@@ -5,6 +5,7 @@ import streamlit as st
 # URL TANIMLARI
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
+INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
 
 def get_game_ids(date):
     date_str = date.strftime("%Y%m%d")
@@ -54,10 +55,6 @@ def get_scoreboard(date):
             continue
     return games
 
-# ----------------------------------------------------------------
-# BURASI KRİTİK: get_cached_boxscore
-# ----------------------------------------------------------------
-# Eğer veriler güncellenmiyorsa, TTL süresini kısabilir veya cache'i silebilirsin.
 @st.cache_data(ttl=600) 
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
@@ -74,33 +71,24 @@ def get_boxscore(game_id):
     if "boxscore" not in data or "players" not in data["boxscore"]:
         return []
 
-    # Bazen API "3PT" bazen "3Pt" gönderebilir. Kontrol için.
-    # Terminalde çıktı görmek istersen print'i açabilirsin:
-    # print(f"Game ID: {game_id} data fetching...")
-
     for team in data["boxscore"]["players"]:
         for group in team.get("statistics", []):
             if "athletes" not in group:
                 continue
             
-            labels = group["labels"]  # Örn: ['MIN', 'FG', '3PT', 'FT', ...]
+            labels = group["labels"]
 
             for athlete in group["athletes"]:
                 raw_stats = athlete["stats"]
                 stats = dict(zip(labels, raw_stats))
                 
-                # Temel Bilgiler
                 stats["PLAYER"] = athlete["athlete"]["displayName"]
                 stats["TEAM"] = team["team"]["abbreviation"]
                 
-                # --- PARSING MANTIĞI (GÜÇLENDİRİLMİŞ) ---
-                
-                # Varsayılan değerler (Hata olmaması için)
                 stats["FGM"] = 0; stats["FGA"] = 0
                 stats["3Pts"] = 0; stats["3PTA"] = 0
                 stats["FTM"] = 0; stats["FTA"] = 0
 
-                # 1. FIELD GOALS (Etiket: "FG")
                 if "FG" in stats:
                     val = str(stats["FG"])
                     if "-" in val:
@@ -108,8 +96,6 @@ def get_boxscore(game_id):
                         stats["FGM"] = int(m)
                         stats["FGA"] = int(a)
 
-                # 2. 3 POINTERS (Etiket: "3PT", "3Pt" veya "3P" olabilir)
-                # Olası tüm etiketleri kontrol edelim
                 t_val = None
                 if "3PT" in stats: t_val = str(stats["3PT"])
                 elif "3Pt" in stats: t_val = str(stats["3Pt"])
@@ -120,7 +106,6 @@ def get_boxscore(game_id):
                     stats["3Pts"] = int(m)
                     stats["3PTA"] = int(a)
 
-                # 3. FREE THROWS (Etiket: "FT")
                 if "FT" in stats:
                     val = str(stats["FT"])
                     if "-" in val:
@@ -128,10 +113,84 @@ def get_boxscore(game_id):
                         stats["FTM"] = int(m)
                         stats["FTA"] = int(a)
                 
-                # 4. MIN (Dakika)
                 if "MIN" not in stats:
                     stats["MIN"] = "--"
 
                 players.append(stats)
 
     return players
+
+# ----------------------------------------------------------------
+# INJURY REPORT FONKSİYONLARI
+# ----------------------------------------------------------------
+@st.cache_data(ttl=3600)  # 1 saatlik cache
+def get_injuries():
+    """TÜM TAKIM SAKATLIKLARI"""
+    try:
+        response = requests.get(INJURIES_URL, timeout=10)
+        data = response.json()
+        
+        # API yanıtını kontrol et
+        if "injuries" not in data:
+            print(f"'injuries' key bulunamadı. Mevcut keys: {list(data.keys())}")
+            return []
+            
+    except Exception as e:
+        print(f"Hata (get_injuries): {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+    all_injuries = []
+    
+    # Ana injuries listesi içindeki her takım
+    for team_data in data.get("injuries", []):
+        try:
+            team_name = team_data.get("displayName", "Unknown Team")
+            team_id = team_data.get("id", "")
+            
+            # Takım logosunu ve kısaltmasını almak için injuries içindeki ilk oyuncudan çekelim
+            team_injuries = team_data.get("injuries", [])
+            
+            if not team_injuries:
+                continue
+                
+            # İlk oyuncudan takım bilgilerini al
+            first_athlete = team_injuries[0].get("athlete", {})
+            team_info = first_athlete.get("team", {})
+            team_abbr = team_info.get("abbreviation", team_name[:3].upper())
+            team_logos = team_info.get("logos", [])
+            team_logo = team_logos[0]["href"] if team_logos else ""
+            
+            for injury in team_injuries:
+                athlete = injury.get("athlete", {})
+                
+                # Oyuncu fotoğrafı
+                player_photo = ""
+                if "headshot" in athlete:
+                    player_photo = athlete["headshot"].get("href", "")
+                
+                # Pozisyon
+                position_info = athlete.get("position", {})
+                position = position_info.get("abbreviation", "N/A")
+                
+                all_injuries.append({
+                    "team": team_abbr,
+                    "team_name": team_name,
+                    "team_logo": team_logo,
+                    "player": athlete.get("displayName", "Unknown"),
+                    "player_photo": player_photo,
+                    "position": position,
+                    "status": injury.get("status", "Unknown"),
+                    "injury_type": injury.get("shortComment", "Unknown"),
+                    "details": injury.get("longComment", "No details"),
+                    "date": injury.get("date", "")
+                })
+                
+        except (KeyError, IndexError) as e:
+            print(f"Parse hatası ({team_name}): {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    return all_injuries

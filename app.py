@@ -21,6 +21,20 @@ load_styles()
 if "auto_loaded" not in st.session_state:
     st.session_state.auto_loaded = True
 
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+
+# Sayfa yönlendirmesi
+if st.session_state.page == "injury":
+    from pages.injury_report import render_injury_page
+    render_injury_page()
+    
+    # Ana sayfaya dön butonu
+    if st.sidebar.button("⬅️ Back to Home", use_container_width=True):
+        st.session_state.page = "home"
+        st.rerun()
+    st.stop()
+
 # Custom CSS for the Modal/Dialog
 st.markdown("""
     <style>
@@ -120,56 +134,42 @@ def show_boxscore_dialog(game_info):
     # 3. Data Processing
     df = pd.DataFrame(players)
     
-    # Sayısal dönüşümler (API'den string gelebilir)
-    # 3Pts -> 3PTM (Made), 3PTA (Attempted) varsayımıyla ekliyoruz.
-    # API yapına göre "3Pts" sadece isabetse, "3PTA" sütununun adını kontrol etmelisin.
     numeric_cols = ["PTS", "REB", "AST", "STL", "BLK", "TO", "FGM", "FGA", "3Pts", "3PTA", "FTM", "FTA"]
     
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         else:
-            # Eğer sütun yoksa (örneğin 3PTA eksikse) hata vermesin diye 0 ile oluştur
             df[c] = 0
 
-    # --- YENİ EKLENEN FORMATLAMA MANTIĞI ---
-    # Dakika, FGM-A, 3PM-A, FTM-A sütunlarını oluşturuyoruz
-    
-    # 1. Field Goals (FGM-FGA)
+    # Field Goals (FGM-FGA)
     df["FG"] = df.apply(lambda x: f"{int(x['FGM'])}-{int(x['FGA'])}", axis=1)
     
-    # 2. 3 Pointers (3PM-3PA)
-    # Not: Kodunda "3Pts" kullanılmış, bunu Made olarak varsayıyorum.
+    # 3 Pointers (3PM-3PA)
     df["3PT"] = df.apply(lambda x: f"{int(x['3Pts'])}-{int(x['3PTA'])}", axis=1)
     
-    # 3. Free Throws (FTM-FTA)
+    # Free Throws (FTM-FTA)
     df["FT"] = df.apply(lambda x: f"{int(x['FTM'])}-{int(x['FTA'])}", axis=1)
 
-    # 4. Minutes (MIN) - Eğer API'den geliyorsa doğrudan kullanırız, yoksa boş döner
+    # Minutes (MIN)
     if "MIN" not in df.columns:
         df["MIN"] = "--"
 
-    # Görüntülenecek Sütun Sırası (Yeni sütunları ekledik)
+    # Görüntülenecek Sütun Sırası
     display_cols = ["PLAYER", "MIN", "FG", "3PT", "FT", "PTS", "REB", "AST", "STL", "BLK", "TO"]
-    
-    # Veride olmayan sütunları display listesinden çıkaralım (Hata önlemek için)
     final_cols = [c for c in display_cols if c in df.columns]
 
     # 4. Tabs & Tables
     if "TEAM" in df.columns:
         teams = df["TEAM"].unique()
         
-        # Tabs oluştur
-        # API sırası ile tab sırası eşleşmesi için basit bir mapping
         tab1, tab2 = st.tabs([f"Away: {game_info.get('away_team')}", f"Home: {game_info.get('home_team')}"])
         
         def render_team_table(container, team_name):
             with container:
-                # Takım filtresi
                 team_df = df[df["TEAM"].astype(str).str.contains(team_name, case=False, na=False)].copy()
                 
                 if not team_df.empty:
-                    # Sıralama: Oynanan dakika veya puana göre
                     if "PTS" in team_df.columns:
                         team_df = team_df.sort_values("PTS", ascending=False)
                     
@@ -190,18 +190,14 @@ def show_boxscore_dialog(game_info):
                 else:
                     st.info(f"No stats available for {team_name}")
 
-        # Eğer teams listesi doluysa sekmelere bas
         if len(teams) > 0:
-            # Away Tab
-            render_team_table(tab1, teams[0]) # Genellikle ilk takım Away'dir ama API'ye göre değişebilir
-            # Home Tab
+            render_team_table(tab1, teams[0])
             if len(teams) > 1:
                 render_team_table(tab2, teams[1])
             else:
                 with tab2: st.info("Waiting for data...")
                 
     else:
-        # Takım bilgisi yoksa ham tablo
         st.dataframe(df[final_cols], use_container_width=True)
 
 
@@ -210,6 +206,15 @@ def show_boxscore_dialog(game_info):
 # --------------------
 def home_page():
     render_header()
+    
+    # Injury Report butonu ekle
+    #col_title, col_injury = st.columns([4, 1])
+    #with col_injury:
+    #    if st.button("🏥 Injury Report", use_container_width=True, type="secondary"):
+    #        # Session state ile sayfa kontrolü
+    #        st.session_state.page = "injury"
+    #        st.rerun()
+    
     date, weights, run = render_sidebar()
 
     if st.session_state.auto_loaded:
