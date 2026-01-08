@@ -1,6 +1,17 @@
 import pandas as pd
 import streamlit as st
 
+# --------------------
+# 1. CONFIG (EN BAŞA EKLENMELİ)
+# --------------------
+# Bu satır sayfanın genişliğini sabitler ve kaymaları önler.
+st.set_page_config(
+    page_title="NBA Dashboard", 
+    layout="wide",  # "centered" isterseniz burayı değiştirin
+    page_icon="🏀",
+    initial_sidebar_state="expanded"
+)
+
 from components.styles import load_styles
 from components.header import render_header
 from components.sidebar import render_sidebar
@@ -16,6 +27,21 @@ from services.scoring import calculate_scores
 # --------------------
 # INIT & STYLES
 # --------------------
+# Injury sayfasından dönüşte kalan stilleri (arka plan vb.) temizlemek için reset CSS'i
+st.markdown("""
+    <style>
+        /* Injury sayfasından kalan arka plan resmini kaldır */
+        .stApp {
+            background-image: none !important;
+        }
+        /* Container genişliğini standartlaştır */
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 load_styles()
 
 if "auto_loaded" not in st.session_state:
@@ -23,6 +49,13 @@ if "auto_loaded" not in st.session_state:
 
 if "page" not in st.session_state:
     st.session_state.page = "home"
+
+if "show_all_games" not in st.session_state:
+    st.session_state.show_all_games = False
+
+# Slider state (Eğer kullanıyorsanız)
+if "slider_index" not in st.session_state:
+    st.session_state.slider_index = 0
 
 # Sayfa yönlendirmesi
 if st.session_state.page == "injury":
@@ -170,8 +203,13 @@ def show_boxscore_dialog(game_info):
                 team_df = df[df["TEAM"].astype(str).str.contains(team_name, case=False, na=False)].copy()
                 
                 if not team_df.empty:
-                    if "PTS" in team_df.columns:
-                        team_df = team_df.sort_values("PTS", ascending=False)
+                    if "MIN" in team_df.columns:
+                        # Sıralama düzeltmesi: Sayısal değere göre sırala
+                        team_df = team_df.sort_values(
+                            by="MIN", 
+                            ascending=False,
+                            key=lambda x: pd.to_numeric(x, errors='coerce').fillna(0)
+                        )
                     
                     st.dataframe(
                         team_df[final_cols],
@@ -207,14 +245,6 @@ def show_boxscore_dialog(game_info):
 def home_page():
     render_header()
     
-    # Injury Report butonu ekle
-    #col_title, col_injury = st.columns([4, 1])
-    #with col_injury:
-    #    if st.button("🏥 Injury Report", use_container_width=True, type="secondary"):
-    #        # Session state ile sayfa kontrolü
-    #        st.session_state.page = "injury"
-    #        st.rerun()
-    
     date, weights, run = render_sidebar()
 
     if st.session_state.auto_loaded:
@@ -234,33 +264,79 @@ def home_page():
     st.caption(f"Games from {resolved_date.strftime('%B %d, %Y')}")
 
     # 2. SCOREBOARD GRID
-    st.subheader("🏀 Games")
+    st.subheader("Games")
     
-    cols = st.columns(3)
+    # Kaç maç gösterilecek?
+    games_to_show = 3
+    total_games = len(games)
     
-    for i, g in enumerate(games):
-        with cols[i % 3]:
-            with st.container(border=True):
-                # Status
-                st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:10px;'>{g.get('status')}</div>", unsafe_allow_html=True)
-                
-                # Score Row
-                c_away, c_score, c_home = st.columns([1, 1.5, 1])
-                with c_away:
-                    st.image(g.get('away_logo'), width=40)
-                    st.markdown(f"<div style='font-size:0.9em; font-weight:bold; text-align:center;'>{g.get('away_team')}</div>", unsafe_allow_html=True)
-                
-                with c_score:
-                    st.markdown(f"<div style='font-size:1.4em; font-weight:800; text-align:center; line-height: 2;'>{g.get('away_score')} - {g.get('home_score')}</div>", unsafe_allow_html=True)
+    # Gösterilecek maçları belirle
+    if st.session_state.show_all_games:
+        visible_games = games
+        cols_per_row = 3
+    else:
+        visible_games = games[:games_to_show]
+        cols_per_row = 3
+    
+    # Maçları göster
+    num_visible = len(visible_games)
+    
+    if num_visible == 0:
+         st.info("No games to display.")
+    else:
+        for row_start in range(0, num_visible, cols_per_row):
+            row_games = visible_games[row_start:row_start + cols_per_row]
+            cols = st.columns(len(row_games))
+            
+            for i, g in enumerate(row_games):
+                with cols[i]:
+                    with st.container(border=True):
+                        # Status
+                        st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:10px;'>{g.get('status')}</div>", unsafe_allow_html=True)
+                        
+# Score Row
+                        c_away, c_score, c_home = st.columns([1, 1.5, 1])
+                        
+                        # DEPLASMAN TAKIMI (HTML Flexbox ile ortalanmış)
+                        with c_away:
+                            st.markdown(f"""
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <img src="{g.get('away_logo')}" style="width: 50px; height: 50px; object-fit: contain;">
+                                <div style="font-size:0.9em; font-weight:bold; margin-top: 5px;">{g.get('away_team')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # SKOR (Mevcut haliyle kalabilir veya aynı mantıkla düzenlenebilir)
+                        with c_score:
+                            st.markdown(f"<div style='font-size:1.4em; font-weight:800; text-align:center; line-height: 2.5; white-space: nowrap;'>{g.get('away_score')}&nbsp;&nbsp;-&nbsp;&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
 
-                with c_home:
-                    st.image(g.get('home_logo'), width=40)
-                    st.markdown(f"<div style='font-size:0.9em; font-weight:bold; text-align:center;'>{g.get('home_team')}</div>", unsafe_allow_html=True)
-                
-                st.markdown("---")
-                
-                if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
-                    show_boxscore_dialog(g)
+                        # EV SAHİBİ TAKIMI (HTML Flexbox ile ortalanmış)
+                        with c_home:
+                            st.markdown(f"""
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <img src="{g.get('home_logo')}" style="width: 50px; height: 50px; object-fit: contain;">
+                                <div style="font-size:0.9em; font-weight:bold; margin-top: 5px;">{g.get('home_team')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.markdown("---")
+                        
+                        if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
+                            show_boxscore_dialog(g)
+    
+    # "Tüm Maçları Gör" / "Daha Az Göster" butonu
+    if total_games > games_to_show:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.session_state.show_all_games:
+                if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
+                    st.session_state.show_all_games = False
+                    st.rerun()
+            else:
+                remaining = total_games - games_to_show
+                if st.button(f"⬇️ Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
+                    st.session_state.show_all_games = True
+                    st.rerun()
 
     st.divider()
 

@@ -10,7 +10,7 @@ def render_tables(df):
 
     # Görüntülenecek sütun sırası
     column_order = [
-        "PLAYER", "TEAM", "USER_SCORE", "MIN", 
+        "PLAYER", "TEAM", "USER_SCORE", "MIN", "PTS", 
         "FG", "3PT", "FT", 
         "REB", "AST", "STL", "BLK", "TO", "+/-"
     ]
@@ -24,6 +24,7 @@ def render_tables(df):
         "TEAM": st.column_config.TextColumn("Team", width="small"),
         "USER_SCORE": st.column_config.NumberColumn("Score", format="%.2f", width="small"),
         "MIN": st.column_config.TextColumn("Min", width="small"),
+        "PTS": st.column_config.TextColumn("Pts", width="small"),
         "FG": st.column_config.TextColumn("FG", width="small"),
         "3PT": st.column_config.TextColumn("3PT", width="small"),
         "FT": st.column_config.TextColumn("FT", width="small"),
