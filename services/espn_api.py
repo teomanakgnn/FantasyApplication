@@ -26,7 +26,7 @@ def get_last_available_game_date(date):
     return None, []
 
 def get_scoreboard(date):
-    """GÜNÜN MAÇLARI + SKOR"""
+    """GÜNÜN MAÇLARI + SKOR + OT KONTROLÜ"""
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
     try:
@@ -41,6 +41,20 @@ def get_scoreboard(date):
             home = next(c for c in comp["competitors"] if c["homeAway"] == "home")
             away = next(c for c in comp["competitors"] if c["homeAway"] == "away")
 
+            # --- OT MANTIĞI BURADA ---
+            status_obj = comp["status"]
+            status_desc = status_obj["type"]["description"] # "Final", "Scheduled", "In Progress" vb.
+            period = status_obj.get("period", 0)
+
+            # Eğer maç bittiyse (Final) ve periyot 4'ten büyükse OT var demektir
+            if status_desc == "Final" and period > 4:
+                ot_count = period - 4
+                if ot_count == 1:
+                    status_desc = "Final/OT"
+                else:
+                    status_desc = f"Final/{ot_count}OT" # Örn: Final/2OT
+            # -------------------------
+
             games.append({
                 "game_id": event["id"],
                 "home_team": home["team"]["abbreviation"],
@@ -49,7 +63,7 @@ def get_scoreboard(date):
                 "away_score": away.get("score", "0"),
                 "home_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{home['team']['abbreviation']}.png",
                 "away_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{away['team']['abbreviation']}.png",
-                "status": comp["status"]["type"]["description"]
+                "status": status_desc  # Güncellenmiş status'u buraya veriyoruz
             })
         except (KeyError, IndexError):
             continue

@@ -35,7 +35,7 @@ def render_boxscore_modal():
         df = pd.DataFrame(players)
         
         preferred_cols = [
-            "PLAYER", "TEAM",
+            "PLAYER", "TEAM", "MIN",
             "PTS", "REB", "AST", "STL", "BLK",
             "FGM", "FGA", "3Pts", "FTM", "FTA", "TO"
         ]
@@ -44,8 +44,28 @@ def render_boxscore_modal():
         available_cols = [c for c in preferred_cols if c in df.columns]
         df_display = df[available_cols].copy()
         
-        # PTS'ye göre sırala
-        if "PTS" in df_display.columns:
+        # MIN kolonunu sayısal formata çevir (eğer varsa)
+        if "MIN" in df_display.columns:
+            # MIN formatı genellikle "34:25" gibi olabilir, sadece dakika kısmını al
+            def parse_minutes(min_str):
+                if pd.isna(min_str) or min_str == "" or min_str == "--":
+                    return 0
+                try:
+                    # Eğer "34:25" formatındaysa ilk kısmı al
+                    if isinstance(min_str, str) and ":" in min_str:
+                        return float(min_str.split(":")[0])
+                    # Eğer direkt sayıysa
+                    return float(min_str)
+                except:
+                    return 0
+            
+            df_display["MIN_NUMERIC"] = df_display["MIN"].apply(parse_minutes)
+            # MIN'e göre azalan sırada sırala
+            df_display = df_display.sort_values("MIN_NUMERIC", ascending=False)
+            # Geçici kolonu sil
+            df_display = df_display.drop(columns=["MIN_NUMERIC"])
+        elif "PTS" in df_display.columns:
+            # MIN yoksa PTS'ye göre sırala
             df_display = df_display.sort_values("PTS", ascending=False)
         
         # Takıma göre grupla ve göster
