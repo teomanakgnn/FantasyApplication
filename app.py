@@ -68,6 +68,11 @@ if st.session_state.page == "injury":
         st.rerun()
     st.stop()
 
+if st.session_state.page == "trends":
+    from pages.player_trends import render_player_trends_page
+    render_player_trends_page()
+    st.stop()
+
 # Custom CSS for the Modal/Dialog
 st.markdown("""
     <style>
