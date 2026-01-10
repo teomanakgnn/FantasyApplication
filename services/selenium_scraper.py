@@ -9,22 +9,47 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 def get_driver():
     """
-    Kullanıcının görmeyeceği (Headless) ve bot korumasına takılmayan driver ayarları.
+    Hem Local hem Streamlit Cloud uyumlu Driver Ayarları
     """
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")  # Tarayıcı penceresi açılmaz
-    chrome_options.add_argument("--window-size=1920,1080") # Masaüstü görünümü zorla (statlar mobilde gizlenir)
+    chrome_options.add_argument("--headless=new") 
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--log-level=3") # Gereksiz logları gizle
     
-    # User-Agent: Normal bir kullanıcı gibi görünmek için
+    # User Agent
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+    try:
+        # Önce Cloud/Linux ortamında Chromium var mı diye bakarız
+        # Streamlit Cloud genelde chromium'u /usr/bin/chromium veya /usr/bin/chromium-browser yoluna kurar.
+        service = Service() # Otomatik path tespiti için boş bırakıyoruz
+        
+        # Eğer sistemde chromium kuruluysa (Cloud ortamı)
+        if os.path.exists("/usr/bin/chromium"):
+            chrome_options.binary_location = "/usr/bin/chromium"
+        elif os.path.exists("/usr/bin/chromium-browser"):
+             chrome_options.binary_location = "/usr/bin/chromium-browser"
+        
+        # Sürücü kurulumu
+        # webdriver_manager cloud'da bazen permission hatası verebilir, 
+        # o yüzden try-except ile yönetiyoruz.
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+        except:
+            # Eğer webdriver_manager çalışmazsa (genelde packages.txt ile yüklendiği için path bellidir)
+            # Linux standart path'i denenir
+            pass
+
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
+        
+    except Exception as e:
+        print(f"Driver başlatma hatası: {str(e)}")
+        return None
 
 def scrape_league_standings(league_id: int):
     """Lig Puan Durumunu çeker."""
