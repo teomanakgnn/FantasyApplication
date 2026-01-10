@@ -12,19 +12,24 @@ def get_driver():
     Kullanıcının görmeyeceği (Headless) ve bot korumasına takılmayan driver ayarları.
     """
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")  # Tarayıcı penceresi açılmaz
-    chrome_options.add_argument("--window-size=1920,1080") # Masaüstü görünümü zorla (statlar mobilde gizlenir)
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--log-level=3") # Gereksiz logları gizle
-    
-    # User-Agent: Normal bir kullanıcı gibi görünmek için
+    chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+    
+    # ÇÖZÜM: webdriver-manager'ı güncelle ve Chrome versiyonunu eşleştir
+    try:
+        # ChromeDriverManager otomatik olarak uyumlu versiyonu indirecek
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
+    except Exception as e:
+        print(f"❌ ChromeDriver kurulumu başarısız: {e}")
+        print("🔧 Manuel çözüm gerekiyor...")
+        raise
 
 def scrape_league_standings(league_id: int):
     """Lig Puan Durumunu çeker."""
