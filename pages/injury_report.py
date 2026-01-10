@@ -130,22 +130,63 @@ def load_professional_styles():
             margin: 0;
         }
 
-        /* PLAYER CARD */
+        /* PLAYER CARD - GÜNCELLENMİŞ SABİT BOYUT */
         .player-card {
             background-color: rgba(255, 255, 255, 0.95);
             border: 1px solid rgba(225, 228, 232, 0.6);
-            border-radius: 3px;
+            border-radius: 6px;
             padding: 0;
             margin-bottom: 15px;
             transition: transform 0.2s, box-shadow 0.2s;
-            height: 100%;
+            height: 320px;
+            display: flex;
+            flex-direction: column;
             backdrop-filter: blur(10px);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            position: relative;
+            overflow: hidden;
         }
+        
         .player-card:hover {
             border-color: #b0b0b0;
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
             transform: translateY(-2px);
+        }
+        
+        /* CARD DETAILS - SCROLLABLE AREA */
+        .card-details {
+            padding: 12px 15px;
+            background-color: rgba(248, 249, 250, 0.95);
+            font-size: 0.85rem;
+            color: #495057;
+            line-height: 1.4;
+            border-top: 1px solid rgba(238, 238, 238, 0.5);
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        /* Scrollbar */
+        .card-details::-webkit-scrollbar {
+            width: 4px;
+        }
+        .card-details::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 4px;
+        }
+        
+        /* Yeni haber ikonu */
+        .new-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #C9082A;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         
         .card-top {
@@ -199,16 +240,6 @@ def load_professional_styles():
         .bg-doubtful { background-color: #FD7E14; }
         .bg-day-to-day { background-color: #17408B; }
         
-        .card-details {
-            padding: 12px 15px;
-            background-color: rgba(248, 249, 250, 0.95);
-            font-size: 0.85rem;
-            color: #495057;
-            line-height: 1.4;
-            border-top: 1px solid rgba(238, 238, 238, 0.5);
-            min-height: 60px;
-        }
-        
         .injury-date {
             font-size: 0.75rem;
             color: #868e96;
@@ -224,7 +255,6 @@ def load_professional_styles():
             font-size: 2.2rem;
             text-transform: uppercase;
             color: #ffffff;
-            
             padding: 20px;
             border-radius: 2px;
             border-left: 6px solid #17408B;
@@ -232,7 +262,6 @@ def load_professional_styles():
             letter-spacing: 1px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-          
         }
         .sub-header {
             color: #e9ecef;
@@ -265,28 +294,14 @@ def load_professional_styles():
 def render_injury_sidebar(df):
     """Sidebar with team filters and stats"""
     
-    # Quick Stats
     total_injuries = len(df)
     st.sidebar.markdown("### 📋 Team Breakdown")
     
-    # Team grouping with injury counts
     team_stats = df.groupby(['team', 'team_name', 'team_logo']).size().reset_index(name='count')
-    team_stats = team_stats.sort_values('team')  # Alfabetik sıralama
+    team_stats = team_stats.sort_values('team')
     
-    # Initialize selected team in session state
     if 'selected_injury_team' not in st.session_state:
         st.session_state.selected_injury_team = "ALL TEAMS"
-    
-    # "All Teams" option
-    all_teams_html = f"""
-    <div class="sidebar-team-card" style="border-left: 4px solid #17408B;">
-        <div class="sidebar-team-info">
-            <div class="sidebar-team-name">ALL TEAMS</div>
-            <div class="sidebar-team-count">{total_injuries} total injuries</div>
-        </div>
-        <div class="sidebar-injury-badge">{total_injuries}</div>
-    </div>
-    """
     
     if st.sidebar.button("All Teams", key="all_teams_btn", use_container_width=True, 
                          type="primary" if st.session_state.selected_injury_team == "ALL TEAMS" else "secondary"):
@@ -295,14 +310,12 @@ def render_injury_sidebar(df):
     
     st.sidebar.markdown("---")
     
-    # Individual team cards
     for _, row in team_stats.iterrows():
         team_abbr = row['team']
         team_name = row['team_name']
         team_logo = row['team_logo']
         injury_count = row['count']
         
-        # Display team card
         st.sidebar.markdown(f"""
         <div class="sidebar-team-card">
             <img src="{team_logo}" class="sidebar-team-logo">
@@ -314,7 +327,6 @@ def render_injury_sidebar(df):
         </div>
         """, unsafe_allow_html=True)
         
-        # Button for filtering
         button_type = "primary" if st.session_state.selected_injury_team == team_abbr else "secondary"
         if st.sidebar.button(f"View {team_abbr}", key=f"team_{team_abbr}", 
                              use_container_width=True, type=button_type):
@@ -349,34 +361,25 @@ def format_injury_date(date_str):
         return "Date unknown"
     
     try:
-        # ESPN API'den gelen tarih formatı genelde ISO format
         injury_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         now = datetime.now(injury_date.tzinfo)
         
         diff = now - injury_date
         
-        # Bugün mü?
         if diff.days == 0:
             hours = diff.seconds // 3600
             if hours == 0:
                 minutes = diff.seconds // 60
                 return f"{minutes}m ago" if minutes > 0 else "Just now"
             return f"{hours}h ago"
-        
-        # Dün mü?
         elif diff.days == 1:
             return "Yesterday"
-        
-        # Bu hafta mı?
         elif diff.days < 7:
             return f"{diff.days}d ago"
-        
-        # Daha eski
         else:
             return injury_date.strftime("%b %d, %Y")
             
     except Exception:
-        # Tarih parse edilemezse sadece tarihi göster
         try:
             injury_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
             return injury_date.strftime("%b %d, %Y")
@@ -389,7 +392,6 @@ def format_injury_date(date_str):
 def render_injury_page():
     load_professional_styles()
     
-    # Data Loading
     with st.spinner("FETCHING LEAGUE DATA..."):
         injuries = get_injuries()
 
@@ -398,15 +400,13 @@ def render_injury_page():
         return
 
     df = pd.DataFrame(injuries)
+    df["date_dt"] = pd.to_datetime(df["date"], errors="coerce")
     
-    # Sidebar with team selection
     selected_team = render_injury_sidebar(df)
     
-    # 1. Header Area
     st.markdown('<div class="main-header">OFFICIAL INJURY REPORT</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="sub-header">NBA LEAGUE UPDATE • {datetime.now().strftime("%B %d, %Y")}</div>', unsafe_allow_html=True)
 
-    # 2. Controls
     top_col1, top_col2 = st.columns([3, 1])
     
     with top_col2:
@@ -414,9 +414,8 @@ def render_injury_page():
             st.cache_data.clear()
             st.rerun()
 
-    # 3. Additional Filters
     with st.container():
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             statuses = ["ALL STATUSES"] + sorted(df["status"].unique().tolist())
             selected_status = st.selectbox("STATUS FILTER", statuses, label_visibility="collapsed", 
@@ -424,11 +423,13 @@ def render_injury_page():
         with c2:
             search = st.text_input("PLAYER SEARCH", placeholder="SEARCH PLAYER...", 
                                   label_visibility="collapsed")
+        with c3:
+            sort_options = ["Newest First", "Oldest First", "Team Name"]
+            selected_sort = st.selectbox("SORT BY", sort_options, label_visibility="collapsed", 
+                                        index=0)
 
-    # Filtering Logic
     filtered_df = df.copy()
     
-    # Apply team filter from sidebar
     if selected_team != "ALL TEAMS":
         filtered_df = filtered_df[filtered_df["team"] == selected_team]
     
@@ -438,9 +439,13 @@ def render_injury_page():
     if search:
         filtered_df = filtered_df[filtered_df["player"].str.contains(search, case=False, na=False)]
 
+    if selected_sort == "Newest First":
+        filtered_df = filtered_df.sort_values("date_dt", ascending=False)
+    elif selected_sort == "Oldest First":
+        filtered_df = filtered_df.sort_values("date_dt", ascending=True)
+
     st.markdown("---")
 
-    # 4. Metrics Row
     m1, m2, m3 = st.columns(3)
     with m1: 
         st.metric("TOTAL REPORTED", len(filtered_df))
@@ -451,52 +456,118 @@ def render_injury_page():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 5. Grid Layout Content
     if filtered_df.empty:
         st.info("NO MATCHING RECORDS FOUND.")
     else:
-        teams_list = sorted(filtered_df["team"].unique())
-        
-        for team in teams_list:
-            team_data = filtered_df[filtered_df["team"] == team]
-            first_rec = team_data.iloc[0]
+        if selected_sort == "Team Name":
+            teams_list = sorted(filtered_df["team"].unique())
             
-            # Team Header
-            st.markdown(f"""
-            <div class="team-header-container">
-                <img src="{first_rec['team_logo']}" class="team-logo-img">
-                <div class="team-title">{first_rec['team_name']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            for team in teams_list:
+                team_data = filtered_df[filtered_df["team"] == team]
+                first_rec = team_data.iloc[0]
+                
+                st.markdown(f"""
+                <div class="team-header-container">
+                    <img src="{first_rec['team_logo']}" class="team-logo-img">
+                    <div class="team-title">{first_rec['team_name']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                player_cols = st.columns(2) 
+                
+                for idx, (_, player) in enumerate(team_data.iterrows()):
+                    col_idx = idx % 2
+                    with player_cols[col_idx]:
+                        render_player_card(player, show_team_in_card=False)
+        else:
+            player_cols = st.columns(2)
             
-            # Grid System for Players
-            player_cols = st.columns(2) 
-            
-            for idx, (_, player) in enumerate(team_data.iterrows()):
+            for idx, (_, player) in enumerate(filtered_df.iterrows()):
                 col_idx = idx % 2
                 with player_cols[col_idx]:
-                    
-                    status_cls = get_status_style(player['status'])
-                    photo_url = player['player_photo'] if player['player_photo'] else "https://a.espncdn.com/combiner/i?img=/i/headshots/nophoto.png"
-                    injury_date_formatted = format_injury_date(player['date'])
-                    
-                    st.markdown(f"""
-                    <div class="player-card">
-                        <div class="card-top">
-                            <img src="{photo_url}" class="p-photo">
-                            <div class="p-info">
-                                <div class="p-name">{player['player']}</div>
-                                <div class="p-meta">{player['position']}</div>
-                            </div>
-                        </div>
-                        <div class="status-badge {status_cls}">{player['status']}</div>
-                        <div class="card-details">
-                            <strong>INJURY:</strong> {player['injury_type']}<br>
-                            <span style="opacity:0.8">{player['details']}</span>
-                            <span class="injury-date">📅 Updated: {injury_date_formatted}</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    render_player_card(player, show_team_in_card=True)
+
+def render_player_card(player, show_team_in_card=False):
+    status_cls = get_status_style(player['status'])
+    photo_url = player['player_photo'] if player['player_photo'] else "https://a.espncdn.com/combiner/i?img=/i/headshots/nophoto.png"
+    injury_date_formatted = format_injury_date(player['date'])
+    
+    # 24 SAAT KONTROLÜ
+    is_recent = False
+    try:
+        dt_obj = player.get('date_dt')
+        if pd.isnull(dt_obj):
+             dt_obj = pd.to_datetime(player['date'], errors='coerce')
+        
+        if dt_obj and not pd.isnull(dt_obj):
+            if dt_obj.tzinfo:
+                dt_obj = dt_obj.replace(tzinfo=None)
+            
+            now = datetime.now()
+            diff = abs((now - dt_obj).total_seconds())
+            
+            if diff < 86400:
+                is_recent = True
+    except Exception:
+        pass
+
+    # Takım bilgisi
+    meta_info = player['position']
+    if show_team_in_card:
+        team_abbr = str(player['team']).replace("'", "&#39;").replace('"', '&quot;')
+        meta_info = f'<span style="color:#17408B; font-weight:800;">{team_abbr}</span> • {player["position"]}'
+
+    # HTML escape fonksiyonu
+    def escape_html(text):
+        if not isinstance(text, str):
+            text = str(text)
+        return (text.replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;')
+                    .replace('"', '&quot;')
+                    .replace("'", '&#39;'))
+    
+    player_name = escape_html(player['player'])
+    injury_type = escape_html(player['injury_type'])
+    details = escape_html(player['details'])
+    status_text = escape_html(player['status'])
+
+    # HTML oluştur
+    if is_recent:
+        html = f'''<div class="player-card">
+    <div class="new-badge">🔥 NEW</div>
+    <div class="card-top">
+        <img src="{photo_url}" class="p-photo">
+        <div class="p-info">
+            <div class="p-name">{player_name}</div>
+            <div class="p-meta">{meta_info}</div>
+        </div>
+    </div>
+    <div class="status-badge {status_cls}">{status_text}</div>
+    <div class="card-details">
+        <strong>INJURY:</strong> {injury_type}<br>
+        <span style="opacity:0.8">{details}</span>
+        <br><span class="injury-date">📅 Updated: {injury_date_formatted}</span>
+    </div>
+</div>'''
+    else:
+        html = f'''<div class="player-card">
+    <div class="card-top">
+        <img src="{photo_url}" class="p-photo">
+        <div class="p-info">
+            <div class="p-name">{player_name}</div>
+            <div class="p-meta">{meta_info}</div>
+        </div>
+    </div>
+    <div class="status-badge {status_cls}">{status_text}</div>
+    <div class="card-details">
+        <strong>INJURY:</strong> {injury_type}<br>
+        <span style="opacity:0.8">{details}</span>
+        <br><span class="injury-date">📅 Updated: {injury_date_formatted}</span>
+    </div>
+</div>'''
+    
+    st.markdown(html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     st.set_page_config(page_title="NBA Injury Report", layout="wide", page_icon="🏀")
