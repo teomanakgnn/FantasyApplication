@@ -74,4 +74,21 @@ def render_sidebar():
 
     run = st.sidebar.button("Run Performance Analysis")
 
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📊 Navigation")
+
+    # Player Trends sayfasına git
+    if st.sidebar.button("📈 Player Trends", use_container_width=True, type="primary"):
+        st.session_state.page = "trends"
+        st.rerun()
+
+    # Injury Report sayfasına git
+    if st.sidebar.button("🏥 Injury Report", use_container_width=True):
+        st.session_state.page = "injury"
+        st.rerun()
+
+    if st.sidebar.button("🏆 Fantasy League", use_container_width=True):
+        st.session_state.page = "fantasy_league"
+        st.rerun()     
+
     return date, weights, run
