@@ -8,28 +8,27 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 def get_driver():
-    """
-    Kullanıcının görmeyeceği (Headless) ve bot korumasına takılmayan driver ayarları.
-    """
     chrome_options = Options()
+    chrome_options.binary_location = "/usr/bin/chromium"  # 🔴 KRİTİK
+    
     chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
-    # ÇÖZÜM: webdriver-manager'ı güncelle ve Chrome versiyonunu eşleştir
-    try:
-        # ChromeDriverManager otomatik olarak uyumlu versiyonu indirecek
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        return driver
-    except Exception as e:
-        print(f"❌ ChromeDriver kurulumu başarısız: {e}")
-        print("🔧 Manuel çözüm gerekiyor...")
-        raise
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    )
+
+    service = Service(
+        ChromeDriverManager(
+            chrome_type="chromium"   # 🔴 EN ÖNEMLİ SATIR
+        ).install()
+    )
+
+    return webdriver.Chrome(service=service, options=chrome_options)
+
 
 def scrape_league_standings(league_id: int):
     """Lig Puan Durumunu çeker."""
