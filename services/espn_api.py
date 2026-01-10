@@ -1,8 +1,13 @@
 import requests
 from datetime import datetime, timedelta
 import streamlit as st
+from functools import lru_cache
+from typing import Dict, List
 
-# URL TANIMLARI
+# =================================================================
+# NBA SCOREBOARD & BOXSCORE FONKSİYONLARI (MEVCUT - DEĞİŞMEDİ)
+# =================================================================
+
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
 INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
@@ -41,19 +46,16 @@ def get_scoreboard(date):
             home = next(c for c in comp["competitors"] if c["homeAway"] == "home")
             away = next(c for c in comp["competitors"] if c["homeAway"] == "away")
 
-            # --- OT MANTIĞI BURADA ---
             status_obj = comp["status"]
-            status_desc = status_obj["type"]["description"] # "Final", "Scheduled", "In Progress" vb.
+            status_desc = status_obj["type"]["description"]
             period = status_obj.get("period", 0)
 
-            # Eğer maç bittiyse (Final) ve periyot 4'ten büyükse OT var demektir
             if status_desc == "Final" and period > 4:
                 ot_count = period - 4
                 if ot_count == 1:
                     status_desc = "Final/OT"
                 else:
-                    status_desc = f"Final/{ot_count}OT" # Örn: Final/2OT
-            # -------------------------
+                    status_desc = f"Final/{ot_count}OT"
 
             games.append({
                 "game_id": event["id"],
@@ -63,13 +65,13 @@ def get_scoreboard(date):
                 "away_score": away.get("score", "0"),
                 "home_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{home['team']['abbreviation']}.png",
                 "away_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{away['team']['abbreviation']}.png",
-                "status": status_desc  # Güncellenmiş status'u buraya veriyoruz
+                "status": status_desc
             })
         except (KeyError, IndexError):
             continue
     return games
 
-@st.cache_data(ttl=600) 
+@st.cache_data(ttl=600)
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
 
@@ -134,17 +136,13 @@ def get_boxscore(game_id):
 
     return players
 
-# ----------------------------------------------------------------
-# INJURY REPORT FONKSİYONLARI
-# ----------------------------------------------------------------
-@st.cache_data(ttl=3600)  # 1 saatlik cache
+@st.cache_data(ttl=3600)
 def get_injuries():
     """TÜM TAKIM SAKATLIKLARI"""
     try:
         response = requests.get(INJURIES_URL, timeout=10)
         data = response.json()
         
-        # API yanıtını kontrol et
         if "injuries" not in data:
             print(f"'injuries' key bulunamadı. Mevcut keys: {list(data.keys())}")
             return []
@@ -157,19 +155,16 @@ def get_injuries():
 
     all_injuries = []
     
-    # Ana injuries listesi içindeki her takım
     for team_data in data.get("injuries", []):
         try:
             team_name = team_data.get("displayName", "Unknown Team")
             team_id = team_data.get("id", "")
             
-            # Takım logosunu ve kısaltmasını almak için injuries içindeki ilk oyuncudan çekelim
             team_injuries = team_data.get("injuries", [])
             
             if not team_injuries:
                 continue
                 
-            # İlk oyuncudan takım bilgilerini al
             first_athlete = team_injuries[0].get("athlete", {})
             team_info = first_athlete.get("team", {})
             team_abbr = team_info.get("abbreviation", team_name[:3].upper())
@@ -179,12 +174,10 @@ def get_injuries():
             for injury in team_injuries:
                 athlete = injury.get("athlete", {})
                 
-                # Oyuncu fotoğrafı
                 player_photo = ""
                 if "headshot" in athlete:
                     player_photo = athlete["headshot"].get("href", "")
                 
-                # Pozisyon
                 position_info = athlete.get("position", {})
                 position = position_info.get("abbreviation", "N/A")
                 
@@ -208,3 +201,197 @@ def get_injuries():
             continue
     
     return all_injuries
+
+# =================================================================
+# FANTASY LEAGUE FONKSİYONLARI - Basitleştirilmiş
+# =================================================================
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9"
+}
+
+def call_espn_api(league_id: int, views: list = None):
+    """
+    ESPN Fantasy API'yi çağırır - Season parametresi YOK
+    """
+    if views is None:
+        views = ['mMatchupScore', 'mScoreboard', 'mSettings', 'mTeam', 'modular', 'mNav']
+    
+    # Season parametresi olmadan direkt league endpoint
+    base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/leagueHistory/{league_id}"
+    
+    params = {'view': views}
+    
+    # Önce leagueHistory dene
+    try:
+        print(f"Trying leagueHistory: {base_url}")
+        response = requests.get(base_url, headers=HEADERS, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # leagueHistory bir array döndürür, en son sezonu al
+            if isinstance(data, list) and len(data) > 0:
+                print(f"✓ Found {len(data)} seasons, using latest")
+                return data[0]  # En son sezon
+        
+    except Exception as e:
+        print(f"leagueHistory failed: {str(e)}")
+    
+    # Alternatif: Direkt league endpoint (bazı ligler için)
+    alt_url = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2026/segments/0/leagues/{league_id}"
+    
+    try:
+        print(f"Trying direct endpoint: {alt_url}")
+        response = requests.get(alt_url, headers=HEADERS, params=params, timeout=10)
+        
+        if response.status_code == 401:
+            raise PermissionError("Bu lig private. Sadece public ligler destekleniyor.")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'teams' in data:
+                print(f"✓ API call successful - Found {len(data.get('teams', []))} teams")
+                return data
+        
+        # 2024'ü de dene
+        alt_url_2024 = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2025/segments/0/leagues/{league_id}"
+        print(f"Trying 2024: {alt_url_2024}")
+        response = requests.get(alt_url_2024, headers=HEADERS, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'teams' in data:
+                print(f"✓ Found 2024 season - {len(data.get('teams', []))} teams")
+                return data
+        
+        raise RuntimeError(f"Hiçbir endpoint çalışmadı. Son status: {response.status_code}")
+        
+    except PermissionError:
+        raise
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed: {str(e)}")
+        raise RuntimeError(f"ESPN API'ye bağlanılamadı: {str(e)}")
+
+def get_team_dict(league_id: int):
+    """Takım ID'lerini kısaltmalarıyla eşleştirir"""
+    data = call_espn_api(league_id, views=['mTeam'])
+    
+    team_dict = {}
+    for team in data.get('teams', []):
+        team_dict[team['id']] = {
+            'abbrev': team.get('abbrev', f"T{team['id']}"),
+            'name': team.get('name', f"Team {team['id']}"),
+            'logo': team.get('logo', '')
+        }
+    
+    return team_dict
+
+def get_teams(league_id: int, season: int = None) -> Dict:
+    """
+    Lig takımlarını çeker - season parametresi artık kullanılmıyor
+    """
+    print(f"\n{'='*60}")
+    print(f"Fetching league {league_id}")
+    print(f"{'='*60}\n")
+    
+    try:
+        data = call_espn_api(league_id)
+        
+        teams = {}
+        for team in data.get('teams', []):
+            team_id = team['id']
+            record = team.get('record', {}).get('overall', {})
+            
+            teams[team_id] = {
+                "id": team_id,
+                "name": team.get('name', f"Team {team_id}"),
+                "abbrev": team.get('abbrev', f"T{team_id}"),
+                "logo": team.get('logo', ''),
+                "wins": record.get('wins', 0),
+                "losses": record.get('losses', 0),
+                "ties": record.get('ties', 0),
+                "points_for": record.get('pointsFor', 0),
+                "points_against": record.get('pointsAgainst', 0),
+            }
+        
+        print(f"✓ Successfully retrieved {len(teams)} teams\n")
+        return teams
+        
+    except PermissionError:
+        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Liga verileri alınamadı.\n\n"
+            f"Kontrol edin:\n"
+            f"  • League ID doğru mu? (Girilen: {league_id})\n"
+            f"  • Lig public mu? (Private ligler desteklenmiyor)\n"
+            f"  • Liga aktif mi?\n\n"
+            f"Hata: {str(e)}"
+        )
+
+def get_current_matchups(league_id: int, season: int = None) -> List[Dict]:
+    """
+    Bu haftanın maçlarını çeker
+    """
+    try:
+        data = call_espn_api(league_id, views=['mMatchupScore', 'mScoreboard'])
+        
+        # Get current week
+        current_week = data.get('status', {}).get('currentMatchupPeriod', 1)
+        
+        # Get team info
+        team_dict = get_team_dict(league_id)
+        
+        # Get schedule
+        schedule = data.get('schedule', [])
+        
+        matchups = []
+        for matchup in schedule:
+            # Only current week matchups
+            if matchup.get('matchupPeriodId') != current_week:
+                continue
+            
+            home_data = matchup.get('home', {})
+            away_data = matchup.get('away', {})
+            
+            home_id = home_data.get('teamId')
+            away_id = away_data.get('teamId')
+            
+            if not home_id or not away_id:
+                continue
+            
+            home_team = team_dict.get(home_id, {})
+            away_team = team_dict.get(away_id, {})
+            
+            matchups.append({
+                "home_team": {
+                    "name": home_team.get('name', 'Unknown'),
+                    "abbrev": home_team.get('abbrev', '???'),
+                    "logo": home_team.get('logo', '')
+                },
+                "away_team": {
+                    "name": away_team.get('name', 'Unknown'),
+                    "abbrev": away_team.get('abbrev', '???'),
+                    "logo": away_team.get('logo', '')
+                },
+                "home_score": home_data.get('totalPoints', 0),
+                "away_score": away_data.get('totalPoints', 0)
+            })
+        
+        print(f"✓ Found {len(matchups)} matchups for week {current_week}")
+        return matchups
+        
+    except Exception as e:
+        print(f"Could not get matchups: {str(e)}")
+        return []
+
+def get_standings(league_id: int, season: int = None) -> List[Dict]:
+    """Lig sıralamasını getirir"""
+    teams = get_teams(league_id)
+    
+    return sorted(
+        teams.values(),
+        key=lambda t: (-t["wins"], -t["points_for"])
+    )
