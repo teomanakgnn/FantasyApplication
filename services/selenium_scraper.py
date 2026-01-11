@@ -98,19 +98,23 @@ def get_scoring_period_params(time_filter: str):
         time_filter: "week", "month", "season"
     
     Returns:
-        dict: URL parametreleri
+        str: URL parametreleri
     """
+    # ESPN Fantasy Basketball için:
+    # Haftalık view için herhangi bir parametre eklemeye gerek yok (default mevcut hafta)
+    # Aylık ve sezonluk için "view" parametresi kullanılır
+    
     if time_filter == "week":
-        # Mevcut hafta için - ESPN genelde aktif haftayı gösterir
-        return {}
+        # Mevcut hafta (default)
+        return ""
     elif time_filter == "month":
-        # Son 4 hafta (yaklaşık 1 ay)
-        return {"view": "mMatchup"}
+        # Matchup history view (genelde son birkaç hafta)
+        return "&view=mMatchupScore"
     elif time_filter == "season":
-        # Tüm sezon
-        return {"view": "mMatchup"}
+        # Sezon geneli görünüm
+        return "&view=mTeam"
     else:
-        return {}
+        return ""
 
         
 def scrape_matchups(league_id: int, time_filter: str = "week"):
@@ -125,21 +129,19 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
     
     # Time filter parametrelerini ekle
     params = get_scoring_period_params(time_filter)
-    if params:
-        param_str = "&".join([f"{k}={v}" for k, v in params.items()])
-        url = f"{base_url}&{param_str}"
-    else:
-        url = base_url
+    url = base_url + params
+    
+    print(f"🔗 Fetching URL: {url}")
     
     driver = get_driver()
     matchups = []
 
     try:
         driver.get(url)
-        time.sleep(6)
+        time.sleep(8)  # Daha uzun bekleme süresi
 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
+        time.sleep(3)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
@@ -187,6 +189,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             })
 
         driver.quit()
+        print(f"✅ Toplam {len(matchups)} matchup çekildi")
         return matchups
 
     except Exception as e:
