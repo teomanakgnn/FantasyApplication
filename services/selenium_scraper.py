@@ -9,7 +9,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 def get_driver():
     chrome_options = Options()
-    chrome_options.binary_location = "/usr/bin/chromium"  # 🔴 KRİTİK
+    chrome_options.binary_location = "/usr/bin/chromium"
     
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -23,7 +23,7 @@ def get_driver():
 
     service = Service(
         ChromeDriverManager(
-            chrome_type="chromium"   # 🔴 EN ÖNEMLİ SATIR
+            chrome_type="chromium"
         ).install()
     )
 
@@ -31,23 +31,27 @@ def get_driver():
 
 
 def scrape_league_standings(league_id: int):
-    """Lig Puan Durumunu çeker."""
+    """
+    Lig Puan Durumunu çeker.
+    
+    Args:
+        league_id: ESPN League ID
+    """
+    # Standings her zaman sezonluk olduğu için time_filter parametresini kaldırdık
     url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
+    
     driver = get_driver()
     
     try:
         driver.get(url)
-        time.sleep(4) # Sayfanın yüklenmesini bekle
+        time.sleep(4)
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
-        # Basit Tablo Okuma Yöntemi
         html_io = StringIO(driver.page_source)
         dfs = pd.read_html(html_io)
         
         target_df = pd.DataFrame()
         
-        # İçinde W, L, T veya WIN geçen en geniş tabloyu bul
         for df in dfs:
             headers = " ".join([str(col).upper() for col in df.columns])
             if ("W" in headers or "WIN" in headers) and len(df) >= 4:
@@ -57,7 +61,6 @@ def scrape_league_standings(league_id: int):
         driver.quit()
         
         if not target_df.empty:
-            # Sütun temizliği
             target_df = target_df.loc[:, ~target_df.columns.str.contains('^Unnamed', case=False)]
             return target_df.astype(str)
             
@@ -81,15 +84,53 @@ def extract_team_names_from_card(card):
         if text and len(text) > 3:
             names.append(text)
 
-    # Genelde ilk 2 tanesi yeterlidir
     if len(names) >= 2:
         return names[0], names[1]
 
     return "Away Team", "Home Team"
+
+
+def get_scoring_period_params(time_filter: str):
+    """
+    Time filter'a göre scoringPeriodId parametrelerini döndürür.
     
+    Args:
+        time_filter: "week", "month", "season"
+    
+    Returns:
+        dict: URL parametreleri
+    """
+    if time_filter == "week":
+        # Mevcut hafta için - ESPN genelde aktif haftayı gösterir
+        return {}
+    elif time_filter == "month":
+        # Son 4 hafta (yaklaşık 1 ay)
+        return {"view": "mMatchup"}
+    elif time_filter == "season":
+        # Tüm sezon
+        return {"view": "mMatchup"}
+    else:
+        return {}
+
         
-def scrape_matchups(league_id: int):
-    url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
+def scrape_matchups(league_id: int, time_filter: str = "week"):
+    """
+    Matchup verilerini çeker.
+    
+    Args:
+        league_id: ESPN League ID
+        time_filter: "week" (mevcut hafta), "month" (son 4 hafta), "season" (tüm sezon)
+    """
+    base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
+    
+    # Time filter parametrelerini ekle
+    params = get_scoring_period_params(time_filter)
+    if params:
+        param_str = "&".join([f"{k}={v}" for k, v in params.items()])
+        url = f"{base_url}&{param_str}"
+    else:
+        url = base_url
+    
     driver = get_driver()
     matchups = []
 
@@ -102,7 +143,7 @@ def scrape_matchups(league_id: int):
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
-        # 1️⃣ GERÇEK 9-CAT STAT TABLOLARI
+        # GERÇEK 9-CAT STAT TABLOLARI
         tables = soup.find_all("table")
         stat_tables = []
 
@@ -111,7 +152,7 @@ def scrape_matchups(league_id: int):
             if all(x in txt for x in ["FG%", "FT%", "REB", "AST", "PTS"]):
                 stat_tables.append(table)
 
-        print(f"✅ {len(stat_tables)} stat tablosu bulundu")
+        print(f"✅ {len(stat_tables)} stat tablosu bulundu ({time_filter})")
 
         for table in stat_tables:
             rows = table.find_all("tr")
@@ -124,12 +165,12 @@ def scrape_matchups(league_id: int):
             if not away_data or not home_data:
                 continue
 
-            # 2️⃣ TABLOYU SARAN MATCHUP CARD
+            # TABLOYU SARAN MATCHUP CARD
             card = table.find_parent("section") or table.find_parent("div")
             if not card:
                 continue
 
-            # 3️⃣ STABİL TAKIM İSİMLERİ
+            # STABİL TAKIM İSİMLERİ
             away_name, home_name = extract_team_names_from_card(card)
 
             matchups.append({
@@ -155,8 +196,6 @@ def scrape_matchups(league_id: int):
         return []
 
 
-
-
 def parse_row_stats(row):
     """
     Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat sözlüğü oluşturur.
@@ -166,25 +205,14 @@ def parse_row_stats(row):
     stats = {}
     values = []
     
-    # Hücrelerdeki metinleri topla
     for cell in cells:
         txt = cell.get_text(strip=True)
-        # Sadece sayısal veya yüzdelik değerleri al (Takım isimlerini elemek için basit filtre)
         if any(char.isdigit() for char in txt):
             values.append(txt)
-    
-    # Standart 9-Cat sırası (ESPN Default)
-    # Genellikle son 9 değer istatistiklerdir. Bazen başta Rank, Skor vb. olur.
-    # Bu yüzden listeyi sondan başa doğru veya uzunluğa göre almak daha güvenlidir.
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     
     if len(values) >= 9:
-        # Son 9 değeri al (En sondaki Total Score olabilir, dikkat)
-        # ESPN Scoreboard: [.., FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS]
-        # Bazen en sonda Total Score olmaz.
-        
-        # Basitçe son 9 öğeyi eşleştirmeyi deneyelim
         relevant_values = values[-9:] 
         
         for i, cat in enumerate(categories):
@@ -194,14 +222,13 @@ def parse_row_stats(row):
     
     return None
 
+
 def extract_team_names_from_matchup(card):
     """
     Scoreboard matchup kartından GERÇEK takım isimlerini çeker
-    (NEEMIAS QUETA, Rainmaker vs.)
     """
     team_names = []
 
-    # ESPN genelde bu isimleri <h2>, <h3> veya role="heading" altında tutar
     possible_headers = card.find_all(
         ["h1", "h2", "h3", "span"],
         string=True
@@ -209,7 +236,6 @@ def extract_team_names_from_matchup(card):
 
     for h in possible_headers:
         text = h.get_text(strip=True)
-        # Kısaltma değil, gerçek takım ismi filtreleri
         if (
             len(text) > 5 and
             not text.isupper() and
@@ -217,16 +243,14 @@ def extract_team_names_from_matchup(card):
         ):
             team_names.append(text)
 
-    # Genelde 2 tane olur (Away, Home)
     if len(team_names) >= 2:
         return team_names[0], team_names[1]
 
     return "Away Team", "Home Team"
 
 
-
 def calculate_category_wins(team_a_stats, team_b_stats):
-    """Simülasyon mantığı için tekrar buraya kopyalandı veya import edilebilir."""
+    """9-Cat kazanma hesaplaması"""
     if not team_a_stats or not team_b_stats:
         return "0-0-0"
     

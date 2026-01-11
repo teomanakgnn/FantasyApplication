@@ -5,25 +5,21 @@ from services.selenium_scraper import scrape_league_standings, scrape_matchups
 # ---------------- CONFIG & CSS ----------------
 
 def apply_custom_style():
-    # Arka plan ve genel stil ayarları
     background_url = "https://wallpaper-house.com/data/out/12/wallpaper2you_489438.jpg" 
     
     st.markdown(f"""
     <style>
         /* --- HEADER GİZLEME VE ALAN AYARLARI --- */
         
-        /* Üst Header'ı tamamen gizle */
         header[data-testid="stHeader"] {{
             visibility: hidden;
             display: none;
         }}
         
-        /* Sayfa içeriğini biraz yukarı çek (Header gidince boşluk kalmasın) */
         .block-container {{
             padding-top: 2rem !important;
         }}
         
-        /* Footer'ı (Made with Streamlit) gizle */
         footer {{
             visibility: hidden;
             display: none;
@@ -45,25 +41,21 @@ def apply_custom_style():
             color: #e2e8f0 !important;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }}
-        /* Tablo Header */
         thead tr th {{
             background-color: #0f172a !important;
             color: #94a3b8 !important;
             border-bottom: 2px solid #334155;
             text-align: center !important;
         }}
-        /* Tablo Hücreleri */
         tbody tr td {{
             color: #f8fafc !important;
             text-align: center !important;
         }}
-        /* Selectbox Arka Planı */
         div[data-baseweb="select"] > div {{
             background-color: #1e293b;
             color: white;
             border-color: #475569;
         }}
-        /* Sekmeler */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 10px;
         }}
@@ -120,6 +112,20 @@ def apply_custom_style():
         .result-badge svg {{
             width: 16px;
             height: 16px;
+        }}
+        
+        /* Time filter badge */
+        .time-badge {{
+            display: inline-block;
+            background: rgba(37, 99, 235, 0.2);
+            border: 1px solid #2563eb;
+            color: #60a5fa;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-left: 10px;
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -228,10 +234,7 @@ def rename_display_columns(df):
 
 # ---------------- ANA SAYFA ----------------
 
-
-
 def render_fantasy_league_page():
-    # Toolbar modunu minimal yaparak da gizlemeye yardımcı olabiliriz ama CSS en garantisidir
     st.set_page_config(page_title="Pro Fantasy Analytics", layout="wide", initial_sidebar_state="expanded")
     apply_custom_style()
 
@@ -239,7 +242,11 @@ def render_fantasy_league_page():
     c1, c2 = st.columns([3, 1])
     with c1:
         st.title("FANTASY LEAGUE ANALYTICS")
-        st.markdown("<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT</div>", unsafe_allow_html=True)
+        
+        # Time filter badge gösterimi
+        current_filter = st.session_state.get('time_filter', 'week')
+        filter_display = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}
+        st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{filter_display[current_filter]}</span></div>", unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
@@ -247,19 +254,47 @@ def render_fantasy_league_page():
         league_input = st.text_input("LEAGUE ID", value="987023001")
         if "leagueId=" in league_input: league_id = league_input.split("leagueId=")[1].split("&")[0]
         else: league_id = league_input.strip()
+        
+        st.markdown("---")
+        st.markdown("### TIME PERIOD")
+        st.caption("⚡ Change anytime after loading data")
+        
+        time_filter = st.radio(
+            "Select Data Range:",
+            options=["week", "month", "season"],
+            format_func=lambda x: {"week": "Current Week", "month": "Last Month", "season": "Full Season"}[x],
+            index=0,
+            key="time_filter_radio"
+        )
+        
+        st.session_state['time_filter'] = time_filter
+        
         st.markdown("---")
         load_data = st.button("INITIALIZE DATA FETCH", type="primary", use_container_width=True)
         
     # --- VERİ YÜKLEME ---
     if load_data and league_id:
         st.session_state.fantasy_league_id = league_id
+        st.session_state.last_time_filter = time_filter
         with st.spinner("ESTABLISHING CONNECTION TO ESPN SERVERS..."):
             try:
                 df_standings = scrape_league_standings(int(league_id))
-                matchups = scrape_matchups(int(league_id))
+                matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['df_standings'] = df_standings
                 st.session_state['matchups'] = matchups
+                st.success(f"✅ Data loaded successfully ({filter_display[time_filter]})")
             except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
+    
+    # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
+    if st.session_state.get('fantasy_league_id') and st.session_state.get('last_time_filter') != time_filter:
+        st.session_state.last_time_filter = time_filter
+        with st.spinner(f"RELOADING DATA FOR {filter_display[time_filter]}..."):
+            try:
+                league_id = st.session_state.fantasy_league_id
+                matchups = scrape_matchups(int(league_id), time_filter)
+                st.session_state['matchups'] = matchups
+                st.success(f"✅ Data reloaded ({filter_display[time_filter]})")
+            except Exception as e: st.error(f"DATA RELOAD ERROR: {str(e)}")
 
     # --- GÖRÜNTÜLEME ---
     df_standings = st.session_state.get('df_standings')
