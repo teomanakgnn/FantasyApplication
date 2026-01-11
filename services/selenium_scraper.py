@@ -91,15 +91,30 @@ def extract_team_names_from_card(card):
 
 
 def get_scoring_period_params(time_filter: str):
+    """
+    Time filter'a göre scoringPeriodId parametrelerini döndürür.
+    
+    Args:
+        time_filter: "week", "month", "season"
+    
+    Returns:
+        str: URL parametreleri
+    """
+    # ESPN Fantasy Basketball için:
+    # Haftalık view için herhangi bir parametre eklemeye gerek yok (default mevcut hafta)
+    # Aylık ve sezonluk için "view" parametresi kullanılır
+    
     if time_filter == "week":
-        return "" # Mevcut hafta
+        # Mevcut hafta (default)
+        return ""
     elif time_filter == "month":
-        # Son 4 haftayı kapsayan view
-        return "&view=mMatchupScore&scoringPeriodId=0" 
+        # Matchup history view (genelde son birkaç hafta)
+        return "&view=mMatchupScore"
     elif time_filter == "season":
-        # Tüm sezonun kümülatif verisi
-        return "&view=mTeamV2" 
-    return ""
+        # Sezon geneli görünüm
+        return "&view=mTeam"
+    else:
+        return ""
 
         
 def scrape_matchups(league_id: int, time_filter: str = "week"):
