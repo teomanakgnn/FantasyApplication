@@ -262,7 +262,7 @@ def render_fantasy_league_page():
         time_filter = st.radio(
             "Select Data Range:",
             options=["week", "month", "season"],
-            format_func=lambda x: {"week": "Current Week", "month": "Last Month", "season": "Full Season"}[x],
+            format_func=lambda x: {"week": "📅 Current Week", "month": "📊 Last Month", "season": "🏆 Full Season"}[x],
             index=0,
             key="time_filter_radio"
         )
@@ -286,15 +286,20 @@ def render_fantasy_league_page():
             except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
     
     # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
-    if st.session_state.get('fantasy_league_id') and st.session_state.get('last_time_filter') != time_filter:
+    if (st.session_state.get('fantasy_league_id') and 
+        st.session_state.get('last_time_filter') and 
+        st.session_state.get('last_time_filter') != time_filter):
+        
         st.session_state.last_time_filter = time_filter
+        
         with st.spinner(f"RELOADING DATA FOR {filter_display[time_filter]}..."):
             try:
                 league_id = st.session_state.fantasy_league_id
                 matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['matchups'] = matchups
-                st.success(f"✅ Data reloaded ({filter_display[time_filter]})")
-            except Exception as e: st.error(f"DATA RELOAD ERROR: {str(e)}")
+                st.rerun()  # Sayfayı yenile
+            except Exception as e: 
+                st.error(f"DATA RELOAD ERROR: {str(e)}")
 
     # --- GÖRÜNTÜLEME ---
     df_standings = st.session_state.get('df_standings')
@@ -353,7 +358,7 @@ def render_fantasy_league_page():
                 
                 # --- DETAYLI ANALİZ (SVG İkonlu) ---
                 st.subheader("🕵️ Detailed Matchup Analysis")
-                selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data])
+                selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data], key="team_analyzer_selectbox")
                 
                 if selected_team:
                     team_stats = next(t for t in sim_data if t['team'] == selected_team)
@@ -402,6 +407,12 @@ def render_fantasy_league_page():
                         if col in raw_df.columns: format_dict[col] = "{:.0f}"
 
                     raw_df_display = rename_display_columns(raw_df)
+                    
+                    # 3PT, STL, TOV sütunlarını integer'a çevir (ondalık kısmı kaldır)
+                    for col in ['3PT', 'STL', 'TOV']:
+                        if col in raw_df_display.columns:
+                            raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
+                    
                     st.dataframe(raw_df_display.style.format(format_dict), use_container_width=True, hide_index=True)   
                     st.divider()
                     st.markdown("#### SCORING TABLE (POINTS 1-10)")
