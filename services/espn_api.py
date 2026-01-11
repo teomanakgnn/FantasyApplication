@@ -256,7 +256,7 @@ def call_espn_api(league_id: int, views: list = None):
                 return data
         
         # 2024'ü de dene
-        alt_url_2024 = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2025/segments/0/leagues/{league_id}"
+        alt_url_2024 = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2026/segments/0/leagues/{league_id}"
         print(f"Trying 2024: {alt_url_2024}")
         response = requests.get(alt_url_2024, headers=HEADERS, params=params, timeout=10)
         
@@ -386,69 +386,6 @@ def get_current_matchups(league_id: int, season: int = None) -> List[Dict]:
     except Exception as e:
         print(f"Could not get matchups: {str(e)}")
         return []
-    
-import streamlit as st
-import espn_api
-from trade_analyzer import TradeAnalyzer
-
-st.title("🏀 NBA Fantasy Trade Analyzer")
-
-league_id = 12345678 # ID'nizi buraya girin veya input alın
-
-# 1. Verileri Çek
-with st.spinner('Lig verileri çekiliyor...'):
-    roster_df = espn_api.get_all_rosters(league_id)
-    analyzer = TradeAnalyzer(roster_df)
-
-# 2. Takım Seçimi
-teams = roster_df[['team_id', 'team_name']].drop_duplicates()
-team_options = {row['team_name']: row['team_id'] for index, row in teams.iterrows()}
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Sizin Takımınız")
-    my_team_name = st.selectbox("Takım Seç", list(team_options.keys()), key="team_a")
-    my_team_id = team_options[my_team_name]
-    
-    # O takımın oyuncularını filtrele
-    my_players = roster_df[roster_df['team_id'] == my_team_id]
-    players_out = st.multiselect("Gönderilecek Oyuncular", my_players['player_name'].tolist())
-    # Seçilen isimlerin ID'lerini bul
-    players_out_ids = my_players[my_players['player_name'].isin(players_out)]['player_id'].tolist()
-
-with col2:
-    st.subheader("Karşı Takım")
-    other_team_name = st.selectbox("Takım Seç", list(team_options.keys()), index=1, key="team_b")
-    other_team_id = team_options[other_team_name]
-    
-    other_players = roster_df[roster_df['team_id'] == other_team_id]
-    players_in = st.multiselect("Alınacak Oyuncular", other_players['player_name'].tolist())
-    players_in_ids = other_players[other_players['player_name'].isin(players_in)]['player_id'].tolist()
-
-# 3. Analiz Butonu
-if st.button("Takası Analiz Et"):
-    if not players_out or not players_in:
-        st.warning("Lütfen her iki taraftan da oyuncu seçin.")
-    else:
-        result = analyzer.analyze_trade(my_team_id, players_out_ids, other_team_id, players_in_ids)
-        
-        st.write("### Takas Etkisi (Sizin Takımınız)")
-        
-        # Sonuçları Tablo Halinde Göster
-        cols = st.columns(len(result))
-        for i, (cat, data) in enumerate(result.items()):
-            color = "green" if data['impact'] == "positive" else "red"
-            diff_str = f"{data['diff']:+.1f}"
-            
-            with cols[i]:
-                st.metric(
-                    label=cat, 
-                    value=f"{data['new']}", 
-                    delta=diff_str,
-                    delta_color="normal" if cat != 'TO' else "inverse" 
-                )
-
 
 def get_standings(league_id: int, season: int = None) -> List[Dict]:
     """Lig sıralamasını getirir"""
@@ -458,69 +395,3 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
         teams.values(),
         key=lambda t: (-t["wins"], -t["points_for"])
     )
-    
-
-# =================================================================
-# ROSTER & TRADE ANALYZER HELPERS
-# =================================================================
-
-def get_all_rosters(league_id: int):
-    """
-    Tüm takımların kadrolarını ve oyuncu istatistiklerini çeker.
-    Returns:
-        pd.DataFrame: Tüm oyuncuların listesi
-    """
-    # mRoster: Kadrolar, mSettings: Ayarlar, mTeam: Takım bilgileri
-    data = call_espn_api(league_id, views=['mRoster', 'mSettings', 'mTeam'])
-    
-    if not data:
-        return pd.DataFrame()
-
-    all_players = []
-    
-    # ESPN Stat ID Eşleştirmesi (NBA Standart)
-    STAT_MAP = {
-        '0': 'PTS', '1': 'BLK', '2': 'STL', '3': 'AST', '6': 'REB', 
-        '11': 'TO', '17': '3PM', '19': 'FG%', '20': 'FT%'
-    }
-    
-    teams = data.get('teams', [])
-    
-    for team in teams:
-        team_id = team['id']
-        team_name = team.get('name', 'Unknown')
-        team_abbrev = team.get('abbrev', 'UNK')
-        
-        roster = team.get('roster', {}).get('entries', [])
-        
-        for entry in roster:
-            player_data = entry.get('playerPoolEntry', {}).get('player', {})
-            
-            player_name = player_data.get('fullName', 'Unknown Player')
-            player_id = player_data.get('id')
-            injury_status = player_data.get('injuryStatus', 'ACTIVE')
-            
-            # İstatistikleri Çekme
-            stats_list = player_data.get('stats', [])
-            season_stats = {v: 0.0 for v in STAT_MAP.values()} # Default 0
-            
-            # 002026 (veya mevcut sezon) ve statSourceId=0 (Real stats)
-            real_stats = next((s for s in stats_list if s.get('statSourceId') == 0 and s.get('statSplitTypeId') == 0), None)
-            
-            if real_stats and 'averageStats' in real_stats:
-                avgs = real_stats['averageStats']
-                for stat_id, val in avgs.items():
-                    if str(stat_id) in STAT_MAP:
-                        season_stats[STAT_MAP[str(stat_id)]] = round(val, 2)
-
-            all_players.append({
-                "team_id": team_id,
-                "team_name": team_name,
-                "team_abbrev": team_abbrev,
-                "player_id": player_id,
-                "player_name": player_name,
-                "injury_status": injury_status,
-                **season_stats
-            })
-            
-    return pd.DataFrame(all_players)
