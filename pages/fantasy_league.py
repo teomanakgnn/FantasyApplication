@@ -130,19 +130,19 @@ def apply_custom_style():
             text-transform: uppercase;
         }}
         
-        .pro-time-section {
+        .pro-time-section {{
             background: rgba(30, 41, 59, 0.6);  
             border: 1px solid #334155;      
             border-radius: 12px;
             padding: 20px;
             margin: 20px 0;
-        }
+        }}
 
-        .pro-badge {
+        .pro-badge {{
             background: #334155;      /* slate */
             color: #e2e8f0;
             box-shadow: none;
-        }
+        }}
 
         
         .pro-badge::before {{
