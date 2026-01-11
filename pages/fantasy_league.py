@@ -238,130 +238,194 @@ def render_fantasy_league_page():
     st.set_page_config(page_title="Pro Fantasy Analytics", layout="wide", initial_sidebar_state="expanded")
     apply_custom_style()
 
-    # --- SESSION STATE INITIALIZATION ---
-    if 'matchups' not in st.session_state:
-        st.session_state['matchups'] = None
-    if 'df_standings' not in st.session_state:
-        st.session_state['df_standings'] = None
-    if 'last_filter' not in st.session_state:
-        st.session_state['last_filter'] = None
-    if 'fantasy_league_id' not in st.session_state:
-        st.session_state['fantasy_league_id'] = None
+    # Üst Bar
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.title("FANTASY LEAGUE ANALYTICS")
+        
+        # Time filter badge gösterimi
+        current_filter = st.session_state.get('time_filter', 'week')
+        filter_display = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}
+        st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{filter_display[current_filter]}</span></div>", unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("### CONFIGURATION")
         league_input = st.text_input("LEAGUE ID", value="987023001")
-        
-        # URL'den ID ayıklama
-        league_id = league_input.split("leagueId=")[1].split("&")[0] if "leagueId=" in league_input else league_input.strip()
+        if "leagueId=" in league_input: league_id = league_input.split("leagueId=")[1].split("&")[0]
+        else: league_id = league_input.strip()
         
         st.markdown("---")
         st.markdown("### TIME PERIOD")
-        st.caption("⚡ Değiştirdiğiniz anda veri otomatik güncellenir")
+        st.caption("⚡ Change anytime after loading data")
         
         time_filter = st.radio(
             "Select Data Range:",
             options=["week", "month", "season"],
             format_func=lambda x: {"week": "📅 Current Week", "month": "📊 Last Month", "season": "🏆 Full Season"}[x],
+            index=0,
             key="time_filter_radio"
         )
         
+        st.session_state['time_filter'] = time_filter
+        
         st.markdown("---")
-        load_btn = st.button("INITIALIZE / REFRESH ALL", type="primary", use_container_width=True)
-
-    # --- VERİ YÜKLEME MANTIĞI ---
-    # 1. Butona basıldıysa
-    # 2. VEYA Filtre değiştiyse (ve halihazırda yüklü veri varsa)
-    filter_changed = time_filter != st.session_state['last_filter']
-    should_fetch = load_btn or (filter_changed and st.session_state['matchups'] is not None)
-
-    if should_fetch and league_id:
-        with st.spinner(f"CONNECTING TO ESPN: {time_filter.upper()} DATA..."):
+        load_data = st.button("INITIALIZE DATA FETCH", type="primary", use_container_width=True)
+        
+    # --- VERİ YÜKLEME ---
+    if load_data and league_id:
+        st.session_state.fantasy_league_id = league_id
+        st.session_state.last_time_filter = time_filter
+        with st.spinner("ESTABLISHING CONNECTION TO ESPN SERVERS..."):
             try:
-                # Standings (Puan Durumu) sadece ilk yüklemede veya butona basınca çekilir
-                if st.session_state['df_standings'] is None or load_btn:
-                    st.session_state['df_standings'] = scrape_league_standings(int(league_id))
-                
-                # Matchup verisi her filtre değişiminde çekilir
-                new_matchups = scrape_matchups(int(league_id), time_filter)
-                
-                if new_matchups:
-                    st.session_state['matchups'] = new_matchups
-                    st.session_state['last_filter'] = time_filter
-                    st.session_state['fantasy_league_id'] = league_id
-                    st.rerun() # UI'ı yeni veriyle tazelemek için
-                else:
-                    st.warning("No matchup data found for this period.")
-                    
-            except Exception as e:
-                st.error(f"DATA FETCH ERROR: {str(e)}")
+                df_standings = scrape_league_standings(int(league_id))
+                matchups = scrape_matchups(int(league_id), time_filter)
+                st.session_state['df_standings'] = df_standings
+                st.session_state['matchups'] = matchups
+                st.success(f"✅ Data loaded successfully ({filter_display[time_filter]})")
+            except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
+    
+    # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
+    if (st.session_state.get('fantasy_league_id') and 
+        st.session_state.get('last_time_filter') and 
+        st.session_state.get('last_time_filter') != time_filter):
+        
+        st.session_state.last_time_filter = time_filter
+        
+        with st.spinner(f"RELOADING DATA FOR {filter_display[time_filter]}..."):
+            try:
+                league_id = st.session_state.fantasy_league_id
+                matchups = scrape_matchups(int(league_id), time_filter)
+                st.session_state['matchups'] = matchups
+                st.rerun()  # Sayfayı yenile
+            except Exception as e: 
+                st.error(f"DATA RELOAD ERROR: {str(e)}")
 
-    # --- ANA PANEL GÖRÜNTÜLEME ---
-    if st.session_state['matchups'] is not None:
-        # Üst Bilgi Barı
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.title("FANTASY LEAGUE ANALYTICS")
-            current_f = st.session_state.get('last_filter', 'week')
-            filter_label = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}[current_f]
-            st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{filter_label}</span></div>", unsafe_allow_html=True)
+    # --- GÖRÜNTÜLEME ---
+    df_standings = st.session_state.get('df_standings')
+    matchups = st.session_state.get('matchups')
 
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 STANDINGS", "⚔️ MATCHUPS", "🔥 POWER RANK", "📈 ROTO SIM"])
+    if df_standings is not None or matchups is not None:
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["LEAGUE STANDINGS", "WEEKLY MATCHUPS", "H2H POWER RANK", "ROTO SIMULATION"])
 
+        # TAB 1: STANDINGS
         with tab1:
-            if st.session_state['df_standings'] is not None:
-                st.dataframe(st.session_state['df_standings'], use_container_width=True, hide_index=True)
-            else:
-                st.info("Standings data not loaded.")
+            if df_standings is not None and not df_standings.empty:
+                st.dataframe(df_standings, use_container_width=True, hide_index=True)
+            else: st.info("NO DATA AVAILABLE")
 
+        # TAB 2: MATCHUPS
         with tab2:
-            matchups = st.session_state['matchups']
-            for match in matchups:
-                with st.container(border=True):
-                    col1, col2, col3 = st.columns([1, 0.2, 1])
-                    with col1:
-                        st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
-                        st.markdown(f"<h1 style='text-align:right; color:#3b82f6; margin:0'>{match['away_score']}</h1>", unsafe_allow_html=True)
-                    with col2: 
-                        st.markdown("<h3 style='text-align:center; color:#64748b; margin-top:15px;'>VS</h3>", unsafe_allow_html=True)
-                    with col3:
-                        st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
-                        st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0'>{match['home_score']}</h1>", unsafe_allow_html=True)
+            if matchups:
+                for match in matchups:
+                    with st.container(border=True):
+                        col1, col2, col3 = st.columns([1, 0.2, 1])
+                        with col1:
+                            st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
+                            st.markdown(f"<h1 style='text-align:right; color:#3b82f6; margin:0'>{match['away_score']}</h1>", unsafe_allow_html=True)
+                        with col2: st.markdown("<h3 style='text-align:center; color:#64748b'>VS</h3>", unsafe_allow_html=True)
+                        with col3:
+                            st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
+                            st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0'>{match['home_score']}</h1>", unsafe_allow_html=True)
 
+        # TAB 3: H2H POWER RANKINGS
         with tab3:
-            st.markdown("### ALL-PLAY-ALL SIMULATION (H2H)")
-            sim_data = run_h2h_simulation_detailed(st.session_state['matchups'])
-            
-            summary_df = pd.DataFrame(sim_data)[['team', 'total_wins', 'total_losses', 'win_pct']]
-            summary_df.columns = ["Team", "Cat Wins", "Cat Losses", "Win %"]
-            st.dataframe(summary_df.style.background_gradient(subset=['Win %'], cmap="Blues"), use_container_width=True, hide_index=True)
-            
-            st.divider()
-            st.subheader("🕵️ Detailed Matchup Analysis")
-            selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data])
-            
-            if selected_team:
-                team_stats = next(t for t in sim_data if t['team'] == selected_team)
-                icon_win = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="green" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" style="display:inline; margin-right:5px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>"""
-                icon_loss = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="red" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" style="display:inline; margin-right:5px;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>"""
+            if matchups:
+                st.markdown("### ALL-PLAY-ALL SIMULATION (H2H)")
+                sim_data = run_h2h_simulation_detailed(matchups)
                 
-                for detail in team_stats['details']:
-                    icon = icon_win if detail['result'] == "WIN" else icon_loss
-                    st.markdown(f"""
-                        <div class="matchup-row" style="border-left: 4px solid {'#22c55e' if detail['result']=='WIN' else '#ef4444'};">
-                            <span>{icon} <b>VS</b> {detail['opponent']}</span>
-                            <span style="font-family:monospace;">{detail['record']} ({detail['result']})</span>
+                total_opponents = len(sim_data) - 1
+                best_teams = [t for t in sim_data if t['opponents_beaten'] == total_opponents]
+                worst_teams = [t for t in sim_data if t['opponents_lost'] == total_opponents]
+                
+                if best_teams:
+                    for t in best_teams:
+                        st.markdown(f"""<div style='background: rgba(34, 197, 94, 0.2); border-left: 4px solid #22c55e; padding: 10px; margin-bottom: 10px;'>
+                        👑 <b>DOMINATION ALERT:</b> {t['team']} beats everyone!</div>""", unsafe_allow_html=True)
+                
+                if worst_teams:
+                    for t in worst_teams:
+                         st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
+                        💀 <b>CRITICAL:</b> {t['team']} loses to everyone.</div>""", unsafe_allow_html=True)
+                
+                st.divider()
+                summary_df = pd.DataFrame(sim_data)[['team', 'total_wins', 'total_losses', 'win_pct']]
+                summary_df.columns = ["Team", "Cat Wins", "Cat Losses", "Win %"]
+                st.dataframe(summary_df.style.background_gradient(subset=['Win %'], cmap="Blues"), use_container_width=True, hide_index=True)
+                
+                st.divider()
+                
+                # --- DETAYLI ANALİZ (SVG İkonlu) ---
+                st.subheader("🕵️ Detailed Matchup Analysis")
+                selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data], key="team_analyzer_selectbox")
+                
+                if selected_team:
+                    team_stats = next(t for t in sim_data if t['team'] == selected_team)
+                    
+                    st.markdown(f"##### Results for {selected_team}")
+                    
+                    # SVG İkonlar
+                    icon_win = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>"""
+                    icon_loss = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>"""
+                    icon_tie = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>"""
+                    
+                    for detail in team_stats['details']:
+                        if detail['result'] == "WIN":
+                            border_color = "#22c55e"; badge_bg = "rgba(34, 197, 94, 0.2)"; badge_text = "#22c55e"; icon = icon_win
+                        elif detail['result'] == "LOSS":
+                            border_color = "#ef4444"; badge_bg = "rgba(239, 68, 68, 0.2)"; badge_text = "#ef4444"; icon = icon_loss
+                        else:
+                            border_color = "#94a3b8"; badge_bg = "rgba(148, 163, 184, 0.2)"; badge_text = "#cbd5e1"; icon = icon_tie
+                            
+                        st.markdown(f"""
+                        <div class="matchup-row" style="border-left: 4px solid {border_color};">
+                            <div style="font-weight: 600; font-size: 16px;">
+                                <span style="color: #64748b; margin-right: 10px; font-size: 14px;">VS</span> {detail['opponent']}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <div style="color: #94a3b8; font-family: 'Consolas', monospace; font-size: 15px; letter-spacing: 1px;">{detail['record']}</div>
+                                <div class="result-badge" style="background: {badge_bg}; color: {badge_text};">
+                                    {icon} {detail['result']}
+                                </div>
+                            </div>
                         </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
+        # TAB 4: ROTO SIMULATION
         with tab4:
-            raw_df, points_df = calculate_roto_score(st.session_state['matchups'])
-            if raw_df is not None:
-                st.markdown("#### SCORING TABLE (POINTS 1-10)")
-                st.dataframe(rename_display_columns(points_df).style.background_gradient(cmap="Greens"), use_container_width=True, hide_index=True)
-    else:
-        st.info("Please enter your League ID and click 'Initialize Data Fetch' to start.")
+            if matchups:
+                st.markdown("### ROTISSERIE (ROTO) ANALYSIS")
+                raw_df, points_df = calculate_roto_score(matchups)
+                
+                if raw_df is not None:
+                    st.markdown("#### RAW STATS")
+                    format_dict = {}
+                    for col in ['FG%', 'FT%']:
+                        if col in raw_df.columns: format_dict[col] = "{:.3f}"
+                    for col in ['3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']:
+                        if col in raw_df.columns: format_dict[col] = "{:.0f}"
+
+                    raw_df_display = rename_display_columns(raw_df)
+                    
+                    # 3PT, STL, TOV sütunlarını integer'a çevir (ondalık kısmı kaldır)
+                    for col in ['3PT', 'STL', 'TOV']:
+                        if col in raw_df_display.columns:
+                            raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
+                    
+                    st.dataframe(raw_df_display.style.format(format_dict), use_container_width=True, hide_index=True)   
+                    st.divider()
+                    st.markdown("#### SCORING TABLE (POINTS 1-10)")
+                    points_df_display = rename_display_columns(points_df)
+
+                    st.dataframe(
+                        points_df_display
+                        .style
+                        .background_gradient(subset=['Total Score'], cmap="Greens")
+                        .format("{:.0f}", subset=points_df_display.columns.drop('Team')),
+                        use_container_width=True,
+                        hide_index=True
+                    )
 
 if __name__ == "__main__":
     render_fantasy_league_page()
