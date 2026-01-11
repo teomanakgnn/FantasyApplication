@@ -342,7 +342,7 @@ def render_player_trends_page():
     st.divider()
 
     # 11. DETAYLI TABLO (Sadece Comparison Table)
-    st.subheader(f"📊 Comparison Table ({len(analysis_df)} Players)")
+    st.subheader(f"Comparison Table ({len(analysis_df)} Players)")
     
     # Tabloyu hazırlama
     display_df = analysis_df.reset_index().sort_values("diff", ascending=False)
