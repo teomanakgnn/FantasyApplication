@@ -10,23 +10,19 @@ def apply_custom_style():
     st.markdown(f"""
     <style>
         /* --- HEADER GİZLEME VE ALAN AYARLARI --- */
-        
         header[data-testid="stHeader"] {{
             visibility: hidden;
             display: none;
         }}
-        
         .block-container {{
             padding-top: 2rem !important;
         }}
-        
         footer {{
             visibility: hidden;
             display: none;
         }}
 
         /* --- MEVCUT TASARIM AYARLARI --- */
-        
         .stApp {{
             background-image: url("{background_url}");
             background-attachment: fixed;
@@ -51,6 +47,8 @@ def apply_custom_style():
             color: #f8fafc !important;
             text-align: center !important;
         }}
+        
+        /* Selectbox ve Tab Ayarları */
         div[data-baseweb="select"] > div {{
             background-color: #1e293b;
             color: white;
@@ -130,179 +128,23 @@ def apply_custom_style():
             text-transform: uppercase;
         }}
         
-        /* PRO Time Period Section */
-        .pro-time-section {{
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
-            border: 2px solid #6366f1;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            position: relative;
-            overflow: hidden;
-        }}
-        
-        .pro-time-section::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7, #8b5cf6, #6366f1);
-            background-size: 200% 100%;
-            animation: shimmer 3s linear infinite;
-        }}
-        
-        @keyframes shimmer {{
-            0% {{ background-position: -200% 0; }}
-            100% {{ background-position: 200% 0; }}
-        }}
-        
+        /* PRO BADGE (Basit haliyle kaldı, diğer yerlerde lazımsa diye) */
         .pro-badge {{
             display: inline-flex;
             align-items: center;
             gap: 6px;
             background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
             color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
-        }}
-        
-        .pro-badge::before {{
-            content: '⚡';
-            font-size: 12px;
-        }}
-        
-        .time-option {{
-            background: rgba(30, 41, 59, 0.6);
-            border: 2px solid #475569;
+            padding: 2px 8px;
             border-radius: 8px;
-            padding: 12px 16px;
-            margin: 8px 0;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }}
-        
-        .time-option:hover {{
-            background: rgba(37, 99, 235, 0.2);
-            border-color: #60a5fa;
-            transform: translateX(4px);
-        }}
-        
-        .time-option.selected {{
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%);
-            border-color: #8b5cf6;
-            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-left: 8px;
         }}
     </style>
     """, unsafe_allow_html=True)
-
-# ---------------- YARDIMCI FONKSİYONLAR ----------------
-
-def clean_stat_value(val):
-    try:
-        if isinstance(val, (int, float)): return float(val)
-        val = str(val).strip()
-        if val == '--': return 0.0
-        if '%' in val: return float(val.replace('%', ''))
-        return float(val)
-    except: return 0.0
-
-def normalize_column_names(df):
-    mapping = {'3PM': '3PTM', 'ThreePM': '3PTM', 'STL': 'ST', 'Steals': 'ST', 'TOV': 'TO', 'Turnovers': 'TO', 'BLK': 'BLK', 'Blocks': 'BLK', 'FGM': 'FG%', 'FTM': 'FT%'}
-    return df.rename(columns=mapping)
-
-def get_stat_val(stats, key):
-    if key in stats: return stats[key]
-    mapping = {'3PTM': ['3PM', '3PTM'], 'ST': ['STL', 'ST'], 'TO': ['TOV', 'TO']}
-    if key in mapping:
-        for possible_key in mapping[key]:
-            if possible_key in stats: return stats[possible_key]
-    return 0
-
-# --- ROTO HESAPLAMASI ---
-def calculate_roto_score(matchups):
-    data = []
-    for m in matchups:
-        h_stats = m['home_team'].get('stats', {}).copy(); h_stats['Team'] = m['home_team']['name']; data.append(h_stats)
-        a_stats = m['away_team'].get('stats', {}).copy(); a_stats['Team'] = m['away_team']['name']; data.append(a_stats)
-    if not data: return None, None
-    df = pd.DataFrame(data)
-    df = normalize_column_names(df)
-    target_cols = ['Team', 'FG%', 'FT%', '3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']
-    for col in target_cols:
-        if col not in df.columns: df[col] = 0.0
-    df = df[target_cols]
-    stat_cols = [c for c in target_cols if c != 'Team']
-    for col in stat_cols: df[col] = df[col].apply(clean_stat_value)
-    points_df = df[['Team']].copy()
-    for col in stat_cols:
-        if col == 'TO': points_df[col] = df[col].rank(ascending=False, method='min')
-        else: points_df[col] = df[col].rank(ascending=True, method='min')
-    points_df['Total Score'] = points_df[stat_cols].sum(axis=1)
-    points_df = points_df.sort_values('Total Score', ascending=False).reset_index(drop=True)
-    df_sorted = df.set_index('Team').loc[points_df['Team']].reset_index()
-    return df_sorted, points_df
-
-# --- H2H SİMÜLASYONU (Detaylı) ---
-def compare_teams_detailed(team_a_stats, team_b_stats):
-    wins, losses, ties = 0, 0, 0
-    cats = ['FG%', 'FT%', '3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']
-    inverse_cats = ['TO']
-    for cat in cats:
-        val_a = clean_stat_value(get_stat_val(team_a_stats, cat))
-        val_b = clean_stat_value(get_stat_val(team_b_stats, cat))
-        if cat in inverse_cats:
-            if val_a < val_b: wins += 1
-            elif val_a > val_b: losses += 1
-            else: ties += 1
-        else:
-            if val_a > val_b: wins += 1
-            elif val_a < val_b: losses += 1
-            else: ties += 1
-    return wins, losses, ties
-
-def run_h2h_simulation_detailed(matchups):
-    team_pool = []
-    for m in matchups:
-        team_pool.append({"name": m['home_team']['name'], "stats": m['home_team'].get('stats', {})})
-        team_pool.append({"name": m['away_team']['name'], "stats": m['away_team'].get('stats', {})})
-    sim_results = []
-    for team_a in team_pool:
-        total_wins, total_losses, total_ties = 0, 0, 0
-        match_details = []
-        for team_b in team_pool:
-            if team_a['name'] == team_b['name']: continue
-            w, l, t = compare_teams_detailed(team_a['stats'], team_b['stats'])
-            total_wins += w; total_losses += l; total_ties += t
-            if w > l: res = "WIN"
-            elif l > w: res = "LOSS"
-            else: res = "TIE"
-            match_details.append({"opponent": team_b['name'], "record": f"{w}-{l}-{t}", "result": res})
-        total_cats = total_wins + total_losses + total_ties
-        win_pct = total_wins / total_cats if total_cats > 0 else 0
-        sim_results.append({
-            "team": team_a['name'], "total_wins": total_wins, "total_losses": total_losses, "win_pct": win_pct,
-            "details": match_details,
-            "opponents_beaten": sum(1 for d in match_details if d['result'] == 'WIN'),
-            "opponents_lost": sum(1 for d in match_details if d['result'] == 'LOSS')
-        })
-    sim_results.sort(key=lambda x: (-x['total_wins'], -x['win_pct']))
-    return sim_results
-
-
-def rename_display_columns(df):
-    display_map = {
-        "3PTM": "3PT",
-        "ST": "STL",
-        "TO": "TOV"
-    }
-    return df.rename(columns=display_map)
 
 # ---------------- ANA SAYFA ----------------
 
@@ -316,9 +158,17 @@ def render_fantasy_league_page():
         st.title("FANTASY LEAGUE ANALYTICS")
         
         # Time filter badge gösterimi
-        current_filter = st.session_state.get('time_filter', 'week')
+        # Session state kontrolü
+        if 'time_filter_radio' not in st.session_state:
+            st.session_state.time_filter_radio = 'week'
+            
+        current_filter = st.session_state.time_filter_radio
         filter_display = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}
-        st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{filter_display[current_filter]}</span></div>", unsafe_allow_html=True)
+        
+        # Eğer yanlışlıkla month/season seçilirse badge bozulmasın diye default week alıyoruz
+        display_text = filter_display.get(current_filter, "CURRENT WEEK")
+        
+        st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{display_text}</span></div>", unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
@@ -329,27 +179,38 @@ def render_fantasy_league_page():
         
         st.markdown("---")
         
-        # PRO TIME PERIOD SECTION
+        # PRO TIME PERIOD SECTION (Eski mor kutu kaldırıldı, sadece başlık)
         st.markdown("""
-        <div class='pro-time-section'>
-            <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;'>
-                <div style='font-size: 15px; font-weight: 700; color: #e2e8f0; letter-spacing: 0.5px;'>TIME PERIOD</div>
-                <div class='pro-badge'>PRO</div>
-            </div>
-            <div style='color: #94a3b8; font-size: 11px; margin-bottom: 12px;'>⚡ Advanced temporal analysis</div>
+        <div style='display: flex; align-items: center; margin-bottom: 10px;'>
+            <span style='font-size: 14px; font-weight: 600; color: #e2e8f0;'>TIME PERIOD</span>
+            <span class='pro-badge'>PRO FEATURES</span>
         </div>
         """, unsafe_allow_html=True)
         
+        # Callback Fonksiyonu: Pro seçeneklere tıklanırsa engelle
+        def check_pro_access():
+            selected = st.session_state.time_filter_radio
+            if selected in ["month", "season"]:
+                st.toast("🔒 Historical data requires PRO subscription.", icon="🚫")
+                st.session_state.time_filter_radio = "week" # Force reset to week
+
         time_filter = st.radio(
             "Select Data Range:",
             options=["week", "month", "season"],
-            format_func=lambda x: {"week": "📅 Current Week", "month": "📊 Last Month", "season": "🏆 Full Season"}[x],
+            format_func=lambda x: {
+                "week": "Current Week", 
+                "month": "🔒 Last Month (PRO ONLY)", 
+                "season": "🔒 Full Season (PRO ONLY)"
+            }[x],
             index=0,
             key="time_filter_radio",
+            on_change=check_pro_access, # Seçim değiştiğinde bu fonksiyon çalışır
             label_visibility="collapsed"
         )
         
-        st.session_state['time_filter'] = time_filter
+        # Değişkene session state'ten atama yapalım ki resetlendiğinde doğru değeri alsın
+        final_time_filter = st.session_state.time_filter_radio
+        st.session_state['time_filter'] = final_time_filter
         
         st.markdown("---")
         load_data = st.button("INITIALIZE DATA FETCH", type="primary", use_container_width=True)
@@ -357,32 +218,16 @@ def render_fantasy_league_page():
     # --- VERİ YÜKLEME ---
     if load_data and league_id:
         st.session_state.fantasy_league_id = league_id
-        st.session_state.last_time_filter = time_filter
+        st.session_state.last_time_filter = final_time_filter
         with st.spinner("ESTABLISHING CONNECTION TO ESPN SERVERS..."):
             try:
                 df_standings = scrape_league_standings(int(league_id))
-                matchups = scrape_matchups(int(league_id), time_filter)
+                matchups = scrape_matchups(int(league_id), final_time_filter)
                 st.session_state['df_standings'] = df_standings
                 st.session_state['matchups'] = matchups
-                st.success(f"✅ Data loaded successfully ({filter_display[time_filter]})")
+                st.success(f"✅ Data loaded successfully ({filter_display.get(final_time_filter, 'CURRENT WEEK')})")
             except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
     
-    # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
-    if (st.session_state.get('fantasy_league_id') and 
-        st.session_state.get('last_time_filter') and 
-        st.session_state.get('last_time_filter') != time_filter):
-        
-        st.session_state.last_time_filter = time_filter
-        
-        with st.spinner(f"RELOADING DATA FOR {filter_display[time_filter]}..."):
-            try:
-                league_id = st.session_state.fantasy_league_id
-                matchups = scrape_matchups(int(league_id), time_filter)
-                st.session_state['matchups'] = matchups
-                st.rerun()  # Sayfayı yenile
-            except Exception as e: 
-                st.error(f"DATA RELOAD ERROR: {str(e)}")
-
     # --- GÖRÜNTÜLEME ---
     df_standings = st.session_state.get('df_standings')
     matchups = st.session_state.get('matchups')
@@ -490,7 +335,6 @@ def render_fantasy_league_page():
 
                     raw_df_display = rename_display_columns(raw_df)
                     
-                    # 3PT, STL, TOV sütunlarını integer'a çevir (ondalık kısmı kaldır)
                     for col in ['3PT', 'STL', 'TOV']:
                         if col in raw_df_display.columns:
                             raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
@@ -508,6 +352,3 @@ def render_fantasy_league_page():
                         use_container_width=True,
                         hide_index=True
                     )
-
-if __name__ == "__main__":
-    render_fantasy_league_page()
