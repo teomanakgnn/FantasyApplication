@@ -117,15 +117,87 @@ def apply_custom_style():
         /* Time filter badge */
         .time-badge {{
             display: inline-block;
-            background: rgba(37, 99, 235, 0.2);
-            border: 1px solid #2563eb;
-            color: #60a5fa;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 1px solid #8b5cf6;
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            margin-left: 12px;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            text-transform: uppercase;
+        }}
+        
+        /* PRO Time Period Section */
+        .pro-time-section {{
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
+            border: 2px solid #6366f1;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .pro-time-section::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7, #8b5cf6, #6366f1);
+            background-size: 200% 100%;
+            animation: shimmer 3s linear infinite;
+        }}
+        
+        @keyframes shimmer {{
+            0% {{ background-position: -200% 0; }}
+            100% {{ background-position: 200% 0; }}
+        }}
+        
+        .pro-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+            color: white;
             padding: 4px 12px;
             border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            margin-left: 10px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+        }}
+        
+        .pro-badge::before {{
+            content: '⚡';
+            font-size: 12px;
+        }}
+        
+        .time-option {{
+            background: rgba(30, 41, 59, 0.6);
+            border: 2px solid #475569;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+        
+        .time-option:hover {{
+            background: rgba(37, 99, 235, 0.2);
+            border-color: #60a5fa;
+            transform: translateX(4px);
+        }}
+        
+        .time-option.selected {{
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(124, 58, 237, 0.3) 100%);
+            border-color: #8b5cf6;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -256,15 +328,25 @@ def render_fantasy_league_page():
         else: league_id = league_input.strip()
         
         st.markdown("---")
-        st.markdown("### TIME PERIOD")
-        st.caption("⚡ Change anytime after loading data")
+        
+        # PRO TIME PERIOD SECTION
+        st.markdown("""
+        <div class='pro-time-section'>
+            <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;'>
+                <div style='font-size: 15px; font-weight: 700; color: #e2e8f0; letter-spacing: 0.5px;'>TIME PERIOD</div>
+                <div class='pro-badge'>PRO</div>
+            </div>
+            <div style='color: #94a3b8; font-size: 11px; margin-bottom: 12px;'>⚡ Advanced temporal analysis</div>
+        </div>
+        """, unsafe_allow_html=True)
         
         time_filter = st.radio(
             "Select Data Range:",
             options=["week", "month", "season"],
             format_func=lambda x: {"week": "📅 Current Week", "month": "📊 Last Month", "season": "🏆 Full Season"}[x],
             index=0,
-            key="time_filter_radio"
+            key="time_filter_radio",
+            label_visibility="collapsed"
         )
         
         st.session_state['time_filter'] = time_filter

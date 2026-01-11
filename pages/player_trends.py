@@ -22,6 +22,22 @@ def render_player_trends_page():
     # 1. Stil Ayarları
     st.markdown("""
         <style>
+                
+                        /* Streamlit Header'ı Gizle */
+            header[data-testid="stHeader"] {
+                display: none !important;
+            }
+            
+            /* Hamburger menüyü gizle */
+            #MainMenu {
+                visibility: hidden !important;
+            }
+            
+            /* Footer'ı gizle */
+            footer {
+                visibility: hidden !important;
+            }    
+
             .stApp { background-image: none !important; }
             .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
             div[data-testid="stMetric"] {
@@ -67,7 +83,7 @@ def render_player_trends_page():
     period2_label = st.sidebar.selectbox(
         "Period 2:", 
         options=list(period_options.keys()), 
-        index=2  # "Last 30 Days" varsayılan
+        index=4  # "Full Season" varsayılan
     )
     period2_days = period_options[period2_label]
     
@@ -94,6 +110,37 @@ def render_player_trends_page():
         f"Max Avg Score",
         min_value=0, max_value=150, value=100, step=5
     )
+    
+    st.sidebar.markdown("---")
+    
+    # Background URL Input
+    st.sidebar.markdown("### 🎨 Background Settings")
+    background_url = "https://wallpapers.com/images/featured/stock-market-pd5zksxr07t7a4xu.jpg"
+    
+    # Apply background if URL provided
+    if background_url:
+        st.markdown(f"""
+            <style>
+                .stApp {{
+                    background-image: url("{background_url}") !important;
+                    background-size: cover !important;
+                    background-position: center !important;
+                    background-repeat: no-repeat !important;
+                    background-attachment: fixed !important;
+                }}
+                /* Optional: Add overlay for better text readability */
+                .stApp::before {{
+                    content: "";
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.3);
+                    z-index: -1;
+                }}
+            </style>
+        """, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
     if st.sidebar.button("⬅️ Back to Home", use_container_width=True):
@@ -294,49 +341,30 @@ def render_player_trends_page():
             
     st.divider()
 
-    # 11. DETAYLI TABLO
-    tab1, tab2, tab3 = st.tabs([
-        f"📊 Comparison Table ({len(analysis_df)} Players)", 
-        f"📋 Period 1 Games ({period1_label})",
-        f"📋 Period 2 Games ({period2_label})"
-    ])
-
-    with tab1:
-        # Tabloyu hazırlama
-        display_df = analysis_df.reset_index().sort_values("diff", ascending=False)
-        
-        st.dataframe(
-            display_df[[
-                "PLAYER", "TEAM", "games_p1", "games_p2",
-                "avg_p1", "avg_p2", "diff"
-            ]],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "PLAYER": st.column_config.TextColumn("Player", width="medium"),
-                "TEAM": st.column_config.TextColumn("Team", width="small"),
-                "games_p1": st.column_config.NumberColumn(f"G (P1)", format="%d"),
-                "games_p2": st.column_config.NumberColumn(f"G (P2)", format="%d"),
-                "avg_p1": st.column_config.NumberColumn(f"{period1_label}", format="%.1f"),
-                "avg_p2": st.column_config.NumberColumn(f"{period2_label}", format="%.1f"),
-                "diff": st.column_config.NumberColumn("Diff (+/-)", format="%.1f"),
-            },
-            height=600
-        )
-
-    with tab2:
-        # Period 1 maçları
-        st.dataframe(
-            df_p1.sort_values(["date", "fantasy_score"], ascending=[False, False]), 
-            use_container_width=True
-        )
-
-    with tab3:
-        # Period 2 maçları
-        st.dataframe(
-            df_p2.sort_values(["date", "fantasy_score"], ascending=[False, False]), 
-            use_container_width=True
-        )
+    # 11. DETAYLI TABLO (Sadece Comparison Table)
+    st.subheader(f"Comparison Table ({len(analysis_df)} Players)")
+    
+    # Tabloyu hazırlama
+    display_df = analysis_df.reset_index().sort_values("diff", ascending=False)
+    
+    st.dataframe(
+        display_df[[
+            "PLAYER", "TEAM", "games_p1", "games_p2",
+            "avg_p1", "avg_p2", "diff"
+        ]],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "PLAYER": st.column_config.TextColumn("Player", width="medium"),
+            "TEAM": st.column_config.TextColumn("Team", width="small"),
+            "games_p1": st.column_config.NumberColumn(f"G (P1)", format="%d"),
+            "games_p2": st.column_config.NumberColumn(f"G (P2)", format="%d"),
+            "avg_p1": st.column_config.NumberColumn(f"{period1_label}", format="%.1f"),
+            "avg_p2": st.column_config.NumberColumn(f"{period2_label}", format="%.1f"),
+            "diff": st.column_config.NumberColumn("Diff (+/-)", format="%.1f"),
+        },
+        height=600
+    )
 
 if __name__ == "__main__":
     render_player_trends_page()
