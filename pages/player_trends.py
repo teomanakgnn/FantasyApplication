@@ -50,7 +50,7 @@ def render_player_trends_page():
         </style>
     """, unsafe_allow_html=True)
     
-    st.title("📈 Player Form & Trends")
+    st.title("Player Form & Trends")
     
     # 2. Import Kontrolü
     try:
