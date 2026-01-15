@@ -10,8 +10,7 @@ from webdriver_manager.core.os_manager import ChromeType
 
 def get_driver():
     chrome_options = Options()
-    
-    # Hata mesajındaki binary yolunu açıkça belirtiyoruz
+    # Eğer sisteminizde Chromium farklı bir yerdeyse burayı güncelleyin:
     chrome_options.binary_location = "/usr/bin/chromium"
     
     chrome_options.add_argument("--headless=new")
@@ -24,7 +23,6 @@ def get_driver():
         "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
     )
 
-    # ÖNEMLİ DÜZELTME: ChromeType.CHROMIUM kullanarak sürüm eşleşmesini sağlıyoruz
     service = Service(
         ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
     )
@@ -66,8 +64,8 @@ def scrape_league_standings(league_id: int):
 
 def scrape_team_rosters(league_id: int):
     """
-    Tüm takımların roster bilgilerini çeker.
-    Geliştirilmiş Scroll ve Fallback mekanizması içerir.
+    Takım kadrolarını çeker. 
+    Yöntem: Sayfadaki tüm tabloları bul -> İstatistik tablosu mu kontrol et -> Takım ismini bul.
     """
     url = f"https://fantasy.espn.com/basketball/league/teams?leagueId={league_id}"
     print(f"🔗 Fetching rosters from: {url}")
@@ -77,87 +75,110 @@ def scrape_team_rosters(league_id: int):
     
     try:
         driver.get(url)
-        time.sleep(5) 
+        time.sleep(5)
         
-        # --- SCROLL MEKANİZMASI ---
-        total_height = driver.execute_script("return document.body.scrollHeight")
-        for i in range(0, total_height, 700):
+        # --- SCROLL (Aşağı Kaydırma) ---
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        # Yavaş yavaş aşağı in
+        for i in range(0, last_height, 500):
             driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.5)
+            time.sleep(0.2)
         
+        # En sona git ve bekle
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
-        # ---------------------------
+        # -------------------------------
         
         soup = BeautifulSoup(driver.page_source, "html.parser")
         
-        # YÖNTEM 1: Standart "Team" sectionlarını bul
-        team_sections = soup.find_all("div", class_=lambda x: x and "team" in x.lower())
-        
-        # YÖNTEM 2 (Fallback): Tablo tarama
-        if len(team_sections) < 2:
-            print("⚠️ Standart section bulunamadı, tablo tarama moduna geçiliyor...")
-            all_tables = soup.find_all("table")
-            team_sections = []
-            for tbl in all_tables:
-                if "Player" in tbl.get_text():
-                    parent = tbl.find_parent("div", class_=lambda x: x and "Body" in x) or tbl.parent
-                    if parent:
-                        team_sections.append(parent)
+        # Sayfadaki TÜM tabloları bul
+        all_tables = soup.find_all("table")
+        print(f"🔎 Sayfada {len(all_tables)} adet tablo bulundu. Kadrolar aranıyor...")
 
-        print(f"🔎 {len(team_sections)} potansiyel takım alanı bulundu.")
+        for table in all_tables:
+            # 1. Bu tablo bir istatistik tablosu mu? (Header kontrolü)
+            header_text = table.get_text().upper()
+            if not ("PTS" in header_text and "FG%" in header_text):
+                continue
 
-        for section in team_sections:
-            team_link = section.find("a", href=lambda x: x and "teamId=" in x)
+            # 2. Takım İsmini Bul (Tablonun üstündeki containerlarda ara)
+            # Genelde yapı: Section -> Header (İsim) + Body (Tablo)
+            team_name = "Unknown Team"
             
-            if not team_link:
-                prev = section.find_previous("div", class_=lambda x: x and "Header" in x)
-                if prev:
-                    team_link = prev.find("a", href=lambda x: x and "teamId=" in x)
-
-            if not team_link: continue
+            # Tablonun ebeveynlerine tırmanarak içinde 'teamId' linki olan ilk yapıyı bul
+            parent = table.parent
+            found_name = False
+            
+            # 5 seviye yukarı çıkıp takım ismi arayalım
+            for _ in range(5):
+                if not parent: break
                 
-            team_name = team_link.get_text(strip=True)
-            player_table = section.find("table")
-            if not player_table: continue
+                # Önce bu seviyedeki veya önceki kardeşlerdeki Header'a bak
+                # ESPN yapısı genelde: div (Header) -> div (Body/Table)
+                header_div = parent.find_previous_sibling("div")
+                if header_div:
+                    link = header_div.find("a", href=lambda x: x and "teamId=" in x)
+                    if link:
+                        team_name = link.get_text(strip=True)
+                        found_name = True
+                        break
+                
+                # Eğer sibling'de yoksa, parent'ın kendi içinde link var mı?
+                link = parent.find("a", href=lambda x: x and "teamId=" in x)
+                if link:
+                     team_name = link.get_text(strip=True)
+                     found_name = True
+                     break
+                
+                parent = parent.parent
             
+            if not found_name:
+                continue # Takım ismi bulunamadıysa bu tabloyu atla (muhtemelen başka bir stats tablosu)
+
+            # 3. Tablodaki Oyuncuları Çek
             players = []
-            rows = player_table.find_all("tr")
+            rows = table.find_all("tr")
             
             for row in rows:
                 cells = row.find_all("td")
                 if len(cells) < 2: continue
                 
-                player_name_div = row.find("div", {"title": True})
-                if player_name_div:
-                     player_name = player_name_div['title']
-                else:
-                    p_link = row.find("a", href=lambda x: x and "playerId" in x)
-                    if p_link: player_name = p_link.get_text(strip=True)
-                    else: continue
-
+                # Oyuncu ismi bulma
+                player_name = None
+                
+                # Yöntem A: title attribute'u
+                div_title = row.find("div", {"title": True})
+                if div_title: player_name = div_title['title']
+                
+                # Yöntem B: Link
+                if not player_name:
+                    a_tag = row.find("a", href=lambda x: x and "playerId" in x)
+                    if a_tag: player_name = a_tag.get_text(strip=True)
+                
                 if not player_name or player_name == "Player": continue
 
+                # İstatistikleri bulma
                 stats_data = {}
-                stat_values = []
-                
+                values = []
                 for cell in cells:
                     txt = cell.get_text(strip=True)
+                    # Sayı, yüzde veya -- içeren hücreleri al
                     if (txt.replace('.', '', 1).isdigit() or txt == '--' or '%' in txt) and len(txt) < 8:
-                        stat_values.append(txt)
+                        values.append(txt)
                 
-                if len(stat_values) >= 9:
-                    relevant = stat_values[-9:] 
+                # 9-Cat eşleştirme (Sondan başa)
+                if len(values) >= 9:
+                    relevant = values[-9:]
                     cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
                     for i, cat in enumerate(cats):
                         stats_data[cat] = relevant[i]
-
+                    
                     players.append({"name": player_name, "stats": stats_data})
             
             if players:
                 rosters[team_name] = players
-                print(f"✅ {team_name}: {len(players)} oyuncu")
-        
+                print(f"✅ {team_name}: {len(players)} oyuncu bulundu")
+
         driver.quit()
         return rosters
         
@@ -204,6 +225,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         tables = soup.find_all("table")
         stat_tables = []
 
+        # Skor tablolarını filtrele
         for table in tables:
             txt = table.get_text()
             if all(x in txt for x in ["FG%", "FT%", "REB", "AST", "PTS"]):
@@ -213,7 +235,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
         for table in stat_tables:
             rows = table.find_all("tr")
-            if len(rows) < 3: continue
+            if len(rows) < 3: continue # Header + 2 takım yoksa geç
 
             away_data = parse_row_stats(rows[1])
             home_data = parse_row_stats(rows[2])
@@ -255,7 +277,6 @@ def parse_row_stats(row):
     if len(values) >= 9:
         relevant_values = values[-9:] 
         for i, cat in enumerate(categories):
-            stats_data = {} 
             stats[cat] = relevant_values[i]
         return stats
     return None
