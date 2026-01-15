@@ -37,7 +37,6 @@ def scrape_league_standings(league_id: int):
     Args:
         league_id: ESPN League ID
     """
-    # Standings her zaman sezonluk olduğu için time_filter parametresini kaldırdık
     url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
     
     driver = get_driver()
@@ -69,6 +68,101 @@ def scrape_league_standings(league_id: int):
     except Exception as e:
         if driver: driver.quit()
         return None
+
+
+def scrape_team_rosters(league_id: int):
+    """
+    Tüm takımların roster bilgilerini çeker (oyuncu isimleri ve istatistikleri).
+    
+    Args:
+        league_id: ESPN League ID
+        
+    Returns:
+        dict: {team_name: [{"name": str, "stats": dict}, ...]}
+    """
+    url = f"https://fantasy.espn.com/basketball/league/teams?leagueId={league_id}"
+    print(f"🔗 Fetching rosters from: {url}")
+    
+    driver = get_driver()
+    rosters = {}
+    
+    try:
+        driver.get(url)
+        time.sleep(6)
+        
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
+        
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        
+        # Takım kartlarını bul
+        team_sections = soup.find_all("div", class_=lambda x: x and "team" in x.lower())
+        
+        # Alternatif: Tüm expansion panelleri bul
+        if not team_sections:
+            team_sections = soup.find_all("section")
+        
+        for section in team_sections:
+            # Takım ismini bul
+            team_link = section.find("a", href=lambda x: x and "teamId=" in x)
+            if not team_link:
+                continue
+                
+            team_name = team_link.get_text(strip=True)
+            
+            # Oyuncu tablosunu bul
+            player_table = section.find("table")
+            if not player_table:
+                continue
+            
+            players = []
+            rows = player_table.find_all("tr")
+            
+            for row in rows[1:]:  # İlk satır header
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+                
+                # Oyuncu ismi
+                player_link = cells[0].find("a")
+                if not player_link:
+                    continue
+                    
+                player_name = player_link.get_text(strip=True)
+                
+                # İstatistikler (9-cat sırasıyla)
+                stats_data = {}
+                stat_values = []
+                
+                for cell in cells[1:]:
+                    txt = cell.get_text(strip=True)
+                    if any(char.isdigit() for char in txt):
+                        stat_values.append(txt)
+                
+                if len(stat_values) >= 9:
+                    categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+                    for i, cat in enumerate(categories):
+                        if i < len(stat_values):
+                            stats_data[cat] = stat_values[i]
+                    
+                    players.append({
+                        "name": player_name,
+                        "stats": stats_data
+                    })
+            
+            if players:
+                rosters[team_name] = players
+                print(f"✅ {team_name}: {len(players)} oyuncu")
+        
+        driver.quit()
+        print(f"✅ Toplam {len(rosters)} takımın roster'ı çekildi")
+        return rosters
+        
+    except Exception as e:
+        print(f"❌ Roster çekme hatası: {e}")
+        if driver:
+            driver.quit()
+        return {}
     
 
 def extract_team_names_from_card(card):
@@ -100,18 +194,11 @@ def get_scoring_period_params(time_filter: str):
     Returns:
         str: URL parametreleri
     """
-    # ESPN Fantasy Basketball için:
-    # Haftalık view için herhangi bir parametre eklemeye gerek yok (default mevcut hafta)
-    # Aylık ve sezonluk için "view" parametresi kullanılır
-    
     if time_filter == "week":
-        # Mevcut hafta (default)
         return ""
     elif time_filter == "month":
-        # Matchup history view (genelde son birkaç hafta)
         return "&view=mMatchupScore"
     elif time_filter == "season":
-        # Sezon geneli görünüm
         return "&view=mTeam"
     else:
         return ""
@@ -127,7 +214,6 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
     """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     
-    # Time filter parametrelerini ekle
     params = get_scoring_period_params(time_filter)
     url = base_url + params
     
@@ -138,14 +224,13 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
     try:
         driver.get(url)
-        time.sleep(8)  # Daha uzun bekleme süresi
+        time.sleep(8)  
 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
-        # GERÇEK 9-CAT STAT TABLOLARI
         tables = soup.find_all("table")
         stat_tables = []
 

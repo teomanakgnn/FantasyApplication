@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from services.selenium_scraper import scrape_league_standings, scrape_matchups
+from services.selenium_scraper import scrape_league_standings, scrape_matchups, scrape_team_rosters
 
 # ---------------- CONFIG & CSS ----------------
 
@@ -221,6 +221,98 @@ def calculate_roto_score(matchups):
     df_sorted = df.set_index('Team').loc[points_df['Team']].reset_index()
     return df_sorted, points_df
 
+# --- TRADE ANALYZER FONKSİYONLARI ---
+def calculate_team_totals(roster):
+    """Bir takımın tüm oyuncularının toplam istatistiklerini hesaplar"""
+    totals = {'FG%': [], 'FT%': [], '3PM': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 'STL': 0, 'BLK': 0, 'TO': 0}
+    
+    for player in roster:
+        stats = player.get('stats', {})
+        for cat in ['3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO']:
+            val = clean_stat_value(stats.get(cat, 0))
+            totals[cat] += val
+        
+        # Yüzdelik statler için liste tut (ortalama alınacak)
+        for pct in ['FG%', 'FT%']:
+            val = clean_stat_value(stats.get(pct, 0))
+            if val > 0:
+                totals[pct].append(val)
+    
+    # Yüzdeliklerin ortalamasını al
+    totals['FG%'] = sum(totals['FG%']) / len(totals['FG%']) if totals['FG%'] else 0
+    totals['FT%'] = sum(totals['FT%']) / len(totals['FT%']) if totals['FT%'] else 0
+    
+    return totals
+
+def display_trade_impact(old_stats, new_stats):
+    """Trade öncesi ve sonrası istatistik değişimlerini gösterir"""
+    categories = ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO']
+    
+    for cat in categories:
+        old_val = old_stats.get(cat, 0)
+        new_val = new_stats.get(cat, 0)
+        
+        if cat in ['FG%', 'FT%']:
+            diff = new_val - old_val
+            diff_str = f"{diff:+.3f}"
+        else:
+            diff = new_val - old_val
+            diff_str = f"{diff:+.1f}"
+        
+        # TO için ters mantık (düşük iyi)
+        if cat == 'TO':
+            if diff < 0:
+                color = "#22c55e"
+                arrow = "⬇️"
+            elif diff > 0:
+                color = "#ef4444"
+                arrow = "⬆️"
+            else:
+                color = "#94a3b8"
+                arrow = "➡️"
+        else:
+            if diff > 0:
+                color = "#22c55e"
+                arrow = "⬆️"
+            elif diff < 0:
+                color = "#ef4444"
+                arrow = "⬇️"
+            else:
+                color = "#94a3b8"
+                arrow = "➡️"
+        
+        st.markdown(f"""
+        <div style='display: flex; justify-content: space-between; padding: 8px; background: rgba(30, 41, 59, 0.4); margin: 4px 0; border-radius: 4px;'>
+            <span style='font-weight: 600;'>{cat}</span>
+            <span style='color: {color}; font-weight: 700;'>{arrow} {diff_str}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+def compare_h2h_winner(team_a_stats, team_b_stats):
+    """İki takımı H2H formatında karşılaştırır ve kazananı döner"""
+    wins_a, wins_b, ties = 0, 0, 0
+    cats = ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO']
+    
+    for cat in cats:
+        val_a = team_a_stats.get(cat, 0)
+        val_b = team_b_stats.get(cat, 0)
+        
+        if cat == 'TO':
+            if val_a < val_b: wins_a += 1
+            elif val_a > val_b: wins_b += 1
+            else: ties += 1
+        else:
+            if val_a > val_b: wins_a += 1
+            elif val_a < val_b: wins_b += 1
+            else: ties += 1
+    
+    if wins_a > wins_b:
+        return f"Team A Wins ({wins_a}-{wins_b}-{ties})"
+    elif wins_b > wins_a:
+        return f"Team B Wins ({wins_b}-{wins_a}-{ties})"
+    else:
+        return f"TIE ({wins_a}-{wins_b}-{ties})"
+
 # --- H2H SİMÜLASYONU (Detaylı) ---
 def compare_teams_detailed(team_a_stats, team_b_stats):
     wins, losses, ties = 0, 0, 0
@@ -322,7 +414,7 @@ def render_fantasy_league_page():
             }[x],
             index=0,
             key="time_filter_radio",
-            disabled=True,   # 👈 tamamı kilitli
+            disabled=True,
             label_visibility="collapsed"
         )
 
@@ -332,6 +424,11 @@ def render_fantasy_league_page():
         
         st.markdown("---")
         load_data = st.button("INITIALIZE DATA FETCH", type="primary", use_container_width=True)
+        
+        # Roster yükleme butonu
+        if st.session_state.get('fantasy_league_id'):
+            st.markdown("---")
+            load_rosters = st.button("🔄 LOAD TEAM ROSTERS", use_container_width=True)
         
     # --- VERİ YÜKLEME ---
     if load_data and league_id:
@@ -346,6 +443,16 @@ def render_fantasy_league_page():
                 st.success(f"✅ Data loaded successfully ({filter_display[time_filter]})")
             except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
     
+    # --- ROSTER YÜKLEME ---
+    if st.session_state.get('fantasy_league_id') and 'load_rosters' in locals() and load_rosters:
+        with st.spinner("LOADING TEAM ROSTERS..."):
+            try:
+                rosters = scrape_team_rosters(int(st.session_state.fantasy_league_id))
+                st.session_state['rosters'] = rosters
+                st.success(f"✅ Loaded rosters for {len(rosters)} teams")
+            except Exception as e:
+                st.error(f"ROSTER FETCH ERROR: {str(e)}")
+    
     # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
     if (st.session_state.get('fantasy_league_id') and 
         st.session_state.get('last_time_filter') and 
@@ -358,17 +465,18 @@ def render_fantasy_league_page():
                 league_id = st.session_state.fantasy_league_id
                 matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['matchups'] = matchups
-                st.rerun()  # Sayfayı yenile
+                st.rerun()
             except Exception as e: 
                 st.error(f"DATA RELOAD ERROR: {str(e)}")
 
     # --- GÖRÜNTÜLEME ---
     df_standings = st.session_state.get('df_standings')
     matchups = st.session_state.get('matchups')
+    rosters = st.session_state.get('rosters', {})
 
     if df_standings is not None or matchups is not None:
         
-        tab1, tab2, tab3, tab4 = st.tabs(["LEAGUE STANDINGS", "WEEKLY MATCHUPS", "H2H POWER RANK", "ROTO SIMULATION"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["LEAGUE STANDINGS", "WEEKLY MATCHUPS", "H2H POWER RANK", "ROTO SIMULATION", "TRADE ANALYZER"])
 
         # TAB 1: STANDINGS
         with tab1:
@@ -469,7 +577,7 @@ def render_fantasy_league_page():
 
                     raw_df_display = rename_display_columns(raw_df)
                     
-                    # 3PT, STL, TOV sütunlarını integer'a çevir (ondalık kısmı kaldır)
+                    # 3PT, STL, TOV sütunlarını integer'a çevir
                     for col in ['3PT', 'STL', 'TOV']:
                         if col in raw_df_display.columns:
                             raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
@@ -487,6 +595,98 @@ def render_fantasy_league_page():
                         use_container_width=True,
                         hide_index=True
                     )
+        
+        # TAB 5: TRADE ANALYZER
+        with tab5:
+            if rosters:
+                st.markdown("### 🔄 TRADE IMPACT ANALYZER")
+                st.markdown("<div style='color: #94a3b8; margin-bottom: 20px;'>Analyze how trading players would affect both teams' category performance</div>", unsafe_allow_html=True)
+                
+                team_names = sorted(rosters.keys())
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### 🔵 Team A")
+                    team_a = st.selectbox("Select Team A", team_names, key="team_a_select")
+                    
+                    if team_a and team_a in rosters:
+                        player_names_a = [p['name'] for p in rosters[team_a]]
+                        players_a = st.multiselect(
+                            "Players Team A gives away:",
+                            player_names_a,
+                            key="players_a_select"
+                        )
+                
+                with col2:
+                    st.markdown("#### 🔴 Team B")
+                    team_b = st.selectbox("Select Team B", [t for t in team_names if t != team_a], key="team_b_select")
+                    
+                    if team_b and team_b in rosters:
+                        player_names_b = [p['name'] for p in rosters[team_b]]
+                        players_b = st.multiselect(
+                            "Players Team B gives away:",
+                            player_names_b,
+                            key="players_b_select"
+                        )
+                
+                st.markdown("---")
+                
+                if st.button("⚡ ANALYZE TRADE", type="primary", use_container_width=True):
+                    if not players_a or not players_b:
+                        st.warning("⚠️ Please select at least one player from each team")
+                    else:
+                        # Trade analizi
+                        team_a_roster = rosters[team_a]
+                        team_b_roster = rosters[team_b]
+                        
+                        # Oyuncuları bul
+                        traded_from_a = [p for p in team_a_roster if p['name'] in players_a]
+                        traded_from_b = [p for p in team_b_roster if p['name'] in players_b]
+                        
+                        # Mevcut durumu hesapla
+                        current_a_stats = calculate_team_totals(team_a_roster)
+                        current_b_stats = calculate_team_totals(team_b_roster)
+                        
+                        # Trade sonrası durumu hesapla
+                        new_roster_a = [p for p in team_a_roster if p['name'] not in players_a] + traded_from_b
+                        new_roster_b = [p for p in team_b_roster if p['name'] not in players_b] + traded_from_a
+                        
+                        new_a_stats = calculate_team_totals(new_roster_a)
+                        new_b_stats = calculate_team_totals(new_roster_b)
+                        
+                        # Değişimleri göster
+                        st.markdown("### 📊 TRADE IMPACT SUMMARY")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown(f"#### {team_a}")
+                            display_trade_impact(current_a_stats, new_a_stats)
+                        
+                        with col2:
+                            st.markdown(f"#### {team_b}")
+                            display_trade_impact(current_b_stats, new_b_stats)
+                        
+                        st.markdown("---")
+                        
+                        # H2H karşılaştırma
+                        st.markdown("### ⚔️ HEAD-TO-HEAD COMPARISON")
+                        
+                        current_winner = compare_h2h_winner(current_a_stats, current_b_stats)
+                        new_winner = compare_h2h_winner(new_a_stats, new_b_stats)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("**Before Trade:**")
+                            st.markdown(f"<div style='font-size: 24px; font-weight: bold; color: #60a5fa;'>{current_winner}</div>", unsafe_allow_html=True)
+                        
+                        with col2:
+                            st.markdown("**After Trade:**")
+                            st.markdown(f"<div style='font-size: 24px; font-weight: bold; color: #22c55e;'>{new_winner}</div>", unsafe_allow_html=True)
+                        
+            else:
+                st.info("📌 Please load team rosters first using the sidebar button")
 
 if __name__ == "__main__":
     render_fantasy_league_page()

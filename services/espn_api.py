@@ -2,7 +2,9 @@ import requests
 from datetime import datetime, timedelta
 import streamlit as st
 from functools import lru_cache
-from typing import Dict, List
+import concurrent.futures 
+from typing import Dict, List, Optional, Union
+
 
 # =================================================================
 # NBA SCOREBOARD & BOXSCORE FONKSİYONLARI (MEVCUT - DEĞİŞMEDİ)
@@ -395,3 +397,72 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
         teams.values(),
         key=lambda t: (-t["wins"], -t["points_for"])
     )
+
+
+def get_historical_boxscores(start_date, end_date):
+    """
+    Belirtilen tarih aralığındaki TÜM maçların boxscore'larını çeker.
+    Performans için Threading kullanır.
+    """
+    all_game_data = []
+    
+    # Tarih listesi oluştur
+    date_list = []
+    curr = start_date
+    while curr <= end_date:
+        date_list.append(curr)
+        curr += timedelta(days=1)
+        
+    print(f"Fetching data from {start_date} to {end_date} ({len(date_list)} days)")
+
+    # 1. Adım: Tüm günlerin Game ID'lerini topla
+    # Threading ile çok daha hızlı
+    date_game_map = {} # {date: [game_ids]}
+    
+    def fetch_ids_for_date(d):
+        return d, get_game_ids(d)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_date = {executor.submit(fetch_ids_for_date, d): d for d in date_list}
+        for future in concurrent.futures.as_completed(future_to_date):
+            d, ids = future.result()
+            if ids:
+                date_game_map[d] = ids
+
+    # 2. Adım: Tüm Game ID'ler için Boxscore çek
+    all_game_ids = []
+    game_id_to_date = {}
+    
+    for d, ids in date_game_map.items():
+        for gid in ids:
+            all_game_ids.append(gid)
+            game_id_to_date[gid] = d
+            
+    # Boxscore'ları paralel çek
+    results = []
+    def fetch_box_with_date(gid):
+        return game_id_to_date[gid], get_boxscore(gid)
+
+    # İlerleme çubuğu (Streamlit context'inde ise)
+    total_games = len(all_game_ids)
+    if total_games == 0:
+        return []
+
+    # UI kilitlenmesin diye progress bar opsiyonel
+    # (Burada basitçe çekiyoruz)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_game = {executor.submit(fetch_box_with_date, gid): gid for gid in all_game_ids}
+        
+        for future in concurrent.futures.as_completed(future_to_game):
+            try:
+                g_date, players = future.result()
+                if players:
+                    results.append({
+                        "date": g_date,
+                        "players": players
+                    })
+            except Exception as e:
+                print(f"Error fetching historical game: {e}")
+                
+    return results
