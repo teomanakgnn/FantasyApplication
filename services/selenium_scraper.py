@@ -9,7 +9,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 def get_driver():
     chrome_options = Options()
-    chrome_options.binary_location = "/usr/bin/chromium"
+    # Linux/Server ortamında çalışıyorsa binary location gerekebilir, 
+    # localde çalışıyorsan bu satırı yoruma alabilirsin:
+    # chrome_options.binary_location = "/usr/bin/chromium"
     
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -18,39 +20,26 @@ def get_driver():
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
 
-    service = Service(
-        ChromeDriverManager(
-            chrome_type="chromium"
-        ).install()
-    )
-
+    service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
 def scrape_league_standings(league_id: int):
-    """
-    Lig Puan Durumunu çeker.
-    
-    Args:
-        league_id: ESPN League ID
-    """
     url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
-    
     driver = get_driver()
     
     try:
         driver.get(url)
-        time.sleep(4)
+        time.sleep(5)
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         html_io = StringIO(driver.page_source)
         dfs = pd.read_html(html_io)
         
         target_df = pd.DataFrame()
-        
         for df in dfs:
             headers = " ".join([str(col).upper() for col in df.columns])
             if ("W" in headers or "WIN" in headers) and len(df) >= 4:
@@ -72,13 +61,8 @@ def scrape_league_standings(league_id: int):
 
 def scrape_team_rosters(league_id: int):
     """
-    Tüm takımların roster bilgilerini çeker (oyuncu isimleri ve istatistikleri).
-    
-    Args:
-        league_id: ESPN League ID
-        
-    Returns:
-        dict: {team_name: [{"name": str, "stats": dict}, ...]}
+    Tüm takımların roster bilgilerini çeker.
+    Geliştirilmiş Scroll ve Fallback mekanizması içerir.
     """
     url = f"https://fantasy.espn.com/basketball/league/teams?leagueId={league_id}"
     print(f"🔗 Fetching rosters from: {url}")
@@ -88,23 +72,50 @@ def scrape_team_rosters(league_id: int):
     
     try:
         driver.get(url)
-        time.sleep(6)
+        time.sleep(5) # İlk yükleme beklemesi
         
+        # --- İYİLEŞTİRİLMİŞ SCROLL MEKANİZMASI ---
+        # Sayfayı parça parça aşağı kaydır (Lazy load tetiklemek için)
+        total_height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(0, total_height, 700):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.5)
+        
+        # En alta git ve biraz daha bekle
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
+        time.sleep(3)
+        # ----------------------------------------
         
         soup = BeautifulSoup(driver.page_source, "html.parser")
         
-        # Takım kartlarını bul
+        # YÖNTEM 1: Standart "Team" sectionlarını bulmaya çalış
         team_sections = soup.find_all("div", class_=lambda x: x and "team" in x.lower())
         
-        # Alternatif: Tüm expansion panelleri bul
-        if not team_sections:
-            team_sections = soup.find_all("section")
-        
+        # YÖNTEM 2 (Fallback): Eğer div class isimleri değişmişse, direk Tabloları bul
+        if len(team_sections) < 2:
+            print("⚠️ Standart section bulunamadı, tablo tarama moduna geçiliyor...")
+            # İçinde 'Player' yazan header'ı olan tabloları bul
+            all_tables = soup.find_all("table")
+            team_sections = []
+            for tbl in all_tables:
+                if "Player" in tbl.get_text():
+                    # Tablonun olduğu kapsayıcıyı al
+                    parent = tbl.find_parent("div", class_=lambda x: x and "Body" in x) or tbl.parent
+                    if parent:
+                        team_sections.append(parent)
+
+        print(f"🔎 {len(team_sections)} potansiyel takım alanı bulundu.")
+
         for section in team_sections:
-            # Takım ismini bul
+            # Takım ismini bul (Genelde link içinde teamId olan kısımdır)
             team_link = section.find("a", href=lambda x: x and "teamId=" in x)
+            
+            # Eğer section içinde link yoksa, section'ın hemen üstüne/öncesine bak (Header yapısı)
+            if not team_link:
+                prev = section.find_previous("div", class_=lambda x: x and "Header" in x)
+                if prev:
+                    team_link = prev.find("a", href=lambda x: x and "teamId=" in x)
+
             if not team_link:
                 continue
                 
@@ -118,119 +129,91 @@ def scrape_team_rosters(league_id: int):
             players = []
             rows = player_table.find_all("tr")
             
-            for row in rows[1:]:  # İlk satır header
+            for row in rows:
                 cells = row.find_all("td")
-                if len(cells) < 2:
-                    continue
+                if len(cells) < 2: continue
                 
                 # Oyuncu ismi
-                player_link = cells[0].find("a")
-                if not player_link:
-                    continue
-                    
-                player_name = player_link.get_text(strip=True)
-                
-                # İstatistikler (9-cat sırasıyla)
+                player_name_div = row.find("div", {"title": True}) # Genelde resim veya isim title içinde olur
+                if player_name_div:
+                     player_name = player_name_div['title']
+                else:
+                    # Linkten bulmayı dene
+                    p_link = row.find("a", href=lambda x: x and "playerId" in x)
+                    if p_link: player_name = p_link.get_text(strip=True)
+                    else: continue
+
+                if not player_name or player_name == "Player": continue
+
+                # İstatistikleri Çek
                 stats_data = {}
                 stat_values = []
                 
-                for cell in cells[1:]:
+                for cell in cells:
                     txt = cell.get_text(strip=True)
-                    if any(char.isdigit() for char in txt):
+                    # Sadece sayısal veya -- içeren değerleri al, başlıkları atla
+                    if (txt.replace('.', '', 1).isdigit() or txt == '--' or '%' in txt) and len(txt) < 8:
                         stat_values.append(txt)
                 
+                # İstatistik eşleştirme (Sondan başa doğru güvenli yöntem)
+                # Beklenen son sütunlar: ... FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
                 if len(stat_values) >= 9:
-                    categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-                    for i, cat in enumerate(categories):
-                        if i < len(stat_values):
-                            stats_data[cat] = stat_values[i]
-                    
-                    players.append({
-                        "name": player_name,
-                        "stats": stats_data
-                    })
+                    # En sondaki değer PTS'dir, ondan önceki TO, vs.
+                    # Bazen ESPN fazladan sütun koyar, sondan 9 tanesini almak en güvenlisidir.
+                    relevant = stat_values[-9:] 
+                    cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+                    for i, cat in enumerate(cats):
+                        stats_data[cat] = relevant[i]
+
+                    players.append({"name": player_name, "stats": stats_data})
             
             if players:
                 rosters[team_name] = players
                 print(f"✅ {team_name}: {len(players)} oyuncu")
         
         driver.quit()
-        print(f"✅ Toplam {len(rosters)} takımın roster'ı çekildi")
         return rosters
         
     except Exception as e:
         print(f"❌ Roster çekme hatası: {e}")
-        if driver:
-            driver.quit()
+        if driver: driver.quit()
         return {}
-    
+
 
 def extract_team_names_from_card(card):
-    """
-    Aynı matchup kartı içinden GERÇEK takım isimlerini
-    teamId içeren linklerden çeker (STABİL YÖNTEM)
-    """
     team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
-
     names = []
     for link in team_links:
         text = link.get_text(strip=True)
         if text and len(text) > 3:
             names.append(text)
-
-    if len(names) >= 2:
-        return names[0], names[1]
-
+    if len(names) >= 2: return names[0], names[1]
     return "Away Team", "Home Team"
 
 
 def get_scoring_period_params(time_filter: str):
-    """
-    Time filter'a göre scoringPeriodId parametrelerini döndürür.
-    
-    Args:
-        time_filter: "week", "month", "season"
-    
-    Returns:
-        str: URL parametreleri
-    """
-    if time_filter == "week":
-        return ""
-    elif time_filter == "month":
-        return "&view=mMatchupScore"
-    elif time_filter == "season":
-        return "&view=mTeam"
-    else:
-        return ""
+    if time_filter == "week": return ""
+    elif time_filter == "month": return "&view=mMatchupScore"
+    elif time_filter == "season": return "&view=mTeam"
+    else: return ""
 
         
 def scrape_matchups(league_id: int, time_filter: str = "week"):
-    """
-    Matchup verilerini çeker.
-    
-    Args:
-        league_id: ESPN League ID
-        time_filter: "week" (mevcut hafta), "month" (son 4 hafta), "season" (tüm sezon)
-    """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
-    
     params = get_scoring_period_params(time_filter)
     url = base_url + params
     
     print(f"🔗 Fetching URL: {url}")
-    
     driver = get_driver()
     matchups = []
 
     try:
         driver.get(url)
-        time.sleep(8)  
-
+        time.sleep(6) 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)
+        time.sleep(2)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
-
         tables = soup.find_all("table")
         stat_tables = []
 
@@ -243,52 +226,35 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
         for table in stat_tables:
             rows = table.find_all("tr")
-            if len(rows) < 3:
-                continue
+            if len(rows) < 3: continue
 
             away_data = parse_row_stats(rows[1])
             home_data = parse_row_stats(rows[2])
 
-            if not away_data or not home_data:
-                continue
+            if not away_data or not home_data: continue
 
-            # TABLOYU SARAN MATCHUP CARD
             card = table.find_parent("section") or table.find_parent("div")
-            if not card:
-                continue
+            if not card: continue
 
-            # STABİL TAKIM İSİMLERİ
             away_name, home_name = extract_team_names_from_card(card)
 
             matchups.append({
-                "away_team": {
-                    "name": away_name,
-                    "stats": away_data
-                },
-                "home_team": {
-                    "name": home_name,
-                    "stats": home_data
-                },
+                "away_team": {"name": away_name, "stats": away_data},
+                "home_team": {"name": home_name, "stats": home_data},
                 "away_score": calculate_category_wins(away_data, home_data),
                 "home_score": calculate_category_wins(home_data, away_data)
             })
 
         driver.quit()
-        print(f"✅ Toplam {len(matchups)} matchup çekildi")
         return matchups
 
     except Exception as e:
         print(f"❌ Hata: {e}")
-        if driver:
-            driver.quit()
+        if driver: driver.quit()
         return []
 
 
 def parse_row_stats(row):
-    """
-    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat sözlüğü oluşturur.
-    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
-    """
     cells = row.find_all("td")
     stats = {}
     values = []
@@ -299,52 +265,18 @@ def parse_row_stats(row):
             values.append(txt)
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-    
     if len(values) >= 9:
         relevant_values = values[-9:] 
-        
         for i, cat in enumerate(categories):
+            stats_data = {} # (Sadece tanımlama, aşağıda kullanılıyor)
             stats[cat] = relevant_values[i]
-            
         return stats
-    
     return None
 
 
-def extract_team_names_from_matchup(card):
-    """
-    Scoreboard matchup kartından GERÇEK takım isimlerini çeker
-    """
-    team_names = []
-
-    possible_headers = card.find_all(
-        ["h1", "h2", "h3", "span"],
-        string=True
-    )
-
-    for h in possible_headers:
-        text = h.get_text(strip=True)
-        if (
-            len(text) > 5 and
-            not text.isupper() and
-            not any(x in text.upper() for x in ["FG%", "PTS", "REB", "AST"])
-        ):
-            team_names.append(text)
-
-    if len(team_names) >= 2:
-        return team_names[0], team_names[1]
-
-    return "Away Team", "Home Team"
-
-
 def calculate_category_wins(team_a_stats, team_b_stats):
-    """9-Cat kazanma hesaplaması"""
-    if not team_a_stats or not team_b_stats:
-        return "0-0-0"
-    
-    wins = 0
-    losses = 0
-    ties = 0
+    if not team_a_stats or not team_b_stats: return "0-0-0"
+    wins, losses, ties = 0, 0, 0
     inverse_cats = ['TO']
     
     for cat, val_a in team_a_stats.items():
@@ -361,7 +293,5 @@ def calculate_category_wins(team_a_stats, team_b_stats):
                 if val_a_clean > val_b_clean: wins += 1
                 elif val_a_clean < val_b_clean: losses += 1
                 else: ties += 1
-        except:
-            continue
-            
+        except: continue
     return f"{wins}-{losses}-{ties}"
