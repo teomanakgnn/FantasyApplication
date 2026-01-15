@@ -10,8 +10,8 @@ from webdriver_manager.core.os_manager import ChromeType
 
 def get_driver():
     chrome_options = Options()
-    # Eğer sisteminizde Chromium farklı bir yerdeyse burayı güncelleyin:
-    chrome_options.binary_location = "/usr/bin/chromium"
+    # Update binary location if needed, otherwise comment out
+    # chrome_options.binary_location = "/usr/bin/chromium"
     
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -20,52 +20,15 @@ def get_driver():
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
 
-    service = Service(
-        ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
-    )
-
+    service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
     return webdriver.Chrome(service=service, options=chrome_options)
-
-
-def scrape_league_standings(league_id: int):
-    url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
-    driver = get_driver()
-    
-    try:
-        driver.get(url)
-        time.sleep(5)
-        
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        html_io = StringIO(driver.page_source)
-        dfs = pd.read_html(html_io)
-        
-        target_df = pd.DataFrame()
-        for df in dfs:
-            headers = " ".join([str(col).upper() for col in df.columns])
-            if ("W" in headers or "WIN" in headers) and len(df) >= 4:
-                target_df = df
-                break
-        
-        driver.quit()
-        
-        if not target_df.empty:
-            target_df = target_df.loc[:, ~target_df.columns.str.contains('^Unnamed', case=False)]
-            return target_df.astype(str)
-            
-        return pd.DataFrame()
-
-    except Exception as e:
-        if driver: driver.quit()
-        return None
-
 
 def scrape_team_rosters(league_id: int):
     """
-    Takım kadrolarını çeker. 
-    Yöntem: Sayfadaki tüm tabloları bul -> İstatistik tablosu mu kontrol et -> Takım ismini bul.
+    Revised Scraper: Finds Team Headers first, then grabs the associated table.
     """
     url = f"https://fantasy.espn.com/basketball/league/teams?leagueId={league_id}"
     print(f"🔗 Fetching rosters from: {url}")
@@ -77,127 +40,125 @@ def scrape_team_rosters(league_id: int):
         driver.get(url)
         time.sleep(5)
         
-        # --- SCROLL (Aşağı Kaydırma) ---
-        last_height = driver.execute_script("return document.body.scrollHeight")
-        # Yavaş yavaş aşağı in
-        for i in range(0, last_height, 500):
+        # --- ROBUST SCROLLING ---
+        # Scroll down in increments to trigger lazy loading
+        total_height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(0, total_height, 700):
             driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.2)
-        
-        # En sona git ve bekle
+            time.sleep(0.5)
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
-        # -------------------------------
         
         soup = BeautifulSoup(driver.page_source, "html.parser")
         
-        # Sayfadaki TÜM tabloları bul
-        all_tables = soup.find_all("table")
-        print(f"🔎 Sayfada {len(all_tables)} adet tablo bulundu. Kadrolar aranıyor...")
+        # --- NEW STRATEGY: Find Team Headers (.Table__Title) ---
+        # ESPN organizes teams into sections. Each section has a header with class "Table__Title"
+        team_headers = soup.find_all("div", class_="Table__Title")
+        
+        print(f"🔎 Found {len(team_headers)} team headers. Parsing...")
 
-        for table in all_tables:
-            # 1. Bu tablo bir istatistik tablosu mu? (Header kontrolü)
-            header_text = table.get_text().upper()
-            if not ("PTS" in header_text and "FG%" in header_text):
+        for header in team_headers:
+            # 1. Extract Team Name
+            # The header usually contains a link with the team name or just text
+            team_link = header.find("a", href=lambda x: x and "teamId=" in x)
+            if team_link:
+                team_name = team_link.get_text(strip=True)
+            else:
+                # Fallback: Just get text if no link
+                team_name = header.get_text(strip=True)
+                
+            # Clean up name (remove "Team Info", "Roster", etc if present)
+            if not team_name: continue
+
+            # 2. Find the Associated Table
+            # The table is usually in the parent container of the header
+            parent_container = header.find_parent("div", class_="Table__Wrapper") 
+            if not parent_container:
+                # Fallback: Look at the parent of the header
+                parent_container = header.parent
+            
+            table = parent_container.find("table")
+            if not table:
                 continue
 
-            # 2. Takım İsmini Bul (Tablonun üstündeki containerlarda ara)
-            # Genelde yapı: Section -> Header (İsim) + Body (Tablo)
-            team_name = "Unknown Team"
-            
-            # Tablonun ebeveynlerine tırmanarak içinde 'teamId' linki olan ilk yapıyı bul
-            parent = table.parent
-            found_name = False
-            
-            # 5 seviye yukarı çıkıp takım ismi arayalım
-            for _ in range(5):
-                if not parent: break
-                
-                # Önce bu seviyedeki veya önceki kardeşlerdeki Header'a bak
-                # ESPN yapısı genelde: div (Header) -> div (Body/Table)
-                header_div = parent.find_previous_sibling("div")
-                if header_div:
-                    link = header_div.find("a", href=lambda x: x and "teamId=" in x)
-                    if link:
-                        team_name = link.get_text(strip=True)
-                        found_name = True
-                        break
-                
-                # Eğer sibling'de yoksa, parent'ın kendi içinde link var mı?
-                link = parent.find("a", href=lambda x: x and "teamId=" in x)
-                if link:
-                     team_name = link.get_text(strip=True)
-                     found_name = True
-                     break
-                
-                parent = parent.parent
-            
-            if not found_name:
-                continue # Takım ismi bulunamadıysa bu tabloyu atla (muhtemelen başka bir stats tablosu)
-
-            # 3. Tablodaki Oyuncuları Çek
+            # 3. Parse Players from Table
             players = []
             rows = table.find_all("tr")
             
             for row in rows:
+                # We need rows with player data. Usually these have specific classes or links.
+                # Find player name link
+                player_link = row.find("a", href=lambda x: x and "playerId=" in x)
+                if not player_link:
+                    continue
+                
+                player_name = player_link.get_text(strip=True)
+                
+                # Extract Stats
                 cells = row.find_all("td")
-                if len(cells) < 2: continue
-                
-                # Oyuncu ismi bulma
-                player_name = None
-                
-                # Yöntem A: title attribute'u
-                div_title = row.find("div", {"title": True})
-                if div_title: player_name = div_title['title']
-                
-                # Yöntem B: Link
-                if not player_name:
-                    a_tag = row.find("a", href=lambda x: x and "playerId" in x)
-                    if a_tag: player_name = a_tag.get_text(strip=True)
-                
-                if not player_name or player_name == "Player": continue
-
-                # İstatistikleri bulma
-                stats_data = {}
                 values = []
                 for cell in cells:
                     txt = cell.get_text(strip=True)
-                    # Sayı, yüzde veya -- içeren hücreleri al
-                    if (txt.replace('.', '', 1).isdigit() or txt == '--' or '%' in txt) and len(txt) < 8:
+                    # Filter for stat-like values (digits, --, %)
+                    if (any(c.isdigit() for c in txt) or txt == '--'):
                         values.append(txt)
                 
-                # 9-Cat eşleştirme (Sondan başa)
+                # 9-CAT mapping (Reverse mapping: usually the last 9 columns are the cats)
+                # Standard ESPN format: ... | FG% | FT% | 3PM | REB | AST | STL | BLK | TO | PTS
                 if len(values) >= 9:
                     relevant = values[-9:]
-                    cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-                    for i, cat in enumerate(cats):
-                        stats_data[cat] = relevant[i]
-                    
+                    stats_data = {
+                        'FG%': relevant[0],
+                        'FT%': relevant[1],
+                        '3PM': relevant[2],
+                        'REB': relevant[3],
+                        'AST': relevant[4],
+                        'STL': relevant[5],
+                        'BLK': relevant[6],
+                        'TO': relevant[7],
+                        'PTS': relevant[8]
+                    }
                     players.append({"name": player_name, "stats": stats_data})
-            
+
             if players:
                 rosters[team_name] = players
-                print(f"✅ {team_name}: {len(players)} oyuncu bulundu")
+                print(f"✅ Extracted {team_name}: {len(players)} players")
 
         driver.quit()
         return rosters
         
     except Exception as e:
-        print(f"❌ Roster çekme hatası: {e}")
+        print(f"❌ Roster scrape error: {e}")
         if driver: driver.quit()
         return {}
 
+def scrape_league_standings(league_id: int):
+    url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
+    driver = get_driver()
+    try:
+        driver.get(url)
+        time.sleep(5)
+        html_io = StringIO(driver.page_source)
+        dfs = pd.read_html(html_io)
+        driver.quit()
+        
+        for df in dfs:
+            headers = " ".join([str(col).upper() for col in df.columns])
+            if ("W" in headers or "WIN" in headers) and len(df) >= 4:
+                return df.astype(str)
+        return pd.DataFrame()
+    except:
+        if driver: driver.quit()
+        return None
 
 def extract_team_names_from_card(card):
     team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
-    names = []
-    for link in team_links:
-        text = link.get_text(strip=True)
-        if text and len(text) > 3:
-            names.append(text)
+    names = [link.get_text(strip=True) for link in team_links if len(link.get_text(strip=True)) > 0]
+    # Filter duplicates and empty strings
+    names = list(dict.fromkeys(names))
+    
     if len(names) >= 2: return names[0], names[1]
     return "Away Team", "Home Team"
-
 
 def get_scoring_period_params(time_filter: str):
     if time_filter == "week": return ""
@@ -205,69 +166,9 @@ def get_scoring_period_params(time_filter: str):
     elif time_filter == "season": return "&view=mTeam"
     else: return ""
 
-        
-def scrape_matchups(league_id: int, time_filter: str = "week"):
-    base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
-    params = get_scoring_period_params(time_filter)
-    url = base_url + params
-    
-    print(f"🔗 Fetching URL: {url}")
-    driver = get_driver()
-    matchups = []
-
-    try:
-        driver.get(url)
-        time.sleep(6) 
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        tables = soup.find_all("table")
-        stat_tables = []
-
-        # Skor tablolarını filtrele
-        for table in tables:
-            txt = table.get_text()
-            if all(x in txt for x in ["FG%", "FT%", "REB", "AST", "PTS"]):
-                stat_tables.append(table)
-
-        print(f"✅ {len(stat_tables)} stat tablosu bulundu ({time_filter})")
-
-        for table in stat_tables:
-            rows = table.find_all("tr")
-            if len(rows) < 3: continue # Header + 2 takım yoksa geç
-
-            away_data = parse_row_stats(rows[1])
-            home_data = parse_row_stats(rows[2])
-
-            if not away_data or not home_data: continue
-
-            card = table.find_parent("section") or table.find_parent("div")
-            if not card: continue
-
-            away_name, home_name = extract_team_names_from_card(card)
-
-            matchups.append({
-                "away_team": {"name": away_name, "stats": away_data},
-                "home_team": {"name": home_name, "stats": home_data},
-                "away_score": calculate_category_wins(away_data, home_data),
-                "home_score": calculate_category_wins(home_data, away_data)
-            })
-
-        driver.quit()
-        return matchups
-
-    except Exception as e:
-        print(f"❌ Hata: {e}")
-        if driver: driver.quit()
-        return []
-
-
 def parse_row_stats(row):
     cells = row.find_all("td")
-    stats = {}
     values = []
-    
     for cell in cells:
         txt = cell.get_text(strip=True)
         if any(char.isdigit() for char in txt):
@@ -275,18 +176,14 @@ def parse_row_stats(row):
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     if len(values) >= 9:
-        relevant_values = values[-9:] 
-        for i, cat in enumerate(categories):
-            stats[cat] = relevant_values[i]
-        return stats
+        relevant = values[-9:]
+        return dict(zip(categories, relevant))
     return None
-
 
 def calculate_category_wins(team_a_stats, team_b_stats):
     if not team_a_stats or not team_b_stats: return "0-0-0"
     wins, losses, ties = 0, 0, 0
     inverse_cats = ['TO']
-    
     for cat, val_a in team_a_stats.items():
         if cat not in team_b_stats: continue
         try:
@@ -303,3 +200,52 @@ def calculate_category_wins(team_a_stats, team_b_stats):
                 else: ties += 1
         except: continue
     return f"{wins}-{losses}-{ties}"
+
+def scrape_matchups(league_id: int, time_filter: str = "week"):
+    base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
+    url = base_url + get_scoring_period_params(time_filter)
+    print(f"🔗 Fetching URL: {url}")
+    
+    driver = get_driver()
+    matchups = []
+    try:
+        driver.get(url)
+        time.sleep(6)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
+        
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        # Find matchup cards (sections)
+        cards = soup.find_all("section", class_="Scoreboard")
+        if not cards: cards = soup.find_all("div", class_="MatchupCard") # Fallback
+        
+        # If no cards found, try iterating tables like before
+        if not cards:
+            tables = soup.find_all("table")
+            # ... (Your existing table logic works fine for matchups, keeping it brief here)
+            # Reverting to table logic as it was working for you:
+            for table in tables:
+                txt = table.get_text()
+                if not all(x in txt for x in ["FG%", "FT%", "PTS"]): continue
+                rows = table.find_all("tr")
+                if len(rows) < 3: continue
+                
+                away_data = parse_row_stats(rows[1])
+                home_data = parse_row_stats(rows[2])
+                if not away_data or not home_data: continue
+                
+                card_container = table.find_parent("section") or table.find_parent("div")
+                away_name, home_name = extract_team_names_from_card(card_container)
+                
+                matchups.append({
+                    "away_team": {"name": away_name, "stats": away_data},
+                    "home_team": {"name": home_name, "stats": home_data},
+                    "away_score": calculate_category_wins(away_data, home_data),
+                    "home_score": calculate_category_wins(home_data, away_data)
+                })
+        driver.quit()
+        return matchups
+    except Exception as e:
+        print(f"❌ Matchup error: {e}")
+        if driver: driver.quit()
+        return []
