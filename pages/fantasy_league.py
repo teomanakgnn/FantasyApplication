@@ -423,35 +423,34 @@ def render_fantasy_league_page():
         st.session_state['time_filter'] = "week"
         
         st.markdown("---")
-        load_data = st.button("INITIALIZE DATA FETCH", type="primary", use_container_width=True)
+        # TEK BUTON: FULL FETCH
+        load_data = st.button("🚀 INITIALIZE FULL DATA FETCH", type="primary", use_container_width=True)
         
-        # Roster yükleme butonu
-        if st.session_state.get('fantasy_league_id'):
-            st.markdown("---")
-            load_rosters = st.button("🔄 LOAD TEAM ROSTERS", use_container_width=True)
-        
-    # --- VERİ YÜKLEME ---
+    # --- VERİ YÜKLEME (TEK SEFERDE HEPSİ) ---
     if load_data and league_id:
         st.session_state.fantasy_league_id = league_id
         st.session_state.last_time_filter = time_filter
-        with st.spinner("ESTABLISHING CONNECTION TO ESPN SERVERS..."):
+        
+        with st.spinner("CONNECTING TO ESPN: FETCHING STANDINGS, MATCHUPS AND ROSTERS..."):
             try:
+                # 1. STANDINGS
                 df_standings = scrape_league_standings(int(league_id))
-                matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['df_standings'] = df_standings
+                
+                # 2. MATCHUPS
+                matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['matchups'] = matchups
-                st.success(f"✅ Data loaded successfully ({filter_display[time_filter]})")
-            except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
-    
-    # --- ROSTER YÜKLEME ---
-    if st.session_state.get('fantasy_league_id') and 'load_rosters' in locals() and load_rosters:
-        with st.spinner("LOADING TEAM ROSTERS..."):
-            try:
-                rosters = scrape_team_rosters(int(st.session_state.fantasy_league_id))
+                
+                # 3. ROSTERS (Buraya taşındı, artık otomatik)
+                rosters = scrape_team_rosters(int(league_id))
                 st.session_state['rosters'] = rosters
-                st.success(f"✅ Loaded rosters for {len(rosters)} teams")
-            except Exception as e:
-                st.error(f"ROSTER FETCH ERROR: {str(e)}")
+
+                if not rosters:
+                    st.warning("⚠️ Matchups loaded but Rosters returned empty. Check Selenium scraper.")
+                else:
+                    st.success(f"✅ All data loaded successfully! ({len(rosters)} teams)")
+            
+            except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
     
     # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
     if (st.session_state.get('fantasy_league_id') and 
@@ -515,7 +514,7 @@ def render_fantasy_league_page():
                 
                 if worst_teams:
                     for t in worst_teams:
-                         st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
+                          st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
                         💀 <b>CRITICAL:</b> {t['team']} loses to everyone.</div>""", unsafe_allow_html=True)
                 
                 st.divider()
@@ -686,7 +685,7 @@ def render_fantasy_league_page():
                             st.markdown(f"<div style='font-size: 24px; font-weight: bold; color: #22c55e;'>{new_winner}</div>", unsafe_allow_html=True)
                         
             else:
-                st.info("📌 Please load team rosters first using the sidebar button")
+                st.info("📌 Rosters not loaded. Please click 'INITIALIZE FULL DATA FETCH' first.")
 
 if __name__ == "__main__":
     render_fantasy_league_page()
