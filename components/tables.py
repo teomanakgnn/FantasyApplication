@@ -51,6 +51,8 @@ def aggregate_player_stats(all_game_data, weights):
     
     for game_day in all_game_data:
         players = game_day.get('players', [])
+        game_date = game_day.get('date')  # Tarihi al
+        
         for player in players:
             key = f"{player.get('PLAYER')}_{player.get('TEAM')}"
             
@@ -62,7 +64,8 @@ def aggregate_player_stats(all_game_data, weights):
                     'MIN_TOTAL': 0,
                     'PTS': 0, 'REB': 0, 'AST': 0, 'STL': 0, 'BLK': 0, 'TO': 0,
                     'FGM': 0, 'FGA': 0, '3Pts': 0, '3PTA': 0, 'FTM': 0, 'FTA': 0,
-                    '+/-': 0
+                    '+/-': 0,
+                    'game_logs': []  # Her oyun için detaylı log
                 }
             
             stats = player_totals[key]
@@ -76,6 +79,15 @@ def aggregate_player_stats(all_game_data, weights):
                 val = player.get(stat, 0)
                 try: stats[stat] += float(val)
                 except: pass
+            
+            # Her oyun için log kaydet (MVP/LVP analizi için)
+            game_log = {
+                'DATE': game_date,
+                'MIN': parse_minutes(player.get('MIN', '0'))
+            }
+            for stat in numeric_stats:
+                game_log[stat] = player.get(stat, 0)
+            stats['game_logs'].append(game_log)
     
     result = []
     for stats in player_totals.values():
@@ -276,7 +288,7 @@ Dakika başına üretimi **{fp_min:.2f} FP/Min** seviyesinde.
 
 
 # =================================================================
-# 3. ANA TABLO FONKSİYONU
+# 3. ANA TABLO FONKSİYONU (MVP/LVP İÇİN VERİ KAYDETME EKLENDİ)
 # =================================================================
 def render_tables(today_df, weights, default_period="Today"):
     
@@ -295,6 +307,7 @@ def render_tables(today_df, weights, default_period="Today"):
             
     current_period = st.session_state.stats_period
     active_df = pd.DataFrame()
+    raw_period_data = []  # MVP/LVP için ham veri
     
     # --- VERİ HAZIRLIĞI ---
     if current_period == "Today":
@@ -303,12 +316,47 @@ def render_tables(today_df, weights, default_period="Today"):
             active_df["USER_SCORE"] = active_df.apply(lambda x: calculate_fantasy_score(x, weights), axis=1)
             if "MIN_INT" not in active_df.columns:
                 active_df["MIN_INT"] = active_df["MIN"].apply(parse_minutes)
+            
+            # Today için period_df olarak kaydet
+            st.session_state["period_df"] = active_df.copy()
     else:
         start_date, end_date = get_date_range(current_period)
         with st.spinner(f"Fetching stats for {current_period}..."):
             historical_data = get_historical_boxscores(start_date, end_date)
             if historical_data:
+                # Önce aggregate edilmiş veriyi oluştur (tablo için)
                 active_df = aggregate_player_stats(historical_data, weights)
+                
+                # MVP/LVP için her günün RAW verisini kaydet
+                all_daily_records = []
+                for game_day in historical_data:
+                    players = game_day.get('players', [])
+                    game_date = game_day.get('date')
+                    
+                    for player in players:
+                        record = {
+                            'DATE': pd.to_datetime(game_date) if game_date else pd.Timestamp.now(),
+                            'PLAYER': player.get('PLAYER'),
+                            'TEAM': player.get('TEAM'),
+                            'MIN': parse_minutes(player.get('MIN', '0'))
+                        }
+                        
+                        # Tüm stat'ları ekle
+                        numeric_stats = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', 
+                                       'FGM', 'FGA', '3Pts', '3PTA', 'FTM', 'FTA', '+/-']
+                        for stat in numeric_stats:
+                            val = player.get(stat, 0)
+                            try:
+                                record[stat] = float(val)
+                            except:
+                                record[stat] = 0
+                        
+                        all_daily_records.append(record)
+                
+                # DataFrame'e çevir ve session state'e kaydet
+                if all_daily_records:
+                    period_df = pd.DataFrame(all_daily_records)
+                    st.session_state["period_df"] = period_df
 
     if active_df.empty:
         st.warning(f"No data available for {current_period}")

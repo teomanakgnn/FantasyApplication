@@ -18,6 +18,7 @@ from components.styles import load_styles
 from components.header import render_header
 from components.sidebar import render_sidebar
 from components.tables import render_tables
+from components.mvp_lvp import render_mvp_lvp_section
 
 from services.espn_api import (
     get_last_available_game_date,
@@ -530,6 +531,8 @@ def home_page():
         for c in num_cols:
             if c not in df.columns: df[c] = 0
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+        st.session_state["period_df"] = df.copy()
+            
 
         # PRO FEATURE: Quick add from main table
         if is_pro and user:
@@ -564,5 +567,14 @@ def home_page():
         render_tables(df, weights=weights) 
     else:
         st.info("No stats available for the selected date.")
+
+    current_period = st.session_state.get("stats_period", "Today")
+    
+    # Only show MVP/LVP for periods longer than "Today"
+    if current_period != "Today":
+        from components.tables import get_date_range
+        date_range = get_date_range(current_period)
+        render_mvp_lvp_section(date_range, weights, current_period)
+    
 
 home_page()
