@@ -6,12 +6,13 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 
 def get_driver():
     chrome_options = Options()
-    # Linux/Server ortamında çalışıyorsa binary location gerekebilir, 
-    # localde çalışıyorsan bu satırı yoruma alabilirsin:
-    # chrome_options.binary_location = "/usr/bin/chromium"
+    
+    # Hata mesajındaki binary yolunu açıkça belirtiyoruz
+    chrome_options.binary_location = "/usr/bin/chromium"
     
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -20,10 +21,14 @@ def get_driver():
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
     )
 
-    service = Service(ChromeDriverManager().install())
+    # ÖNEMLİ DÜZELTME: ChromeType.CHROMIUM kullanarak sürüm eşleşmesini sağlıyoruz
+    service = Service(
+        ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
+    )
+
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
@@ -72,34 +77,30 @@ def scrape_team_rosters(league_id: int):
     
     try:
         driver.get(url)
-        time.sleep(5) # İlk yükleme beklemesi
+        time.sleep(5) 
         
-        # --- İYİLEŞTİRİLMİŞ SCROLL MEKANİZMASI ---
-        # Sayfayı parça parça aşağı kaydır (Lazy load tetiklemek için)
+        # --- SCROLL MEKANİZMASI ---
         total_height = driver.execute_script("return document.body.scrollHeight")
         for i in range(0, total_height, 700):
             driver.execute_script(f"window.scrollTo(0, {i});")
             time.sleep(0.5)
         
-        # En alta git ve biraz daha bekle
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
-        # ----------------------------------------
+        # ---------------------------
         
         soup = BeautifulSoup(driver.page_source, "html.parser")
         
-        # YÖNTEM 1: Standart "Team" sectionlarını bulmaya çalış
+        # YÖNTEM 1: Standart "Team" sectionlarını bul
         team_sections = soup.find_all("div", class_=lambda x: x and "team" in x.lower())
         
-        # YÖNTEM 2 (Fallback): Eğer div class isimleri değişmişse, direk Tabloları bul
+        # YÖNTEM 2 (Fallback): Tablo tarama
         if len(team_sections) < 2:
             print("⚠️ Standart section bulunamadı, tablo tarama moduna geçiliyor...")
-            # İçinde 'Player' yazan header'ı olan tabloları bul
             all_tables = soup.find_all("table")
             team_sections = []
             for tbl in all_tables:
                 if "Player" in tbl.get_text():
-                    # Tablonun olduğu kapsayıcıyı al
                     parent = tbl.find_parent("div", class_=lambda x: x and "Body" in x) or tbl.parent
                     if parent:
                         team_sections.append(parent)
@@ -107,24 +108,18 @@ def scrape_team_rosters(league_id: int):
         print(f"🔎 {len(team_sections)} potansiyel takım alanı bulundu.")
 
         for section in team_sections:
-            # Takım ismini bul (Genelde link içinde teamId olan kısımdır)
             team_link = section.find("a", href=lambda x: x and "teamId=" in x)
             
-            # Eğer section içinde link yoksa, section'ın hemen üstüne/öncesine bak (Header yapısı)
             if not team_link:
                 prev = section.find_previous("div", class_=lambda x: x and "Header" in x)
                 if prev:
                     team_link = prev.find("a", href=lambda x: x and "teamId=" in x)
 
-            if not team_link:
-                continue
+            if not team_link: continue
                 
             team_name = team_link.get_text(strip=True)
-            
-            # Oyuncu tablosunu bul
             player_table = section.find("table")
-            if not player_table:
-                continue
+            if not player_table: continue
             
             players = []
             rows = player_table.find_all("tr")
@@ -133,33 +128,25 @@ def scrape_team_rosters(league_id: int):
                 cells = row.find_all("td")
                 if len(cells) < 2: continue
                 
-                # Oyuncu ismi
-                player_name_div = row.find("div", {"title": True}) # Genelde resim veya isim title içinde olur
+                player_name_div = row.find("div", {"title": True})
                 if player_name_div:
                      player_name = player_name_div['title']
                 else:
-                    # Linkten bulmayı dene
                     p_link = row.find("a", href=lambda x: x and "playerId" in x)
                     if p_link: player_name = p_link.get_text(strip=True)
                     else: continue
 
                 if not player_name or player_name == "Player": continue
 
-                # İstatistikleri Çek
                 stats_data = {}
                 stat_values = []
                 
                 for cell in cells:
                     txt = cell.get_text(strip=True)
-                    # Sadece sayısal veya -- içeren değerleri al, başlıkları atla
                     if (txt.replace('.', '', 1).isdigit() or txt == '--' or '%' in txt) and len(txt) < 8:
                         stat_values.append(txt)
                 
-                # İstatistik eşleştirme (Sondan başa doğru güvenli yöntem)
-                # Beklenen son sütunlar: ... FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
                 if len(stat_values) >= 9:
-                    # En sondaki değer PTS'dir, ondan önceki TO, vs.
-                    # Bazen ESPN fazladan sütun koyar, sondan 9 tanesini almak en güvenlisidir.
                     relevant = stat_values[-9:] 
                     cats = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
                     for i, cat in enumerate(cats):
@@ -268,7 +255,7 @@ def parse_row_stats(row):
     if len(values) >= 9:
         relevant_values = values[-9:] 
         for i, cat in enumerate(categories):
-            stats_data = {} # (Sadece tanımlama, aşağıda kullanılıyor)
+            stats_data = {} 
             stats[cat] = relevant_values[i]
         return stats
     return None
