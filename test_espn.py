@@ -1,91 +1,76 @@
-import requests
-import urllib.parse
-import json
+from services.espn_api import get_historical_boxscores
+from utils.helpers import parse_minutes
 
-# ==========================================
-# BURAYI DOLDURUN (Doğrudan yapıştırın)
-# ==========================================
-LEAGUE_ID = 987023001
-# Gizli sekmeden aldığınız espn_s2 (uzun olan):
-RAW_ESPN_S2 ="AEBGpUIA/AnKmAMeiwq2byxcqKI9YYYkT7KJaWfqBJj+XYjo6BX0WJkjskYvkQe7O3uyXwQwVotdoxWzjfKvff4GmQRQ186YtoYi/hmh/G2V2pnu+TsWU6vVf46CbathwR6FIvltM8d7BVYC8m0owPT1YWxF1tAwSdbWt+FRAdekC/u3VqskCGpA7L2lMoV5lpiV14BZu8A4aRVcen/RkkbTBU873fz/tl4rwCjOl0QXGkUDhxsJ/gIYWVWJhaGIovny9q/iMu8aNjWJptKwCQXgFvMjJyldMP/lPoPdydWuqg=="
-# Gizli sekmeden aldığınız swid ({...} süslü parantezli olan):
-RAW_SWID = "{28BCA13D-E16C-4FB4-A5C2-1491BBF229EE}" 
+# ---------------- CONFIG ----------------
+PLAYER_NAME = "Julian Champagnie"
+START_DATE = "2026-01-06"
+END_DATE = "2026-01-12"
 
-# ==========================================
-# TEST KODU
-# ==========================================
-
-# 1. Cookie Hazırlığı
-cookies = {}
-if RAW_ESPN_S2 and RAW_SWID:
-    # URL Decode işlemi (Örn: %2B -> +)
-    decoded_s2 = urllib.parse.unquote(RAW_ESPN_S2)
-    cookies['espn_s2'] = decoded_s2
-    cookies['SWID'] = RAW_SWID
-    print(f"✅ Cookie Hazırlandı.")
-    print(f"   SWID: {RAW_SWID}")
-    print(f"   S2 (İlk 20 hane): {decoded_s2[:20]}...")
-else:
-    print("❌ UYARI: Cookie bilgileri boş! Lütfen dosyanın başındaki alanları doldurun.")
-    exit()
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "x-fantasy-filter": '{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS"]}}}'
+# Fantasy weights (app ile birebir aynı olmalı)
+weights = {
+    "PTS": 1.0,
+    "REB": 0.4,
+    "AST": 0.7,
+    "STL": 1.1,
+    "BLK": 0.75,
+    "TO": -1.0
 }
 
-# 2. Bağlantı Testi (Sırayla 3 Endpoint)
-urls = [
-    # 1. League History (En Güvenlisi)
-    f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/leagueHistory/{LEAGUE_ID}?view=mSettings",
-    # 2. 2026 Sezonu
-    f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2026/segments/0/leagues/{LEAGUE_ID}?view=mSettings",
-]
+# ---------------------------------------
 
-print(f"\n🚀 Bağlantı Testi Başlıyor (Lig ID: {LEAGUE_ID})...")
+def calculate_fantasy_score(player, weights):
+    score = 0.0
+    for stat, weight in weights.items():
+        try:
+            score += float(player.get(stat, 0)) * float(weight)
+        except (TypeError, ValueError):
+            pass
+    return score
 
-success = False
-for url in urls:
-    print(f"\nTesting URL: {url}")
-    try:
-        r = requests.get(url, headers=headers, cookies=cookies, timeout=10)
-        print(f"   Status Code: {r.status_code}")
-        
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                
-                # History array döner
-                if isinstance(data, list) and len(data) > 0:
-                    team_count = len(data[0].get('teams', []))
-                    print(f"   ✅ BAŞARILI! (History Modu)")
-                    print(f"   Takım Sayısı: {team_count}")
-                    success = True
-                    break
-                    
-                # Sezon dict döner
-                elif isinstance(data, dict):
-                    if 'messages' in data and 'No permission' in str(data['messages']):
-                         print("   ❌ Yetki Yok (Permission Denied Message)")
-                    else:
-                        team_count = len(data.get('teams', [])) or len(data.get('settings', {}))
-                        print(f"   ✅ BAŞARILI! (Sezon Modu)")
-                        print(f"   Veri Tipi: {type(data)}")
-                        success = True
-                        break
-            except json.JSONDecodeError:
-                print("   ⚠️ HTML Döndü (Login Sayfası)")
-                # HTML'in başını yazdıralım ki ne dediğini görelim
-                print(f"   HTML Başlığı: {r.text[:100]}")
-        elif r.status_code == 401:
-            print("   ⛔ 401 Unauthorized (Cookie Geçersiz)")
-        else:
-            print(f"   ❌ Hata: {r.status_code}")
-            
-    except Exception as e:
-        print(f"   💥 Bağlantı Hatası: {e}")
 
-if success:
-    print("\n🎉 SONUÇ: Cookie'leriniz çalışıyor! Sorun kodun entegrasyonunda.")
-else:
-    print("\n💀 SONUÇ: Cookie'leriniz geçersiz veya ESPN bu IP'yi engelliyor.")
+historical_data = get_historical_boxscores(START_DATE, END_DATE)
+
+print(f"\n🔍 Checking appearances for: {PLAYER_NAME}\n")
+
+for game_day in historical_data:
+    date = game_day.get("date", "UNKNOWN DATE")
+    players = game_day.get("players", [])
+
+    day_stats = []
+
+    for p in players:
+        name = p.get("PLAYER")
+        mins = parse_minutes(p.get("MIN", "0"))
+
+        if not name or mins < 5:
+            continue
+
+        score = calculate_fantasy_score(p, weights)
+
+        day_stats.append({
+            "player": name,
+            "score": score,
+            "mins": mins
+        })
+
+    if not day_stats:
+        continue
+
+    # ---------- TOP 10 ----------
+    mvp_pool = [x for x in day_stats if x["mins"] >= 20]
+    mvp_pool.sort(key=lambda x: x["score"], reverse=True)
+    top10 = [x["player"] for x in mvp_pool[:10]]
+
+    # ---------- WORST 10 ----------
+    lvp_pool = [x for x in day_stats if x["mins"] >= 15]
+    lvp_pool.sort(key=lambda x: x["score"])
+    worst10 = [x["player"] for x in lvp_pool[:10]]
+
+    if PLAYER_NAME in top10 or PLAYER_NAME in worst10:
+        print(f"📅 {date}")
+        if PLAYER_NAME in top10:
+            rank = top10.index(PLAYER_NAME) + 1
+            print(f"   🏆 TOP 10 → Rank #{rank}")
+        if PLAYER_NAME in worst10:
+            rank = worst10.index(PLAYER_NAME) + 1
+            print(f"   💔 WORST 10 → Rank #{rank}")
