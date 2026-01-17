@@ -71,7 +71,7 @@ def calculate_mvp_lvp_from_df(df: pd.DataFrame, weights: dict):
             top_counter[p] += 1
 
         # LVP — Worst 10 of the day (Must play at least 15 mins to qualify as 'bad')
-        lvp_pool = day_df[day_df["MIN"] >= 15] \
+        lvp_pool = day_df[day_df["MIN"] >= 20] \
             .sort_values("fantasy_score", ascending=True) \
             .head(10)
         
