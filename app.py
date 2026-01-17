@@ -139,6 +139,10 @@ if st.session_state.page == "injury":
         st.rerun()
     st.stop()
 
+if st.button("⚖️ Trade Analyzer", use_container_width=True):
+        st.session_state.page = "trade_analyzer"
+        st.rerun()    
+
 if st.session_state.page == "trends":
     # PRO kontrolü
     if not is_pro:
@@ -426,6 +430,7 @@ def home_page():
     
     # Sidebar'dan weights'i de alıyoruz
     date, weights, run = render_sidebar()
+    st.session_state['last_weights'] = weights
     
     # Override with saved preferences if available
     if prefs and prefs.get('default_weights'):
@@ -453,6 +458,13 @@ def home_page():
     
     games_to_show = 3
     total_games = len(games)
+
+    if st.session_state.page == "trade_analyzer":
+        from pages.trade_analyzer import render_trade_analyzer_page
+        # Home'dan weights alınmadıysa default oluşturmamız gerekebilir,
+        # ama genelde home bir kere render olduğu için session_state'de vardır.
+        render_trade_analyzer_page()
+        st.stop()
     
     if st.session_state.show_all_games:
         visible_games = games

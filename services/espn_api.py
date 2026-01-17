@@ -4,6 +4,7 @@ import streamlit as st
 from functools import lru_cache
 import concurrent.futures 
 from typing import Dict, List, Optional, Union
+import pandas as pd
 
 
 # =================================================================
@@ -398,6 +399,77 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
         key=lambda t: (-t["wins"], -t["points_for"])
     )
 
+# services/espn_api.py dosyasının en altına ekle:
+
+# services/espn_api.py dosyasında get_active_players_stats fonksiyonunu bununla değiştirin:
+
+@st.cache_data(ttl=3600)
+def get_active_players_stats(days=15):
+    """
+    Son X günün maçlarını tarayıp aktif oyuncuların ortalamalarını çıkarır.
+    Trade Analyzer'da dropdown listesi doldurmak için kullanılır.
+    """
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    games_data = get_historical_boxscores(start_date, end_date)
+    
+    player_stats = {}
+    
+    # Güvenli sayı çevirme fonksiyonu (String gelirse sayıya çevirir, hata verirse 0 döner)
+    def to_num(val):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    for game in games_data:
+        for p in game['players']:
+            name = p['PLAYER']
+            if name not in player_stats:
+                player_stats[name] = {
+                    'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
+                    'STL': 0, 'BLK': 0, 'TO': 0, 
+                    'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
+                    '3Pts': 0, 'TEAM': p.get('TEAM', '')
+                }
+            
+            stats = player_stats[name]
+            stats['GP'] += 1
+            
+            # BURASI DÜZELTİLDİ: Her değeri to_num() ile güvenli sayıya çeviriyoruz
+            stats['PTS'] += to_num(p.get('PTS', 0))
+            stats['REB'] += to_num(p.get('REB', 0))
+            stats['AST'] += to_num(p.get('AST', 0))
+            stats['STL'] += to_num(p.get('STL', 0))
+            stats['BLK'] += to_num(p.get('BLK', 0))
+            stats['TO']  += to_num(p.get('TO', 0))
+            stats['FGM'] += to_num(p.get('FGM', 0))
+            stats['FGA'] += to_num(p.get('FGA', 0))
+            stats['FTM'] += to_num(p.get('FTM', 0))
+            stats['FTA'] += to_num(p.get('FTA', 0))
+            stats['3Pts'] += to_num(p.get('3Pts', 0))
+
+    # Ortalamaları hesapla
+    final_list = []
+    for name, s in player_stats.items():
+        if s['GP'] > 0:
+            final_list.append({
+                'PLAYER': name,
+                'TEAM': s['TEAM'],
+                'GP': s['GP'],
+                'PTS': round(s['PTS'] / s['GP'], 1),
+                'REB': round(s['REB'] / s['GP'], 1),
+                'AST': round(s['AST'] / s['GP'], 1),
+                'STL': round(s['STL'] / s['GP'], 1),
+                'BLK': round(s['BLK'] / s['GP'], 1),
+                'TO': round(s['TO'] / s['GP'], 1),
+                '3Pts': round(s['3Pts'] / s['GP'], 1),
+                'FG%': round((s['FGM'] / s['FGA'] * 100) if s['FGA'] > 0 else 0, 1),
+                'FT%': round((s['FTM'] / s['FTA'] * 100) if s['FTA'] > 0 else 0, 1),
+            })
+            
+    return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
 
 def get_historical_boxscores(start_date, end_date):
     """
