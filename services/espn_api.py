@@ -15,6 +15,35 @@ SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/s
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
 INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
 
+@st.cache_data(ttl=86400) # 24 saat cache
+def get_nba_teams_dynamic():
+    """
+    ESPN API'den güncel NBA takımlarını ve ID'lerini dinamik olarak çeker.
+    """
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams?limit=100"
+    try:
+        data = requests.get(url, timeout=10).json()
+        teams_map = {} # {id: abbreviation} örn: {'13': 'LAL'}
+        
+        # JSON yolu: sports -> leagues -> teams -> team
+        for sport in data.get('sports', []):
+            for league in sport.get('leagues', []):
+                for team_entry in league.get('teams', []):
+                    team = team_entry.get('team', {})
+                    t_id = team.get('id')
+                    t_abbr = team.get('abbreviation')
+                    t_name = team.get('displayName')
+                    
+                    if t_id and t_abbr:
+                        teams_map[t_id] = {
+                            'abbr': t_abbr,
+                            'name': t_name
+                        }
+        return teams_map
+    except Exception as e:
+        print(f"Takım listesi çekilemedi: {e}")
+        return {}
+
 def get_game_ids(date):
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
@@ -205,6 +234,68 @@ def get_injuries():
     
     return all_injuries
 
+@st.cache_data(ttl=86400)
+def get_current_team_rosters():
+    """
+    Tüm NBA takımlarının güncel rosterlerini çeker.
+    Dinamik ID listesi kullanır.
+    Returns: Dict[player_name] = team_abbreviation
+    """
+    # Önce takımları API'den al
+    nba_teams = get_nba_teams_dynamic()
+    
+    if not nba_teams:
+        st.error("NBA takım listesi API'den çekilemedi.")
+        return {}
+
+    player_team_map = {}
+    
+    print(f"Rosterlar taranıyor: {len(nba_teams)} takım bulundu.")
+    
+    # Threading ile hızlandıralım (tek tek 30 istek atmak yavaş olur)
+    def fetch_single_roster(team_id, team_info):
+        t_abbr = team_info['abbr']
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/roster"
+        try:
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Roster yapısı: data['athletes'] -> list of players
+                athletes = data.get('athletes', [])
+                
+                # Bazen yapı 'entries' içinde olabilir, kontrol edelim
+                if not athletes and 'entries' in data:
+                     athletes = [e.get('athlete', {}) for e in data['entries']]
+                
+                local_map = {}
+                for ath in athletes:
+                    # İsimleri alalım
+                    p_name = ath.get('displayName') or ath.get('fullName')
+                    if p_name:
+                        # İsmi temizle (normalize et)
+                        clean_name = p_name.replace(".", "").replace("'", "").lower().strip()
+                        # Normal ismi kaydet ama temizlenmiş halini anahtarda kullanmak daha iyidir
+                        # Ancak şimdilik orijinal ismi key yapıyoruz, display için.
+                        local_map[p_name] = t_abbr
+                return local_map
+        except Exception:
+            return {}
+        return {}
+
+    # Paralel istek at
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_team = {
+            executor.submit(fetch_single_roster, t_id, info): t_id 
+            for t_id, info in nba_teams.items()
+        }
+        
+        for future in concurrent.futures.as_completed(future_to_team):
+            result = future.result()
+            if result:
+                player_team_map.update(result)
+
+    print(f"✓ Toplam {len(player_team_map)} oyuncu haritalandı.")
+    return player_team_map
 # =================================================================
 # FANTASY LEAGUE FONKSİYONLARI - Basitleştirilmiş
 # =================================================================
@@ -407,37 +498,63 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
 def get_active_players_stats(days=15):
     """
     Son X günün maçlarını tarayıp aktif oyuncuların ortalamalarını çıkarır.
-    Trade Analyzer'da dropdown listesi doldurmak için kullanılır.
+    Sadece maç başına ortalama 10+ dakika oynayan oyuncular dahil edilir.
     """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
+    
+    # GÜNCEL ROSTER BİLGİSİNİ ÇEK
+    current_rosters = get_current_team_rosters()
     
     games_data = get_historical_boxscores(start_date, end_date)
     
     player_stats = {}
     
-    # Güvenli sayı çevirme fonksiyonu (String gelirse sayıya çevirir, hata verirse 0 döner)
+    # Güvenli sayı çevirme fonksiyonu
     def to_num(val):
         try:
             return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    # Dakika parse fonksiyonu (MIN formatı: "25:30" veya "25" olabilir)
+    def parse_minutes(min_str):
+        try:
+            if isinstance(min_str, (int, float)):
+                return float(min_str)
+            if isinstance(min_str, str):
+                if ':' in min_str:
+                    parts = min_str.split(':')
+                    return float(parts[0]) + float(parts[1]) / 60
+                else:
+                    return float(min_str)
+            return 0.0
         except (ValueError, TypeError):
             return 0.0
 
     for game in games_data:
         for p in game['players']:
             name = p['PLAYER']
+            
+            # Dakikayı parse et
+            minutes_played = parse_minutes(p.get('MIN', 0))
+            
             if name not in player_stats:
+                # GÜNCEL TAKIMI KULLAN
+                current_team = current_rosters.get(name, p.get('TEAM', ''))
+                
                 player_stats[name] = {
                     'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
                     'STL': 0, 'BLK': 0, 'TO': 0, 
                     'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
-                    '3Pts': 0, 'TEAM': p.get('TEAM', '')
+                    '3Pts': 0, 'TEAM': current_team,
+                    'MIN': 0  # Toplam dakika ekle
                 }
             
             stats = player_stats[name]
             stats['GP'] += 1
+            stats['MIN'] += minutes_played  # Dakikayı ekle
             
-            # BURASI DÜZELTİLDİ: Her değeri to_num() ile güvenli sayıya çeviriyoruz
             stats['PTS'] += to_num(p.get('PTS', 0))
             stats['REB'] += to_num(p.get('REB', 0))
             stats['AST'] += to_num(p.get('AST', 0))
@@ -450,14 +567,21 @@ def get_active_players_stats(days=15):
             stats['FTA'] += to_num(p.get('FTA', 0))
             stats['3Pts'] += to_num(p.get('3Pts', 0))
 
-    # Ortalamaları hesapla
+    # Ortalamaları hesapla - Sadece maç başına 10+ dakika oynayanlar
     final_list = []
     for name, s in player_stats.items():
         if s['GP'] > 0:
+            avg_minutes = s['MIN'] / s['GP']
+            
+            # MAÇBAŞI 10 DAKİKADAN AZ OYNAYANLAR HARİÇ
+            if avg_minutes < 10:
+                continue
+            
             final_list.append({
                 'PLAYER': name,
-                'TEAM': s['TEAM'],
+                'TEAM': s['TEAM'],  # Güncel takım
                 'GP': s['GP'],
+                'MIN': round(avg_minutes, 1),  # Ortalama dakika
                 'PTS': round(s['PTS'] / s['GP'], 1),
                 'REB': round(s['REB'] / s['GP'], 1),
                 'AST': round(s['AST'] / s['GP'], 1),
