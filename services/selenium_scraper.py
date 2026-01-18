@@ -6,40 +6,28 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-import os
 
 def get_driver():
-    """
-    Hem Local (Windows/Mac) hem de Streamlit Cloud (Linux) 
-    ortamında çalışacak akıllı driver yapılandırması.
-    """
     chrome_options = Options()
+    chrome_options.binary_location = "/usr/bin/chromium"
     
-    # 1. ORTAM KONTROLÜ:
-    # Eğer "/usr/bin/chromium" yolu varsa (Streamlit Cloud/Linux), onu kullan.
-    # Yoksa (Senin bilgisayarın/Windows), varsayılan Chrome'u kullan (binary_location atama).
-    if os.path.exists("/usr/bin/chromium"):
-        chrome_options.binary_location = "/usr/bin/chromium"
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    # Genel Ayarlar
-    chrome_options.add_argument("--headless=new")  # Arka planda çalıştır
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
     )
 
-    try:
-        # ChromeDriverManager otomatik olarak uygun sürümü indirip kurar
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=chrome_options)
-    except Exception as e:
-        # Hata durumunda detaylı bilgi verelim
-        print(f"❌ Driver başlatılamadı: {str(e)}")
-        raise e
+    service = Service(
+        ChromeDriverManager(
+            chrome_type="chromium"
+        ).install()
+    )
+
+    return webdriver.Chrome(service=service, options=chrome_options)
 
 
 def scrape_league_standings(league_id: int):
@@ -49,6 +37,7 @@ def scrape_league_standings(league_id: int):
     Args:
         league_id: ESPN League ID
     """
+    # Standings her zaman sezonluk olduğu için time_filter parametresini kaldırdık
     url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
     
     driver = get_driver()
@@ -80,101 +69,6 @@ def scrape_league_standings(league_id: int):
     except Exception as e:
         if driver: driver.quit()
         return None
-
-
-def scrape_team_rosters(league_id: int):
-    """
-    Tüm takımların roster bilgilerini çeker (oyuncu isimleri ve istatistikleri).
-    
-    Args:
-        league_id: ESPN League ID
-        
-    Returns:
-        dict: {team_name: [{"name": str, "stats": dict}, ...]}
-    """
-    url = f"https://fantasy.espn.com/basketball/league/teams?leagueId={league_id}"
-    print(f"🔗 Fetching rosters from: {url}")
-    
-    driver = get_driver()
-    rosters = {}
-    
-    try:
-        driver.get(url)
-        time.sleep(6)
-        
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        
-        # Takım kartlarını bul
-        team_sections = soup.find_all("div", class_=lambda x: x and "team" in x.lower())
-        
-        # Alternatif: Tüm expansion panelleri bul
-        if not team_sections:
-            team_sections = soup.find_all("section")
-        
-        for section in team_sections:
-            # Takım ismini bul
-            team_link = section.find("a", href=lambda x: x and "teamId=" in x)
-            if not team_link:
-                continue
-                
-            team_name = team_link.get_text(strip=True)
-            
-            # Oyuncu tablosunu bul
-            player_table = section.find("table")
-            if not player_table:
-                continue
-            
-            players = []
-            rows = player_table.find_all("tr")
-            
-            for row in rows[1:]:  # İlk satır header
-                cells = row.find_all("td")
-                if len(cells) < 2:
-                    continue
-                
-                # Oyuncu ismi
-                player_link = cells[0].find("a")
-                if not player_link:
-                    continue
-                    
-                player_name = player_link.get_text(strip=True)
-                
-                # İstatistikler (9-cat sırasıyla)
-                stats_data = {}
-                stat_values = []
-                
-                for cell in cells[1:]:
-                    txt = cell.get_text(strip=True)
-                    if any(char.isdigit() for char in txt):
-                        stat_values.append(txt)
-                
-                if len(stat_values) >= 9:
-                    categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-                    for i, cat in enumerate(categories):
-                        if i < len(stat_values):
-                            stats_data[cat] = stat_values[i]
-                    
-                    players.append({
-                        "name": player_name,
-                        "stats": stats_data
-                    })
-            
-            if players:
-                rosters[team_name] = players
-                print(f"✅ {team_name}: {len(players)} oyuncu")
-        
-        driver.quit()
-        print(f"✅ Toplam {len(rosters)} takımın roster'ı çekildi")
-        return rosters
-        
-    except Exception as e:
-        print(f"❌ Roster çekme hatası: {e}")
-        if driver:
-            driver.quit()
-        return {}
     
 
 def extract_team_names_from_card(card):
@@ -206,11 +100,18 @@ def get_scoring_period_params(time_filter: str):
     Returns:
         str: URL parametreleri
     """
+    # ESPN Fantasy Basketball için:
+    # Haftalık view için herhangi bir parametre eklemeye gerek yok (default mevcut hafta)
+    # Aylık ve sezonluk için "view" parametresi kullanılır
+    
     if time_filter == "week":
+        # Mevcut hafta (default)
         return ""
     elif time_filter == "month":
+        # Matchup history view (genelde son birkaç hafta)
         return "&view=mMatchupScore"
     elif time_filter == "season":
+        # Sezon geneli görünüm
         return "&view=mTeam"
     else:
         return ""
@@ -226,6 +127,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
     """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     
+
     params = get_scoring_period_params(time_filter)
     url = base_url + params
     
@@ -243,6 +145,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
+ 
         tables = soup.find_all("table")
         stat_tables = []
 
@@ -297,46 +200,30 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
 
 def parse_row_stats(row):
+    """
+    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat sözlüğü oluşturur.
+    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
+    """
     cells = row.find_all("td")
+    stats = {}
     values = []
     
     for cell in cells:
         txt = cell.get_text(strip=True)
-        # Rakam, -- veya nokta içerenleri al
-        if txt and (any(c.isdigit() for c in txt) or txt == "--"):
+        if any(char.isdigit() for char in txt):
             values.append(txt)
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-    stats = {}
-
-    if len(values) < 9:
-        return None
-
-    # Sondan 9 kategori
-    relevant_values = values[-9:]
-    for i, cat in enumerate(categories):
-        stats[cat] = relevant_values[i]
     
-    # GP Mantığı - ÖNEMLİ: GP genellikle ilk sütunda olur
-    stats['GP'] = '0'
+    if len(values) >= 9:
+        relevant_values = values[-9:] 
+        
+        for i, cat in enumerate(categories):
+            stats[cat] = relevant_values[i]
+            
+        return stats
     
-    # İlk değeri kontrol et (genellikle GP burada)
-    if len(values) > 0:
-        first_val = values[0].strip()
-        if first_val.isdigit():
-            stats['GP'] = first_val
-        elif first_val == "--":
-            stats['GP'] = "0"
-    
-    # Eğer ilk değer GP değilse, -10. pozisyonu dene
-    if stats['GP'] == '0' and len(values) >= 10:
-        candidate = values[-10]
-        if candidate.isdigit():
-            stats['GP'] = candidate
-        elif candidate.strip().isdigit():
-            stats['GP'] = candidate.strip()
-
-    return stats
+    return None
 
 
 def extract_team_names_from_matchup(card):
