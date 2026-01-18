@@ -6,28 +6,40 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+from os import os
 
 def get_driver():
+    """
+    Hem Local (Windows/Mac) hem de Streamlit Cloud (Linux) 
+    ortamında çalışacak akıllı driver yapılandırması.
+    """
     chrome_options = Options()
-    chrome_options.binary_location = "/usr/bin/chromium"
     
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    # 1. ORTAM KONTROLÜ:
+    # Eğer "/usr/bin/chromium" yolu varsa (Streamlit Cloud/Linux), onu kullan.
+    # Yoksa (Senin bilgisayarın/Windows), varsayılan Chrome'u kullan (binary_location atama).
+    if os.path.exists("/usr/bin/chromium"):
+        chrome_options.binary_location = "/usr/bin/chromium"
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+    
+    # Genel Ayarlar
+    chrome_options.add_argument("--headless=new")  # Arka planda çalıştır
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
 
-    service = Service(
-        ChromeDriverManager(
-            chrome_type="chromium"
-        ).install()
-    )
-
-    return webdriver.Chrome(service=service, options=chrome_options)
+    try:
+        # ChromeDriverManager otomatik olarak uygun sürümü indirip kurar
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        # Hata durumunda detaylı bilgi verelim
+        print(f"❌ Driver başlatılamadı: {str(e)}")
+        raise e
 
 
 def scrape_league_standings(league_id: int):
@@ -285,38 +297,46 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
 
 def parse_row_stats(row):
-    """
-    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat + GP sözlüğü oluşturur.
-    Beklenen Sıra: GP, FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
-    """
     cells = row.find_all("td")
-    stats = {}
     values = []
     
     for cell in cells:
         txt = cell.get_text(strip=True)
-        # Sadece sayısal değer içeren hücreleri al
-        if any(char.isdigit() for char in txt):
+        # Rakam, -- veya nokta içerenleri al
+        if txt and (any(c.isdigit() for c in txt) or txt == "--"):
             values.append(txt)
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+    stats = {}
+
+    if len(values) < 9:
+        return None
+
+    # Sondan 9 kategori
+    relevant_values = values[-9:]
+    for i, cat in enumerate(categories):
+        stats[cat] = relevant_values[i]
     
-    # ESPN genelde 9 kategori + GP (Games Played) verir. Toplam en az 10 veri olmalı.
-    if len(values) >= 9:
-        # Son 9 değer kategorilerdir
-        relevant_values = values[-9:] 
-        for i, cat in enumerate(categories):
-            stats[cat] = relevant_values[i]
-            
-        # 9 kategoriden önceki değer genelde GP (Oynanan Maç Sayısı)'dır
-        if len(values) >= 10:
-            stats['GP'] = values[-10]
-        else:
+    # GP Mantığı - ÖNEMLİ: GP genellikle ilk sütunda olur
+    stats['GP'] = '0'
+    
+    # İlk değeri kontrol et (genellikle GP burada)
+    if len(values) > 0:
+        first_val = values[0].strip()
+        if first_val.isdigit():
+            stats['GP'] = first_val
+        elif first_val == "--":
             stats['GP'] = "0"
-            
-        return stats
     
-    return None
+    # Eğer ilk değer GP değilse, -10. pozisyonu dene
+    if stats['GP'] == '0' and len(values) >= 10:
+        candidate = values[-10]
+        if candidate.isdigit():
+            stats['GP'] = candidate
+        elif candidate.strip().isdigit():
+            stats['GP'] = candidate.strip()
+
+    return stats
 
 
 def extract_team_names_from_matchup(card):
