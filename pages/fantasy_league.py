@@ -376,7 +376,6 @@ def render_fantasy_league_page():
                 st.dataframe(df_standings, use_container_width=True, hide_index=True)
             else: st.info("NO DATA AVAILABLE")
 
-# TAB 2: MATCHUPS
         with tab2:
             if matchups:
                 st.markdown(f"### ⚔️ WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
@@ -396,8 +395,8 @@ def render_fantasy_league_page():
                             # GP Badge (Sağa yaslı)
                             st.markdown(f"""
                             <div style='display:flex; justify-content:flex-end; margin-bottom:5px;'>
-                                <span style='background:#334155; color:#cbd5e1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;'>
-                                    🏟️ GAMES: {gp_away}
+                                <span style='background:#334155; color:#cbd5e1; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
+                                    🏀 GAMES PLAYED: {gp_away}
                                 </span>
                             </div>
                             """, unsafe_allow_html=True)
@@ -415,8 +414,8 @@ def render_fantasy_league_page():
                             # GP Badge (Sola yaslı)
                             st.markdown(f"""
                             <div style='display:flex; justify-content:flex-start; margin-bottom:5px;'>
-                                <span style='background:#334155; color:#cbd5e1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;'>
-                                    🏟️ GAMES: {gp_home}
+                                <span style='background:#334155; color:#cbd5e1; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
+                                    🏀 GAMES PLAYED: {gp_home}
                                 </span>
                             </div>
                             """, unsafe_allow_html=True)
