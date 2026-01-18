@@ -286,8 +286,8 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
 def parse_row_stats(row):
     """
-    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat sözlüğü oluşturur.
-    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
+    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat + GP sözlüğü oluşturur.
+    Beklenen Sıra: GP, FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
     """
     cells = row.find_all("td")
     stats = {}
@@ -295,16 +295,24 @@ def parse_row_stats(row):
     
     for cell in cells:
         txt = cell.get_text(strip=True)
+        # Sadece sayısal değer içeren hücreleri al
         if any(char.isdigit() for char in txt):
             values.append(txt)
     
     categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
     
+    # ESPN genelde 9 kategori + GP (Games Played) verir. Toplam en az 10 veri olmalı.
     if len(values) >= 9:
+        # Son 9 değer kategorilerdir
         relevant_values = values[-9:] 
-        
         for i, cat in enumerate(categories):
             stats[cat] = relevant_values[i]
+            
+        # 9 kategoriden önceki değer genelde GP (Oynanan Maç Sayısı)'dır
+        if len(values) >= 10:
+            stats['GP'] = values[-10]
+        else:
+            stats['GP'] = "0"
             
         return stats
     
