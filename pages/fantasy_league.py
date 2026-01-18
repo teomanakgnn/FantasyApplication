@@ -376,50 +376,50 @@ def render_fantasy_league_page():
                 st.dataframe(df_standings, use_container_width=True, hide_index=True)
             else: st.info("NO DATA AVAILABLE")
 
-with tab2:
-    if matchups:
-        st.markdown(f"### ⚔️ WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
-        for match in matchups:
-            # Upcoming games verilerini çek
-            upcoming_away = match['away_team'].get('upcoming_games', 'N/A')
-            upcoming_home = match['home_team'].get('upcoming_games', 'N/A')
+        with tab2:
+            if matchups:
+                st.markdown(f"### ⚔️ WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
+                for match in matchups:
+                    # Upcoming games verilerini çek
+                    upcoming_away = match['away_team'].get('upcoming_games', 'N/A')
+                    upcoming_home = match['home_team'].get('upcoming_games', 'N/A')
 
-            with st.container(border=True):
-                col1, col2, col3 = st.columns([1, 0.2, 1])
-                
-                # --- DEPLASMAN TAKIMI ---
-                with col1:
-                    st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
-                    
-                    # Upcoming Games Badge
-                    st.markdown(f"""
-                    <div style='display:flex; justify-content:flex-end; margin-bottom:5px;'>
-                        <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                            📅 UPCOMING: {upcoming_away} games
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"<h1 style='text-align:right; color:#3b82f6; margin:0; font-size: 3rem;'>{match['away_score']}</h1>", unsafe_allow_html=True)
+                    with st.container(border=True):
+                        col1, col2, col3 = st.columns([1, 0.2, 1])
+                        
+                        # --- DEPLASMAN TAKIMI ---
+                        with col1:
+                            st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
+                            
+                            # Upcoming Games Badge
+                            st.markdown(f"""
+                            <div style='display:flex; justify-content:flex-end; margin-bottom:5px;'>
+                                <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
+                                    📅 UPCOMING: {upcoming_away} games
+                                </span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"<h1 style='text-align:right; color:#3b82f6; margin:0; font-size: 3rem;'>{match['away_score']}</h1>", unsafe_allow_html=True)
 
-                # --- VS ---
-                with col2: 
-                    st.markdown("<div style='display:flex; align-items:center; justify-content:center; height:100%;'><h3 style='color:#64748b; margin-top:20px'>VS</h3></div>", unsafe_allow_html=True)
-                
-                # --- EV SAHİBİ TAKIMI ---
-                with col3:
-                    st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
-                    
-                    # Upcoming Games Badge
-                    st.markdown(f"""
-                    <div style='display:flex; justify-content:flex-start; margin-bottom:5px;'>
-                        <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                            📅 UPCOMING: {upcoming_home} games
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0; font-size: 3rem;'>{match['home_score']}</h1>", unsafe_allow_html=True)
+                        # --- VS ---
+                        with col2: 
+                            st.markdown("<div style='display:flex; align-items:center; justify-content:center; height:100%;'><h3 style='color:#64748b; margin-top:20px'>VS</h3></div>", unsafe_allow_html=True)
+                        
+                        # --- EV SAHİBİ TAKIMI ---
+                        with col3:
+                            st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
+                            
+                            # Upcoming Games Badge
+                            st.markdown(f"""
+                            <div style='display:flex; justify-content:flex-start; margin-bottom:5px;'>
+                                <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
+                                    📅 UPCOMING: {upcoming_home} games
+                                </span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0; font-size: 3rem;'>{match['home_score']}</h1>", unsafe_allow_html=True)
         # TAB 3: H2H POWER RANKINGS
         with tab3:
             if matchups:
