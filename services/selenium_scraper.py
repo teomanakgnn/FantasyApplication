@@ -170,13 +170,52 @@ def get_scoring_period_params(time_filter: str):
         return ""
 
         
+def extract_team_games_count(card, team_index=0):
+    """
+    Matchup kartından takımın o hafta toplam maç sayısını çeker.
+    ESPN'de genellikle takım adının yanında veya altında gösterilir.
+    Örn: "4-0 (12 GP)" veya sadece "GP: 12"
+    """
+    try:
+        # Tüm text'i al ve GP bilgisini ara
+        card_text = card.get_text()
+        
+        # "GP" içeren tüm span/div elementlerini bul
+        gp_elements = card.find_all(text=lambda t: t and 'GP' in t.upper())
+        
+        if gp_elements and len(gp_elements) > team_index:
+            gp_text = gp_elements[team_index]
+            # Sayıyı çıkar (örn: "12 GP" -> 12)
+            import re
+            numbers = re.findall(r'\d+', gp_text)
+            if numbers:
+                return int(numbers[0])
+        
+        # Alternatif: Parent container'da ara
+        team_containers = card.find_all("div", class_=lambda x: x and "team" in x.lower())
+        if len(team_containers) > team_index:
+            container_text = team_containers[team_index].get_text()
+            import re
+            gp_match = re.search(r'(\d+)\s*GP', container_text, re.IGNORECASE)
+            if gp_match:
+                return int(gp_match.group(1))
+        
+        return 0
+        
+    except Exception as e:
+        print(f"⚠️ GP extraction error: {e}")
+        return 0
+
+
 def scrape_matchups(league_id: int, time_filter: str = "week"):
     """
-    Matchup verilerini çeker + her takımın o hafta oynayacağı toplam maç sayısını ekler
+    Matchup verilerini çeker + her takımın o hafta toplam maç sayısını ekler
     """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     params = get_scoring_period_params(time_filter)
     url = base_url + params
+    
+    print(f"🔗 Fetching URL: {url}")
     
     driver = get_driver()
     matchups = []
@@ -189,6 +228,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         time.sleep(3)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
+
         tables = soup.find_all("table")
         stat_tables = []
 
@@ -210,51 +250,49 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             if not away_data or not home_data:
                 continue
 
+            # TABLOYU SARAN MATCHUP CARD
             card = table.find_parent("section") or table.find_parent("div")
             if not card:
                 continue
 
+            # Takım isimleri
             away_name, home_name = extract_team_names_from_card(card)
             
-            # Team ID'leri çek
-            away_team_id = None
-            home_team_id = None
+            # GP bilgisini karttan çek
+            away_gp = extract_team_games_count(card, team_index=0)
+            home_gp = extract_team_games_count(card, team_index=1)
             
-            team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
-            if len(team_links) >= 2:
-                away_team_id = team_links[0]['href'].split('teamId=')[1].split('&')[0]
-                home_team_id = team_links[1]['href'].split('teamId=')[1].split('&')[0]
+            # Eğer bulamazsa, stats içinden al (yedek)
+            if away_gp == 0 and 'GP' in away_data:
+                try:
+                    away_gp = int(away_data['GP'])
+                except:
+                    away_gp = 0
+                    
+            if home_gp == 0 and 'GP' in home_data:
+                try:
+                    home_gp = int(home_data['GP'])
+                except:
+                    home_gp = 0
 
             matchups.append({
                 "away_team": {
                     "name": away_name,
                     "stats": away_data,
-                    "team_id": away_team_id
+                    "games_played": away_gp
                 },
                 "home_team": {
                     "name": home_name,
                     "stats": home_data,
-                    "team_id": home_team_id
+                    "games_played": home_gp
                 },
                 "away_score": calculate_category_wins(away_data, home_data),
                 "home_score": calculate_category_wins(home_data, away_data)
             })
+            
+            print(f"  📊 {away_name} ({away_gp} GP) vs {home_name} ({home_gp} GP)")
 
         driver.quit()
-        
-        # HER TAKIM İÇİN UPCOMING GAMES SAYISINI ÇEK
-        print("🔄 Fetching upcoming games for each team...")
-        for match in matchups:
-            if match['away_team']['team_id']:
-                upcoming = get_team_upcoming_games(league_id, match['away_team']['team_id'])
-                match['away_team']['upcoming_games'] = upcoming
-                print(f"  {match['away_team']['name']}: {upcoming} games")
-            
-            if match['home_team']['team_id']:
-                upcoming = get_team_upcoming_games(league_id, match['home_team']['team_id'])
-                match['home_team']['upcoming_games'] = upcoming
-                print(f"  {match['home_team']['name']}: {upcoming} games")
-        
         print(f"✅ Toplam {len(matchups)} matchup çekildi")
         return matchups
 
@@ -263,11 +301,11 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         if driver:
             driver.quit()
         return []
-
+    
 def parse_row_stats(row):
     """
-    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat sözlüğü oluşturur.
-    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS
+    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat + GP sözlüğü oluşturur.
+    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS (ve muhtemelen GP)
     """
     cells = row.find_all("td")
     stats = {}
@@ -278,17 +316,21 @@ def parse_row_stats(row):
         if any(char.isdigit() for char in txt):
             values.append(txt)
     
-    categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
-    
-    if len(values) >= 9:
-        relevant_values = values[-9:] 
-        
+    # GP genellikle ilk sütun olabilir, kontrol edelim
+    if len(values) >= 10:  # GP + 9 kategori
+        stats['GP'] = values[0]
+        categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+        for i, cat in enumerate(categories):
+            stats[cat] = values[i + 1]
+    elif len(values) >= 9:  # Sadece 9 kategori
+        categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
+        relevant_values = values[-9:]
         for i, cat in enumerate(categories):
             stats[cat] = relevant_values[i]
-            
-        return stats
+    else:
+        return None
     
-    return None
+    return stats
 
 
 def extract_team_names_from_matchup(card):
