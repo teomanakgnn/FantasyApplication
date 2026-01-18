@@ -60,16 +60,16 @@ def render_sidebar():
 
     # --- Default weights ---
     base_weights = {
-        "PTS": 0.9,      
+        "PTS": 0.75,      
         "REB": 0.5,      
         "AST": 0.8,      
         "STL": 1.7,      
         "BLK": 1.6,      
-        "TO": -1.3,      
-        "FGA": -0.6,     
-        "FGM": 0.8,      
-        "FTA": -0.35,    
-        "FTM": 0.75,     
+        "TO": -1.5,      
+        "FGA": -0.9,     
+        "FGM": 1.2,      
+        "FTA": -0.55,    
+        "FTM": 1.1,     
         "3Pts": 0.6, 
     }
 
