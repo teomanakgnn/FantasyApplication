@@ -234,6 +234,324 @@ def get_injuries():
     
     return all_injuries
 
+
+# services/espn_api.py
+
+def get_nba_season_stats_official(season_year=2026):
+    """
+    FIXED VERSION (INDEX MAPPING):
+    API artık 'names' göndermediği için, veriler doğrudan
+    sıra numarasına (index) göre haritalanır.
+    Referans: Luka Doncic JSON yapısı analiz edilmiştir.
+    """
+    import pandas as pd
+    import requests
+    
+    # Beklenen sütunlar
+    REQUIRED_COLUMNS = [
+        "PLAYER", "TEAM", "GP", "MIN", "PTS", "REB", "AST", 
+        "STL", "BLK", "TO", "FGM", "FGA", "FTM", "FTA", 
+        "3Pts", "3PTA", "FG%", "FT%", "+/-"
+    ]
+    
+    base_url = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Referer": "https://www.espn.com/"
+    }
+
+    # API Stratejisi: 2026 -> 2025 -> Current
+    attempts = [season_year, season_year - 1]
+    found_athletes = []
+
+    print(f"🔄 Fetching Official Stats (Target: {season_year})...")
+
+    for s in attempts:
+        try:
+            params = {
+                "region": "us", "lang": "en", "contentorigin": "espn",
+                "isqualified": "false", "page": 1, "limit": 1000, 
+                "sort": "offensive.avgPoints:desc",
+                "season": s
+            }
+            
+            response = requests.get(base_url, headers=headers, params=params, timeout=10)
+            data = response.json()
+            athletes = data.get("athletes", [])
+            
+            if athletes:
+                print(f"   ✓ Success with season {s} (Found {len(athletes)} players)")
+                found_athletes = athletes
+                break
+        except Exception:
+            continue
+
+    processed_data = []
+
+    if not found_athletes:
+        print("❌ No data found.")
+        # Boş DataFrame döndür (KeyError engellemek için sütunlarla)
+        df = pd.DataFrame(columns=REQUIRED_COLUMNS)
+        return df
+
+    # --- PARSING ENGINE (INDEX BASED) ---
+    for ath_entry in found_athletes:
+        try:
+            row = {col: 0.0 for col in REQUIRED_COLUMNS}
+            
+            # 1. Oyuncu Bilgileri
+            athlete = ath_entry.get('athlete', {})
+            row['PLAYER'] = athlete.get('displayName', 'Unknown')
+            row['TEAM'] = athlete.get('team', {}).get('abbreviation', 'FA')
+            
+            # 2. Kategorileri Ayır
+            categories = {c['name']: c.get('values', []) for c in ath_entry.get('categories', [])}
+            
+            # --- GENERAL KATEGORİSİ ---
+            # Beklenen Sıra: [0:GP, 1:MIN, ..., 11:REB(Tahmini), ...]
+            gen = categories.get('general', [])
+            if len(gen) > 1:
+                row['GP'] = float(gen[0])
+                row['MIN'] = float(gen[1])
+                # Luka verisinde index 11 (7.7) Rebound gibi görünüyor
+                if len(gen) > 11:
+                    row['REB'] = float(gen[11])
+
+            # --- OFFENSIVE KATEGORİSİ ---
+            # Beklenen Sıra:
+            # 0:PTS, 1:FGM, 2:FGA, 3:FG%, 4:3PM, 5:3PA, 6:3P%, 
+            # 7:FTM, 8:FTA, 9:FT%, 10:AST, 11:TO
+            off = categories.get('offensive', [])
+            if len(off) > 11:
+                row['PTS'] = float(off[0])
+                row['FGM'] = float(off[1])
+                row['FGA'] = float(off[2])
+                row['FG%'] = float(off[3])
+                row['3Pts'] = float(off[4])
+                row['3PTA'] = float(off[5])
+                # Index 6 3P% (Atla)
+                row['FTM'] = float(off[7])
+                row['FTA'] = float(off[8])
+                row['FT%'] = float(off[9])
+                row['AST'] = float(off[10])
+                row['TO'] = float(off[11])
+
+            # --- DEFENSIVE KATEGORİSİ ---
+            # Beklenen Sıra: 0:STL, 1:BLK
+            defi = categories.get('defensive', [])
+            if len(defi) > 1:
+                row['STL'] = float(defi[0])
+                row['BLK'] = float(defi[1])
+            
+            # Rebound Kontrolü (Eğer General'den gelmediyse Defensive'den kontrol etmeye gerek yok, 
+            # veri yapısında defensive içinde REB yoktu)
+            
+            # Yüzde Düzeltmeleri (Eğer 0-1 arasındaysa 100 ile çarp)
+            if row['FG%'] <= 1.0 and row['FG%'] > 0: row['FG%'] *= 100
+            if row['FT%'] <= 1.0 and row['FT%'] > 0: row['FT%'] *= 100
+            
+            if row['GP'] > 0:
+                processed_data.append(row)
+
+        except Exception:
+            continue
+
+    df = pd.DataFrame(processed_data)
+    
+    # Güvenlik Kontrolü: DataFrame boşsa veya sütunlar eksikse
+    for col in REQUIRED_COLUMNS:
+        if col not in df.columns:
+            df[col] = 0.0
+
+    return df.sort_values(by="PTS", ascending=False)
+    # services/espn_api.py dosyasında ilgili yerleri bu kodla değiştirin
+
+# =================================================================
+# GÜNCELLENMİŞ GET_ACTIVE_PLAYERS_STATS VE YEREL AGGREGATE FONKSİYONU
+# =================================================================
+
+@st.cache_data(ttl=3600)
+def get_active_players_stats(days=None, season_stats=True):
+    """
+    Aktif oyuncuların istatistiklerini çeker.
+    
+    Args:
+        days: Kaç günlük veri alınacak (None ise sezon başından itibaren)
+        season_stats: True ise sezon başından, False ise son X gün
+    """
+    end_date = datetime.now()
+    
+    if season_stats or days is None:
+        # NBA 2024-25 sezonu başlangıcı: 22 Ekim 2024
+        # NBA 2025-26 sezonu başlangıcı: ~22 Ekim 2025 (tahmini)
+        current_year = end_date.year
+        current_month = end_date.month
+        
+        # Eğer Ekim öncesiyse, geçen sezonun verisini kullan
+        if current_month < 10:
+            season_start_year = current_year - 1
+        else:
+            season_start_year = current_year
+        
+        # NBA sezonları genelde Ekim'in son haftasında başlar
+        start_date = datetime(season_start_year, 10, 22)
+        
+        print(f"📊 Sezon istatistikleri: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
+        print(f"📅 Toplam {(end_date - start_date).days} gün")
+    else:
+        # Son X gün
+        start_date = end_date - timedelta(days=days)
+        print(f"📊 Son {days} gün istatistikleri")
+    
+    # GÜNCEL ROSTER BİLGİSİNİ ÇEK
+    current_rosters = get_current_team_rosters()
+    
+    # İsim normalleştirme için yardımcı fonksiyon
+    def normalize_name(name):
+        """İsimleri karşılaştırma için normalize eder"""
+        if not name:
+            return ""
+        return name.replace(".", "").replace("'", "").replace("-", " ").lower().strip()
+    
+    # Normalize edilmiş roster dictionary oluştur
+    normalized_rosters = {}
+    for player_name, team in current_rosters.items():
+        norm_name = normalize_name(player_name)
+        normalized_rosters[norm_name] = {
+            'team': team,
+            'original_name': player_name
+        }
+    
+    games_data = get_historical_boxscores(start_date, end_date)
+    
+    player_stats = {}
+    
+    # Güvenli sayı çevirme fonksiyonu
+    def to_num(val):
+        try:
+            if val == '' or val is None or val == '--':
+                return 0.0
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    # Dakika parse fonksiyonu
+    def parse_minutes(min_str):
+        try:
+            if min_str == '' or min_str is None or min_str == '--':
+                return 0.0
+            if isinstance(min_str, (int, float)):
+                return float(min_str)
+            if isinstance(min_str, str):
+                if ':' in min_str:
+                    parts = min_str.split(':')
+                    return float(parts[0]) + float(parts[1]) / 60
+                else:
+                    return float(min_str)
+            return 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Her maçtaki her oyuncu için istatistikleri topla
+    for game in games_data:
+        for p in game['players']:
+            name = p.get('PLAYER', '')
+            if not name:
+                continue
+            
+            # Dakikayı parse et - 0 ise atla
+            minutes_played = parse_minutes(p.get('MIN', 0))
+            if minutes_played == 0:
+                continue
+            
+            # Güncel takımı bul (normalize edilmiş isimle)
+            norm_name = normalize_name(name)
+            roster_info = normalized_rosters.get(norm_name)
+            
+            if roster_info:
+                current_team = roster_info['team']
+                display_name = roster_info['original_name']
+            else:
+                current_team = p.get('TEAM', 'UNK')
+                display_name = name
+            
+            if display_name not in player_stats:
+                player_stats[display_name] = {
+                    'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
+                    'STL': 0, 'BLK': 0, 'TO': 0, 
+                    'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
+                    '3Pts': 0, '3PTA': 0,  # 3PTA eklendi
+                    'TEAM': current_team,
+                    'MIN': 0,
+                    'last_game_date': game['date']
+                }
+            
+            stats = player_stats[display_name]
+            stats['TEAM'] = current_team
+            stats['GP'] += 1
+            stats['MIN'] += minutes_played
+            
+            if game['date'] > stats['last_game_date']:
+                stats['last_game_date'] = game['date']
+            
+            # İstatistikleri topla
+            stats['PTS'] += to_num(p.get('PTS', 0))
+            stats['REB'] += to_num(p.get('REB', 0))
+            stats['AST'] += to_num(p.get('AST', 0))
+            stats['STL'] += to_num(p.get('STL', 0))
+            stats['BLK'] += to_num(p.get('BLK', 0))
+            stats['TO']  += to_num(p.get('TO', 0))
+            stats['FGM'] += to_num(p.get('FGM', 0))
+            stats['FGA'] += to_num(p.get('FGA', 0))
+            stats['FTM'] += to_num(p.get('FTM', 0))
+            stats['FTA'] += to_num(p.get('FTA', 0))
+            stats['3Pts'] += to_num(p.get('3Pts', 0))
+            stats['3PTA'] += to_num(p.get('3PTA', 0))
+
+    # Ortalamaları hesapla - Sadece maç başına 10+ dakika oynayanlar
+    final_list = []
+    for name, s in player_stats.items():
+        if s['GP'] == 0:
+            continue
+            
+        avg_minutes = s['MIN'] / s['GP']
+        
+        # MAÇBAŞI 10 DAKİKADAN AZ OYNAYANLAR HARİÇ
+        if avg_minutes < 10:
+            continue
+        
+        # Yüzdeleri hesapla
+        fg_pct = round((s['FGM'] / s['FGA'] * 100) if s['FGA'] > 0 else 0, 1)
+        ft_pct = round((s['FTM'] / s['FTA'] * 100) if s['FTA'] > 0 else 0, 1)
+        three_pct = round((s['3Pts'] / s['3PTA'] * 100) if s['3PTA'] > 0 else 0, 1)
+        
+        final_list.append({
+            'PLAYER': name,
+            'TEAM': s['TEAM'],
+            'GP': s['GP'],
+            'MIN': round(avg_minutes, 1),
+            'PTS': round(s['PTS'] / s['GP'], 1),
+            'REB': round(s['REB'] / s['GP'], 1),
+            'AST': round(s['AST'] / s['GP'], 1),
+            'STL': round(s['STL'] / s['GP'], 1),
+            'BLK': round(s['BLK'] / s['GP'], 1),
+            'TO': round(s['TO'] / s['GP'], 1),
+            'FGM': round(s['FGM'] / s['GP'], 1),
+            'FGA': round(s['FGA'] / s['GP'], 1),
+            'FTM': round(s['FTM'] / s['GP'], 1),
+            'FTA': round(s['FTA'] / s['GP'], 1),
+            '3Pts': round(s['3Pts'] / s['GP'], 1),
+            '3PM': round(s['3Pts'] / s['GP'], 1),  # Duplicate for compatibility
+            '3PTA': round(s['3PTA'] / s['GP'], 1),
+            'FG%': fg_pct,
+            'FT%': ft_pct,
+            '3P%': three_pct,
+        })
+    
+    print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
+    
+    return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
 @st.cache_data(ttl=86400)
 def get_current_team_rosters():
     """
@@ -495,16 +813,56 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
 # services/espn_api.py dosyasında get_active_players_stats fonksiyonunu bununla değiştirin:
 
 @st.cache_data(ttl=3600)
-def get_active_players_stats(days=15):
+def get_active_players_stats(days=None, season_stats=True):
     """
-    Son X günün maçlarını tarayıp aktif oyuncuların ortalamalarını çıkarır.
-    Sadece maç başına ortalama 10+ dakika oynayan oyuncular dahil edilir.
+    Aktif oyuncuların istatistiklerini çeker.
+    
+    Args:
+        days: Kaç günlük veri alınacak (None ise sezon başından itibaren)
+        season_stats: True ise sezon başından, False ise son X gün
     """
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
+    
+    if season_stats or days is None:
+        # NBA 2024-25 sezonu başlangıcı: 22 Ekim 2024
+        # NBA 2025-26 sezonu başlangıcı: ~22 Ekim 2025 (tahmini)
+        current_year = end_date.year
+        current_month = end_date.month
+        
+        # Eğer Ekim öncesiyse, geçen sezonun verisini kullan
+        if current_month < 10:
+            season_start_year = current_year - 1
+        else:
+            season_start_year = current_year
+        
+        # NBA sezonları genelde Ekim'in son haftasında başlar
+        start_date = datetime(season_start_year, 10, 22)
+        
+        print(f"📊 Sezon istatistikleri: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
+        print(f"📅 Toplam {(end_date - start_date).days} gün")
+    else:
+        # Son X gün
+        start_date = end_date - timedelta(days=days)
+        print(f"📊 Son {days} gün istatistikleri")
     
     # GÜNCEL ROSTER BİLGİSİNİ ÇEK
     current_rosters = get_current_team_rosters()
+    
+    # İsim normalleştirme için yardımcı fonksiyon
+    def normalize_name(name):
+        """İsimleri karşılaştırma için normalize eder"""
+        if not name:
+            return ""
+        return name.replace(".", "").replace("'", "").replace("-", " ").lower().strip()
+    
+    # Normalize edilmiş roster dictionary oluştur
+    normalized_rosters = {}
+    for player_name, team in current_rosters.items():
+        norm_name = normalize_name(player_name)
+        normalized_rosters[norm_name] = {
+            'team': team,
+            'original_name': player_name
+        }
     
     games_data = get_historical_boxscores(start_date, end_date)
     
@@ -513,13 +871,17 @@ def get_active_players_stats(days=15):
     # Güvenli sayı çevirme fonksiyonu
     def to_num(val):
         try:
+            if val == '' or val is None or val == '--':
+                return 0.0
             return float(val)
         except (ValueError, TypeError):
             return 0.0
     
-    # Dakika parse fonksiyonu (MIN formatı: "25:30" veya "25" olabilir)
+    # Dakika parse fonksiyonu
     def parse_minutes(min_str):
         try:
+            if min_str == '' or min_str is None or min_str == '--':
+                return 0.0
             if isinstance(min_str, (int, float)):
                 return float(min_str)
             if isinstance(min_str, str):
@@ -532,68 +894,122 @@ def get_active_players_stats(days=15):
         except (ValueError, TypeError):
             return 0.0
 
+    # Her maçtaki her oyuncu için istatistikleri topla
     for game in games_data:
         for p in game['players']:
-            name = p['PLAYER']
+            name = p.get('PLAYER', '')
+            if not name:
+                continue
             
-            # Dakikayı parse et
+            # Dakikayı parse et - 0 ise atla
             minutes_played = parse_minutes(p.get('MIN', 0))
+            if minutes_played == 0:
+                continue
             
-            if name not in player_stats:
-                # GÜNCEL TAKIMI KULLAN
-                current_team = current_rosters.get(name, p.get('TEAM', ''))
-                
-                player_stats[name] = {
+            # Güncel takımı bul (normalize edilmiş isimle)
+            norm_name = normalize_name(name)
+            roster_info = normalized_rosters.get(norm_name)
+            
+            if roster_info:
+                current_team = roster_info['team']
+                display_name = roster_info['original_name']
+            else:
+                current_team = p.get('TEAM', 'UNK')
+                display_name = name
+            
+            if display_name not in player_stats:
+                player_stats[display_name] = {
                     'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
                     'STL': 0, 'BLK': 0, 'TO': 0, 
                     'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
-                    '3Pts': 0, 'TEAM': current_team,
-                    'MIN': 0  # Toplam dakika ekle
+                    '3Pts': 0, '3PTA': 0,
+                    'TEAM': current_team,
+                    'MIN': 0,
+                    'last_game_date': game['date']
                 }
             
-            stats = player_stats[name]
+            stats = player_stats[display_name]
+            stats['TEAM'] = current_team
             stats['GP'] += 1
-            stats['MIN'] += minutes_played  # Dakikayı ekle
+            stats['MIN'] += minutes_played
             
+            if game['date'] > stats['last_game_date']:
+                stats['last_game_date'] = game['date']
+            
+            # İstatistikleri topla
             stats['PTS'] += to_num(p.get('PTS', 0))
             stats['REB'] += to_num(p.get('REB', 0))
             stats['AST'] += to_num(p.get('AST', 0))
             stats['STL'] += to_num(p.get('STL', 0))
             stats['BLK'] += to_num(p.get('BLK', 0))
             stats['TO']  += to_num(p.get('TO', 0))
+            
+            # FG istatistikleri - get_boxscore'dan gelen değerleri kullan
             stats['FGM'] += to_num(p.get('FGM', 0))
             stats['FGA'] += to_num(p.get('FGA', 0))
             stats['FTM'] += to_num(p.get('FTM', 0))
             stats['FTA'] += to_num(p.get('FTA', 0))
             stats['3Pts'] += to_num(p.get('3Pts', 0))
+            stats['3PTA'] += to_num(p.get('3PTA', 0))
+            
+            # Debug: İlk 3 oyuncu için değerleri yazdır
+            if stats['GP'] == 1 and len(player_stats) <= 3:
+                print(f"DEBUG {display_name}: FGM={p.get('FGM')}, FGA={p.get('FGA')}, FTM={p.get('FTM')}, FTA={p.get('FTA')}")
 
     # Ortalamaları hesapla - Sadece maç başına 10+ dakika oynayanlar
     final_list = []
     for name, s in player_stats.items():
-        if s['GP'] > 0:
-            avg_minutes = s['MIN'] / s['GP']
+        if s['GP'] == 0:
+            continue
             
-            # MAÇBAŞI 10 DAKİKADAN AZ OYNAYANLAR HARİÇ
-            if avg_minutes < 10:
-                continue
-            
-            final_list.append({
-                'PLAYER': name,
-                'TEAM': s['TEAM'],  # Güncel takım
-                'GP': s['GP'],
-                'MIN': round(avg_minutes, 1),  # Ortalama dakika
-                'PTS': round(s['PTS'] / s['GP'], 1),
-                'REB': round(s['REB'] / s['GP'], 1),
-                'AST': round(s['AST'] / s['GP'], 1),
-                'STL': round(s['STL'] / s['GP'], 1),
-                'BLK': round(s['BLK'] / s['GP'], 1),
-                'TO': round(s['TO'] / s['GP'], 1),
-                '3Pts': round(s['3Pts'] / s['GP'], 1),
-                'FG%': round((s['FGM'] / s['FGA'] * 100) if s['FGA'] > 0 else 0, 1),
-                'FT%': round((s['FTM'] / s['FTA'] * 100) if s['FTA'] > 0 else 0, 1),
-            })
-            
+        avg_minutes = s['MIN'] / s['GP']
+        
+        # MAÇBAŞI 10 DAKİKADAN AZ OYNAYANLAR HARİÇ
+        if avg_minutes < 10:
+            continue
+        
+        # Yüzdeleri hesapla
+        fg_pct = round((s['FGM'] / s['FGA'] * 100) if s['FGA'] > 0 else 0, 1)
+        ft_pct = round((s['FTM'] / s['FTA'] * 100) if s['FTA'] > 0 else 0, 1)
+        three_pct = round((s['3Pts'] / s['3PTA'] * 100) if s['3PTA'] > 0 else 0, 1)
+        
+        final_list.append({
+            'PLAYER': name,
+            'TEAM': s['TEAM'],
+            'GP': s['GP'],
+            'MIN': round(avg_minutes, 1),
+            'PTS': round(s['PTS'] / s['GP'], 1),
+            'REB': round(s['REB'] / s['GP'], 1),
+            'AST': round(s['AST'] / s['GP'], 1),
+            'STL': round(s['STL'] / s['GP'], 1),
+            'BLK': round(s['BLK'] / s['GP'], 1),
+            'TO': round(s['TO'] / s['GP'], 1),
+            'FGM': round(s['FGM'] / s['GP'], 1),
+            'FGA': round(s['FGA'] / s['GP'], 1),
+            'FTM': round(s['FTM'] / s['GP'], 1),
+            'FTA': round(s['FTA'] / s['GP'], 1),
+            '3Pts': round(s['3Pts'] / s['GP'], 1),
+            '3PM': round(s['3Pts'] / s['GP'], 1),  # Duplicate for compatibility
+            '3PTA': round(s['3PTA'] / s['GP'], 1),
+            'FG%': fg_pct,
+            'FT%': ft_pct,
+            '3P%': three_pct,
+        })
+    
+    print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
+    
     return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
+
+# KULLANIM ÖRNEKLERİ:
+
+# Sezon başından itibaren (varsayılan):
+# df = get_active_players_stats()
+
+# Son 15 gün:
+# df = get_active_players_stats(days=15, season_stats=False)
+
+# Son 30 gün:
+# df = get_active_players_stats(days=30, season_stats=False)
 
 def get_historical_boxscores(start_date, end_date):
     """

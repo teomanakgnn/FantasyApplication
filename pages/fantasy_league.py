@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from services.selenium_scraper import scrape_league_standings, scrape_matchups, scrape_team_rosters
+from services.espn_scraper import scrape_league_standings as espn_standings, scrape_matchups as espn_matchups, scrape_team_rosters as espn_rosters
+from services.yahoo_scraper import scrape_league_standings as yahoo_standings, scrape_matchups as yahoo_matchups, scrape_team_rosters as yahoo_rosters
 
 # ---------------- CONFIG & CSS ----------------
 
@@ -80,6 +81,31 @@ def apply_custom_style():
             background-color: #1d4ed8;
         }}
         
+        /* --- LEAGUE PROVIDER BADGES --- */
+        .provider-badge {{
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-left: 10px;
+        }}
+        
+        .espn-badge {{
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            border: 1px solid #dc2626;
+            color: white;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }}
+        
+        .yahoo-badge {{
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            border: 1px solid #7c3aed;
+            color: white;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }}
+        
         /* --- LİSTE TASARIMI (SVG İkonlu) --- */
         .matchup-row {{
             display: flex;
@@ -139,12 +165,11 @@ def apply_custom_style():
         }}
 
         .pro-badge {{
-            background: #334155;      /* slate */
+            background: #334155;
             color: #e2e8f0;
             box-shadow: none;
         }}
 
-        
         .pro-badge::before {{
             content: '⚡';
             font-size: 12px;
@@ -250,7 +275,7 @@ def calculate_roto_score(matchups):
     df_sorted = df.set_index('Team').loc[points_df['Team']].reset_index()
     return df_sorted, points_df
 
-# --- TRADE ANALYZER FONKSİYONLARI (DÜZELTİLMİŞ) ---
+# --- TRADE ANALYZER FONKSİYONLARI ---
 def calculate_team_totals(roster):
     """Bir takımın tüm oyuncularının toplam/ortalama istatistiklerini hesaplar"""
     totals = {
@@ -274,12 +299,10 @@ def calculate_team_totals(roster):
     for player in roster:
         stats = player.get('stats', {})
         
-        # Normal counting stats
         for cat in ['PTS', 'REB', 'AST', 'BLK']:
             val = clean_stat_value(stats.get(cat, 0))
             totals[cat] += val
         
-        # Mapped stats (çeşitli isimlerde olabilir)
         for cat, possible_keys in stat_mapping.items():
             val = 0
             for key in possible_keys:
@@ -288,13 +311,11 @@ def calculate_team_totals(roster):
                     break
             totals[cat] += val
         
-        # Yüzdelik statler için liste tut (ortalama alınacak)
         for pct in ['FG%', 'FT%']:
             val = clean_stat_value(stats.get(pct, 0))
             if val > 0:
                 totals[pct].append(val)
     
-    # Yüzdeliklerin ortalamasını al
     totals['FG%'] = sum(totals['FG%']) / len(totals['FG%']) if totals['FG%'] else 0
     totals['FT%'] = sum(totals['FT%']) / len(totals['FT%']) if totals['FT%'] else 0
     
@@ -302,16 +323,14 @@ def calculate_team_totals(roster):
 
 def get_impact_class(diff, category):
     """Değişimin pozitif/negatif/nötr olduğunu belirle"""
-    threshold = 0.001  # Çok küçük değişimler için
+    threshold = 0.001
     
     if category == 'TO':
-        # TO için düşük iyi
         if diff < -threshold:
             return 'positive'
         elif diff > threshold:
             return 'negative'
     else:
-        # Diğer statler için yüksek iyi
         if diff > threshold:
             return 'positive'
         elif diff < -threshold:
@@ -328,7 +347,6 @@ def display_trade_impact(old_stats, new_stats):
         new_val = new_stats.get(cat, 0)
         diff = new_val - old_val
         
-        # Format belirleme
         if cat in ['FG%', 'FT%']:
             old_display = f"{old_val:.1f}%"
             new_display = f"{new_val:.1f}%"
@@ -338,10 +356,8 @@ def display_trade_impact(old_stats, new_stats):
             new_display = f"{new_val:.1f}"
             diff_str = f"{diff:+.1f}"
         
-        # Impact class belirle
         impact_class = get_impact_class(diff, cat)
         
-        # İkon ve renk
         if impact_class == 'positive':
             arrow = "⬆️"
             color = "#22c55e"
@@ -388,7 +404,6 @@ def compare_h2h_winner(team_a_stats, team_b_stats):
         val_b = team_b_stats.get(cat, 0)
         
         if cat == 'TO':
-            # TO için düşük iyi
             if val_a < val_b: 
                 wins_a += 1
                 winner = 'A'
@@ -399,7 +414,6 @@ def compare_h2h_winner(team_a_stats, team_b_stats):
                 ties += 1
                 winner = 'TIE'
         else:
-            # Diğer statler için yüksek iyi
             if val_a > val_b: 
                 wins_a += 1
                 winner = 'A'
@@ -426,7 +440,7 @@ def compare_h2h_winner(team_a_stats, team_b_stats):
     
     return result, category_results
 
-# --- H2H SİMÜLASYONU (Detaylı) ---
+# --- H2H SİMÜLASYONU ---
 def compare_teams_detailed(team_a_stats, team_b_stats):
     wins, losses, ties = 0, 0, 0
     cats = ['FG%', 'FT%', '3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']
@@ -472,7 +486,6 @@ def run_h2h_simulation_detailed(matchups):
     sim_results.sort(key=lambda x: (-x['total_wins'], -x['win_pct']))
     return sim_results
 
-
 def rename_display_columns(df):
     display_map = {
         "3PTM": "3PT",
@@ -492,17 +505,43 @@ def render_fantasy_league_page():
     with c1:
         st.title("FANTASY LEAGUE ANALYTICS")
         
+        # Provider badge gösterimi
+        provider = st.session_state.get('league_provider', 'ESPN')
+        badge_class = 'espn-badge' if provider == 'ESPN' else 'yahoo-badge'
+        
         # Time filter badge gösterimi
         current_filter = st.session_state.get('time_filter', 'week')
         filter_display = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}
-        st.markdown(f"<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>ADVANCED DATA INTELLIGENCE // 9-CAT <span class='time-badge'>{filter_display[current_filter]}</span></div>", unsafe_allow_html=True)
+        st.markdown(f"""<div style='color: #94a3b8; margin-top: -15px; margin-bottom: 20px;'>
+            ADVANCED DATA INTELLIGENCE // 9-CAT 
+            <span class='provider-badge {badge_class}'>{provider}</span>
+            <span class='time-badge'>{filter_display[current_filter]}</span>
+        </div>""", unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("### CONFIGURATION")
-        league_input = st.text_input("LEAGUE ID", value="987023001")
-        if "leagueId=" in league_input: league_id = league_input.split("leagueId=")[1].split("&")[0]
-        else: league_id = league_input.strip()
+        
+        # Provider seçimi
+        provider = st.radio(
+            "LEAGUE PROVIDER",
+            options=["ESPN", "Yahoo"],
+            horizontal=True,
+            key="league_provider"
+        )
+        
+        st.markdown("---")
+        
+        # League ID girişi
+        if provider == "ESPN":
+            league_input = st.text_input("LEAGUE ID", value="987023001")
+            if "leagueId=" in league_input: 
+                league_id = league_input.split("leagueId=")[1].split("&")[0]
+            else: 
+                league_id = league_input.strip()
+        else:  # Yahoo
+            league_input = st.text_input("LEAGUE ID", value="", placeholder="e.g., 12345")
+            league_id = league_input.strip()
         
         st.markdown("---")
         
@@ -531,55 +570,41 @@ def render_fantasy_league_page():
             label_visibility="collapsed"
         )
 
-        # Manuel olarak sadece week set edelim
         time_filter = "week"
         st.session_state['time_filter'] = "week"
         
         st.markdown("---")
-        # TEK BUTON: FULL FETCH
+        
+        # LOAD DATA BUTTON
         load_data = st.button("🚀 INITIALIZE FULL DATA FETCH", type="primary", use_container_width=True)
         
-    # --- VERİ YÜKLEME (TEK SEFERDE HEPSİ) ---
+    # --- VERİ YÜKLEME ---
     if load_data and league_id:
         st.session_state.fantasy_league_id = league_id
         st.session_state.last_time_filter = time_filter
         
-        with st.spinner("CONNECTING TO ESPN: FETCHING STANDINGS, MATCHUPS AND ROSTERS..."):
+        with st.spinner(f"CONNECTING TO {provider}: FETCHING STANDINGS, MATCHUPS AND ROSTERS..."):
             try:
-                # 1. STANDINGS
-                df_standings = scrape_league_standings(int(league_id))
+                if provider == "ESPN":
+                    df_standings = espn_standings(int(league_id))
+                    matchups = espn_matchups(int(league_id), time_filter)
+                    rosters = espn_rosters(int(league_id))
+                else:  # Yahoo
+                    df_standings = yahoo_standings(league_id)
+                    matchups = yahoo_matchups(league_id, time_filter)
+                    rosters = yahoo_rosters(league_id)
+                
                 st.session_state['df_standings'] = df_standings
-                
-                # 2. MATCHUPS
-                matchups = scrape_matchups(int(league_id), time_filter)
                 st.session_state['matchups'] = matchups
-                
-                # 3. ROSTERS
-                rosters = scrape_team_rosters(int(league_id))
                 st.session_state['rosters'] = rosters
 
                 if not rosters:
-                    st.warning("⚠️ Matchups loaded but Rosters returned empty. Check Selenium scraper.")
+                    st.warning("⚠️ Matchups loaded but Rosters returned empty. Check scraper.")
                 else:
                     st.success(f"✅ All data loaded successfully! ({len(rosters)} teams)")
             
-            except Exception as e: st.error(f"DATA FETCH ERROR: {str(e)}")
-    
-    # --- TIME FILTER DEĞİŞİMİNDE OTOMATİK YENİDEN YÜKLEME ---
-    if (st.session_state.get('fantasy_league_id') and 
-        st.session_state.get('last_time_filter') and 
-        st.session_state.get('last_time_filter') != time_filter):
-        
-        st.session_state.last_time_filter = time_filter
-        
-        with st.spinner(f"RELOADING DATA FOR {filter_display[time_filter]}..."):
-            try:
-                league_id = st.session_state.fantasy_league_id
-                matchups = scrape_matchups(int(league_id), time_filter)
-                st.session_state['matchups'] = matchups
-                st.rerun()
             except Exception as e: 
-                st.error(f"DATA RELOAD ERROR: {str(e)}")
+                st.error(f"DATA FETCH ERROR: {str(e)}")
 
     # --- GÖRÜNTÜLEME ---
     df_standings = st.session_state.get('df_standings')
@@ -594,7 +619,8 @@ def render_fantasy_league_page():
         with tab1:
             if df_standings is not None and not df_standings.empty:
                 st.dataframe(df_standings, use_container_width=True, hide_index=True)
-            else: st.info("NO DATA AVAILABLE")
+            else: 
+                st.info("NO DATA AVAILABLE")
 
         # TAB 2: MATCHUPS
         with tab2:
@@ -605,7 +631,8 @@ def render_fantasy_league_page():
                         with col1:
                             st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
                             st.markdown(f"<h1 style='text-align:right; color:#3b82f6; margin:0'>{match['away_score']}</h1>", unsafe_allow_html=True)
-                        with col2: st.markdown("<h3 style='text-align:center; color:#64748b'>VS</h3>", unsafe_allow_html=True)
+                        with col2: 
+                            st.markdown("<h3 style='text-align:center; color:#64748b'>VS</h3>", unsafe_allow_html=True)
                         with col3:
                             st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
                             st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0'>{match['home_score']}</h1>", unsafe_allow_html=True)
@@ -627,7 +654,7 @@ def render_fantasy_league_page():
                 
                 if worst_teams:
                     for t in worst_teams:
-                          st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
+                        st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
                         💀 <b>CRITICAL:</b> {t['team']} loses to everyone.</div>""", unsafe_allow_html=True)
                 
                 st.divider()
@@ -637,7 +664,7 @@ def render_fantasy_league_page():
                 
                 st.divider()
                 
-                # --- DETAYLI ANALİZ (SVG İkonlu) ---
+                # --- DETAYLI ANALİZ ---
                 st.subheader("🕵️ Detailed Matchup Analysis")
                 selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data], key="team_analyzer_selectbox")
                 
@@ -646,7 +673,6 @@ def render_fantasy_league_page():
                     
                     st.markdown(f"##### Results for {selected_team}")
                     
-                    # SVG İkonlar
                     icon_win = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>"""
                     icon_loss = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>"""
                     icon_tie = """<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>"""
@@ -689,7 +715,6 @@ def render_fantasy_league_page():
 
                     raw_df_display = rename_display_columns(raw_df)
                     
-                    # 3PT, STL, TOV sütunlarını integer'a çevir
                     for col in ['3PT', 'STL', 'TOV']:
                         if col in raw_df_display.columns:
                             raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
@@ -748,26 +773,21 @@ def render_fantasy_league_page():
                     if not players_a or not players_b:
                         st.warning("⚠️ Please select at least one player from each team")
                     else:
-                        # Trade analizi
                         team_a_roster = rosters[team_a]
                         team_b_roster = rosters[team_b]
                         
-                        # Oyuncuları bul
                         traded_from_a = [p for p in team_a_roster if p['name'] in players_a]
                         traded_from_b = [p for p in team_b_roster if p['name'] in players_b]
                         
-                        # Mevcut durumu hesapla
                         current_a_stats = calculate_team_totals(team_a_roster)
                         current_b_stats = calculate_team_totals(team_b_roster)
                         
-                        # Trade sonrası durumu hesapla
                         new_roster_a = [p for p in team_a_roster if p['name'] not in players_a] + traded_from_b
                         new_roster_b = [p for p in team_b_roster if p['name'] not in players_b] + traded_from_a
                         
                         new_a_stats = calculate_team_totals(new_roster_a)
                         new_b_stats = calculate_team_totals(new_roster_b)
                         
-                        # Değişimleri göster
                         st.markdown("### 📊 TRADE IMPACT SUMMARY")
                         
                         col1, col2 = st.columns(2)
@@ -782,7 +802,6 @@ def render_fantasy_league_page():
                         
                         st.markdown("---")
                         
-                        # H2H karşılaştırma
                         st.markdown("### ⚔️ HEAD-TO-HEAD COMPARISON")
                         
                         current_winner, current_cats = compare_h2h_winner(current_a_stats, current_b_stats)
@@ -797,7 +816,6 @@ def render_fantasy_league_page():
                             st.markdown("**After Trade:**")
                             st.markdown(f"<div style='font-size: 24px; font-weight: bold; color: #22c55e;'>{new_winner}</div>", unsafe_allow_html=True)
                         
-                        # Kategori bazında detay
                         st.markdown("---")
                         st.markdown("### 📋 CATEGORY BREAKDOWN")
                         
