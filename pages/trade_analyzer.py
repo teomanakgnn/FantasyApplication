@@ -89,7 +89,7 @@ def render_trade_analyzer_page():
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.header("⚙️ Scoring System")
+        st.header("Scoring System")
         
         # PUNT STRATEGY
         st.subheader("🎯 Punt Strategy")
@@ -312,17 +312,17 @@ def render_trade_analyzer_page():
 
         with r2:
             if abs(diff) < 2:
-                st.success("⚖️ FAIR TRADE")
+                st.success("FAIR TRADE")
             elif diff > 0:
-                st.success(f"👑 TEAM 1 WINS")
+                st.success(f"TEAM 1 WINS")
                 st.caption(f"+{diff:.1f} advantage")
             else:
-                st.error(f"👑 TEAM 2 WINS")
+                st.error(f"TEAM 2 WINS")
                 st.caption(f"+{abs(diff):.1f} advantage")
             st.progress(confidence / 100)
 
     # --- VISUAL COMPARISON ---
-    st.markdown("### 📊 Stat Breakdown")
+    st.markdown("### Stat Breakdown")
     stats_config = [
         ('PTS', 'Points', False), ('REB', 'Rebs', False), ('AST', 'Asts', False),
         ('STL', 'Stls', False), ('BLK', 'Blks', False), ('3PM', '3PM', False), ('TO', 'TO', True)
@@ -348,7 +348,7 @@ def render_trade_analyzer_page():
             """, unsafe_allow_html=True)
 
     # --- DETAILED TABLE (COMBINED SHOOTING STATS) ---
-    st.markdown("### 📝 Detailed Player Stats")
+    st.markdown("### Detailed Player Stats")
     
     c_t1, c_t2 = st.columns(2)
     
