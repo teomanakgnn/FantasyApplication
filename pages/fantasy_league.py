@@ -380,9 +380,9 @@ def render_fantasy_league_page():
             if matchups:
                 st.markdown(f"### ⚔️ WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
                 for match in matchups:
-                    # GP verilerini çek
-                    gp_away = match['away_team'].get('games_played', 0)
-                    gp_home = match['home_team'].get('games_played', 0)
+                    # Haftalık maç verilerini çek
+                    games_away = match['away_team'].get('weekly_games', 0)
+                    games_home = match['home_team'].get('weekly_games', 0)
 
                     with st.container(border=True):
                         col1, col2, col3 = st.columns([1, 0.2, 1])
@@ -391,11 +391,11 @@ def render_fantasy_league_page():
                         with col1:
                             st.markdown(f"<h3 style='text-align:right; margin:0'>{match['away_team']['name']}</h3>", unsafe_allow_html=True)
                             
-                            # GP Badge (Sağa yaslı)
+                            # Weekly Games Badge (Sağa yaslı)
                             st.markdown(f"""
                             <div style='display:flex; justify-content:flex-end; margin-bottom:5px;'>
                                 <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                                    🏀 TOTAL GAMES: {gp_away}
+                                    📅 WEEKLY GAMES: {games_away}
                                 </span>
                             </div>
                             """, unsafe_allow_html=True)
@@ -410,17 +410,17 @@ def render_fantasy_league_page():
                         with col3:
                             st.markdown(f"<h3 style='text-align:left; margin:0'>{match['home_team']['name']}</h3>", unsafe_allow_html=True)
                             
-                            # GP Badge (Sola yaslı)
+                            # Weekly Games Badge (Sola yaslı)
                             st.markdown(f"""
                             <div style='display:flex; justify-content:flex-start; margin-bottom:5px;'>
                                 <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                                    🏀 TOTAL GAMES: {gp_home}
+                                    📅 WEEKLY GAMES: {games_home}
                                 </span>
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0; font-size: 3rem;'>{match['home_score']}</h1>", unsafe_allow_html=True)
-            
+                            st.markdown(f"<h1 style='text-align:left; color:#ef4444; margin:0; font-size: 3rem;'>{match['home_score']}</h1>", unsafe_allow_html=True) 
+                
         # TAB 3: H2H POWER RANKINGS
         with tab3:
             if matchups:

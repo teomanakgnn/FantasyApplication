@@ -29,6 +29,155 @@ def get_driver():
 
     return webdriver.Chrome(service=service, options=chrome_options)
 
+def get_team_id_from_matchup_card(card, team_index=0):
+    """
+    Matchup kartından takım ID'sini çeker
+    """
+    try:
+        team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
+        if len(team_links) > team_index:
+            href = team_links[team_index]['href']
+            team_id = href.split('teamId=')[1].split('&')[0]
+            return team_id
+        return None
+    except Exception as e:
+        print(f"⚠️ Team ID extraction error: {e}")
+        return None
+
+
+def get_current_scoring_period(league_id: int):
+    """
+    Mevcut scoring period'u (hafta numarası) çeker
+    """
+    url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
+    driver = get_driver()
+    
+    try:
+        driver.get(url)
+        time.sleep(3)
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        # "Week X" veya "Matchup Period X" gibi text'i ara
+        import re
+        text = soup.get_text()
+        week_match = re.search(r'Week\s+(\d+)|Matchup Period\s+(\d+)', text, re.IGNORECASE)
+        
+        if week_match:
+            period = week_match.group(1) or week_match.group(2)
+            driver.quit()
+            return int(period)
+        
+        driver.quit()
+        return 1  # Default
+        
+    except Exception as e:
+        print(f"⚠️ Scoring period error: {e}")
+        if driver:
+            driver.quit()
+        return 1
+
+
+def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = None):
+    """
+    Takımın roster'ındaki oyuncuların o hafta toplam kaç maç oynayacağını hesaplar
+    
+    Args:
+        league_id: ESPN League ID
+        team_id: Takım ID'si
+        scoring_period: Hangi hafta (None ise mevcut hafta)
+    
+    Returns:
+        int: Toplam maç sayısı
+    """
+    if scoring_period:
+        url = f"https://fantasy.espn.com/basketball/team?leagueId={league_id}&teamId={team_id}&scoringPeriodId={scoring_period}"
+    else:
+        url = f"https://fantasy.espn.com/basketball/team?leagueId={league_id}&teamId={team_id}"
+    
+    driver = get_driver()
+    
+    try:
+        driver.get(url)
+        time.sleep(5)
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        # Roster tablosunu bul
+        tables = soup.find_all('table')
+        roster_table = None
+        
+        for table in tables:
+            headers = table.find_all('th')
+            header_text = ' '.join([h.get_text() for h in headers])
+            
+            # "OPPONENT" veya "OPP" sütunu olan tabloyu bul
+            if any(keyword in header_text.upper() for keyword in ['OPPONENT', 'OPP', 'MATCHUP']):
+                roster_table = table
+                break
+        
+        if not roster_table:
+            print(f"⚠️ Roster table not found for team {team_id}")
+            driver.quit()
+            return 0
+        
+        # Oyuncuları parse et
+        rows = roster_table.find_all('tr')
+        total_games = 0
+        player_count = 0
+        
+        for row in rows[1:]:  # İlk satır header
+            cells = row.find_all('td')
+            if len(cells) < 3:
+                continue
+            
+            # Oyuncu adını al (ilk sütun genellikle)
+            player_name = cells[0].get_text(strip=True)
+            
+            # Boş satırları atla
+            if not player_name or player_name == '-':
+                continue
+            
+            # OPPONENT/MATCHUP sütununu bul
+            matchup_text = ""
+            for cell in cells:
+                text = cell.get_text(strip=True)
+                # "@" veya "vs" içeren hücreyi bul
+                if '@' in text or 'vs' in text.lower():
+                    matchup_text = text
+                    break
+            
+            if matchup_text:
+                # Maç sayısını hesapla
+                # Örnek formatlar:
+                # "@LAL" -> 1 maç
+                # "@LAL, vsBOS" -> 2 maç
+                # "@LAL, vsBOS, @NYK" -> 3 maç
+                
+                games_this_week = 0
+                
+                # Virgül ile ayrılmış maçları say
+                if ',' in matchup_text:
+                    games_this_week = matchup_text.count(',') + 1
+                elif '@' in matchup_text or 'vs' in matchup_text.lower():
+                    games_this_week = 1
+                
+                total_games += games_this_week
+                player_count += 1
+                
+                # Debug
+                if games_this_week > 0:
+                    print(f"    👤 {player_name}: {games_this_week} games ({matchup_text})")
+        
+        driver.quit()
+        print(f"  ✅ Team {team_id}: {player_count} players, {total_games} total games")
+        return total_games
+        
+    except Exception as e:
+        print(f"❌ Error fetching team {team_id} games: {e}")
+        if driver:
+            driver.quit()
+        return 0
 
 def scrape_league_standings(league_id: int):
     """
@@ -209,7 +358,7 @@ def extract_team_games_count(card, team_index=0):
 
 def scrape_matchups(league_id: int, time_filter: str = "week"):
     """
-    Matchup verilerini çeker + her takımın o hafta toplam maç sayısını ekler
+    Matchup verilerini çeker + her takımın o hafta toplam maç sayısını hesaplar
     """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     params = get_scoring_period_params(time_filter)
@@ -228,6 +377,10 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         time.sleep(3)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
+
+        # Mevcut scoring period'u al
+        current_period = get_current_scoring_period(league_id)
+        print(f"📅 Current Scoring Period: Week {current_period}")
 
         tables = soup.find_all("table")
         stat_tables = []
@@ -258,42 +411,53 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             # Takım isimleri
             away_name, home_name = extract_team_names_from_card(card)
             
-            # GP bilgisini karttan çek
-            away_gp = extract_team_games_count(card, team_index=0)
-            home_gp = extract_team_games_count(card, team_index=1)
-            
-            # Eğer bulamazsa, stats içinden al (yedek)
-            if away_gp == 0 and 'GP' in away_data:
-                try:
-                    away_gp = int(away_data['GP'])
-                except:
-                    away_gp = 0
-                    
-            if home_gp == 0 and 'GP' in home_data:
-                try:
-                    home_gp = int(home_data['GP'])
-                except:
-                    home_gp = 0
+            # Takım ID'lerini al
+            away_team_id = get_team_id_from_matchup_card(card, team_index=0)
+            home_team_id = get_team_id_from_matchup_card(card, team_index=1)
 
             matchups.append({
                 "away_team": {
                     "name": away_name,
                     "stats": away_data,
-                    "games_played": away_gp
+                    "team_id": away_team_id
                 },
                 "home_team": {
                     "name": home_name,
                     "stats": home_data,
-                    "games_played": home_gp
+                    "team_id": home_team_id
                 },
                 "away_score": calculate_category_wins(away_data, home_data),
                 "home_score": calculate_category_wins(home_data, away_data)
             })
-            
-            print(f"  📊 {away_name} ({away_gp} GP) vs {home_name} ({home_gp} GP)")
 
         driver.quit()
-        print(f"✅ Toplam {len(matchups)} matchup çekildi")
+        
+        # HER TAKIM İÇİN HAFTALIK MAÇ SAYISINI HESAPLA
+        print("\n🔄 Calculating weekly games for each team...")
+        for match in matchups:
+            print(f"\n📊 Processing: {match['away_team']['name']} vs {match['home_team']['name']}")
+            
+            if match['away_team']['team_id']:
+                away_games = get_team_weekly_games(
+                    league_id, 
+                    match['away_team']['team_id'],
+                    current_period if time_filter == "week" else None
+                )
+                match['away_team']['weekly_games'] = away_games
+            else:
+                match['away_team']['weekly_games'] = 0
+            
+            if match['home_team']['team_id']:
+                home_games = get_team_weekly_games(
+                    league_id,
+                    match['home_team']['team_id'],
+                    current_period if time_filter == "week" else None
+                )
+                match['home_team']['weekly_games'] = home_games
+            else:
+                match['home_team']['weekly_games'] = 0
+        
+        print(f"\n✅ Toplam {len(matchups)} matchup çekildi")
         return matchups
 
     except Exception as e:
