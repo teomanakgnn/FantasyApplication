@@ -98,83 +98,104 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
     driver = get_driver()
     
     try:
+        print(f"  🔗 Fetching: {url}")
         driver.get(url)
-        time.sleep(5)
+        time.sleep(6)
+        
+        # Sayfayı scroll et
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # Roster tablosunu bul
+        # Tüm tabloları bul
         tables = soup.find_all('table')
-        roster_table = None
         
-        for table in tables:
-            headers = table.find_all('th')
-            header_text = ' '.join([h.get_text() for h in headers])
-            
-            # "OPPONENT" veya "OPP" sütunu olan tabloyu bul
-            if any(keyword in header_text.upper() for keyword in ['OPPONENT', 'OPP', 'MATCHUP']):
-                roster_table = table
-                break
+        print(f"  📊 Found {len(tables)} tables on page")
         
-        if not roster_table:
-            print(f"⚠️ Roster table not found for team {team_id}")
-            driver.quit()
-            return 0
-        
-        # Oyuncuları parse et
-        rows = roster_table.find_all('tr')
         total_games = 0
         player_count = 0
         
-        for row in rows[1:]:  # İlk satır header
-            cells = row.find_all('td')
-            if len(cells) < 3:
+        # Her tabloyu kontrol et
+        for idx, table in enumerate(tables):
+            # Header kontrolü
+            headers = table.find_all('th')
+            header_texts = [h.get_text(strip=True).upper() for h in headers]
+            
+            print(f"    Table {idx}: Headers = {header_texts[:10]}")  # İlk 10 header
+            
+            # "PLAYER" ve "OPP" veya "OPPONENT" içeren tabloyu ara
+            has_player = any('PLAYER' in h for h in header_texts)
+            has_opponent = any('OPP' in h or 'OPPONENT' in h for h in header_texts)
+            
+            if not (has_player and has_opponent):
                 continue
+                
+            print(f"    ✅ Found roster table (Table {idx})")
             
-            # Oyuncu adını al (ilk sütun genellikle)
-            player_name = cells[0].get_text(strip=True)
-            
-            # Boş satırları atla
-            if not player_name or player_name == '-':
-                continue
-            
-            # OPPONENT/MATCHUP sütununu bul
-            matchup_text = ""
-            for cell in cells:
-                text = cell.get_text(strip=True)
-                # "@" veya "vs" içeren hücreyi bul
-                if '@' in text or 'vs' in text.lower():
-                    matchup_text = text
+            # OPP sütununun indeksini bul
+            opp_index = None
+            for i, h in enumerate(header_texts):
+                if 'OPP' in h or 'OPPONENT' in h:
+                    opp_index = i
                     break
             
-            if matchup_text:
-                # Maç sayısını hesapla
-                # Örnek formatlar:
-                # "@LAL" -> 1 maç
-                # "@LAL, vsBOS" -> 2 maç
-                # "@LAL, vsBOS, @NYK" -> 3 maç
+            if opp_index is None:
+                print(f"    ⚠️ OPP column not found")
+                continue
                 
+            print(f"    📍 OPP column index: {opp_index}")
+            
+            # Oyuncuları parse et
+            rows = table.find_all('tr')
+            
+            for row_idx, row in enumerate(rows[1:]):  # Header'ı atla
+                cells = row.find_all('td')
+                
+                if len(cells) <= opp_index:
+                    continue
+                
+                # Oyuncu adını al
+                player_cell = cells[0] if cells else None
+                player_name = player_cell.get_text(strip=True) if player_cell else ""
+                
+                # Boş satırları ve header satırlarını atla
+                if not player_name or player_name.upper() in ['PLAYER', 'STARTERS', 'BENCH']:
+                    continue
+                
+                # OPP sütunundaki veriyi al
+                opp_cell = cells[opp_index]
+                opp_text = opp_cell.get_text(strip=True)
+                
+                # Maç sayısını hesapla
+                # Formatlar: "@LAL", "vsBOS", "@LAL, vsBOS", "@LAL, vsBOS, @NYK"
                 games_this_week = 0
                 
-                # Virgül ile ayrılmış maçları say
-                if ',' in matchup_text:
-                    games_this_week = matchup_text.count(',') + 1
-                elif '@' in matchup_text or 'vs' in matchup_text.lower():
-                    games_this_week = 1
-                
-                total_games += games_this_week
-                player_count += 1
-                
-                # Debug
-                if games_this_week > 0:
-                    print(f"    👤 {player_name}: {games_this_week} games ({matchup_text})")
+                if opp_text and opp_text != '-' and opp_text != '--':
+                    # Virgül sayısı + 1 = maç sayısı
+                    if ',' in opp_text:
+                        games_this_week = opp_text.count(',') + 1
+                    elif '@' in opp_text or 'vs' in opp_text.lower():
+                        games_this_week = 1
+                    
+                    if games_this_week > 0:
+                        total_games += games_this_week
+                        player_count += 1
+                        print(f"      👤 {player_name}: {games_this_week} game(s) - {opp_text}")
         
         driver.quit()
-        print(f"  ✅ Team {team_id}: {player_count} players, {total_games} total games")
+        
+        if player_count > 0:
+            print(f"  ✅ Team {team_id}: {player_count} active players, {total_games} total games")
+        else:
+            print(f"  ⚠️ Team {team_id}: No players found with games")
+            
         return total_games
         
     except Exception as e:
-        print(f"❌ Error fetching team {team_id} games: {e}")
+        print(f"  ❌ Error fetching team {team_id} games: {e}")
+        import traceback
+        traceback.print_exc()
         if driver:
             driver.quit()
         return 0
