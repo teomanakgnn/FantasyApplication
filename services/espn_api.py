@@ -570,7 +570,8 @@ def get_current_team_rosters():
     
     print(f"Rosterlar taranıyor: {len(nba_teams)} takım bulundu.")
     
-    # Threading ile hızlandıralım (tek tek 30 istek atmak yavaş olur)
+# services/espn_api.py içindeki ilgili bölüm
+
     def fetch_single_roster(team_id, team_info):
         t_abbr = team_info['abbr']
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/roster"
@@ -578,23 +579,22 @@ def get_current_team_rosters():
             resp = requests.get(url, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                # Roster yapısı: data['athletes'] -> list of players
                 athletes = data.get('athletes', [])
                 
-                # Bazen yapı 'entries' içinde olabilir, kontrol edelim
                 if not athletes and 'entries' in data:
-                     athletes = [e.get('athlete', {}) for e in data['entries']]
+                    athletes = [e.get('athlete', {}) for e in data['entries']]
                 
                 local_map = {}
                 for ath in athletes:
-                    # İsimleri alalım
                     p_name = ath.get('displayName') or ath.get('fullName')
+                    p_id = ath.get('id')  # <--- ID BURADA ALINIYOR
+                    
                     if p_name:
-                        # İsmi temizle (normalize et)
-                        clean_name = p_name.replace(".", "").replace("'", "").lower().strip()
-                        # Normal ismi kaydet ama temizlenmiş halini anahtarda kullanmak daha iyidir
-                        # Ancak şimdilik orijinal ismi key yapıyoruz, display için.
-                        local_map[p_name] = t_abbr
+                        # Sadece takım ismini değil, sözlük döndürüyoruz
+                        local_map[p_name] = {
+                            'team': t_abbr,
+                            'id': p_id
+                        }
                 return local_map
         except Exception:
             return {}
@@ -999,6 +999,8 @@ def get_active_players_stats(days=None, season_stats=True):
     print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
     
     return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
+
+
 
 # KULLANIM ÖRNEKLERİ:
 

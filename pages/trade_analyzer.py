@@ -178,8 +178,21 @@ def render_trade_analyzer_page():
             else:
                 df_players[col] = 0.0
 
+    # --- DÜZELTME BURADA: Team Verisi Temizleme ---
+    # Yardımcı fonksiyon: Eğer veri dict ise içinden 'team' bilgisini al
+    def extract_team_abbr(val):
+        if isinstance(val, dict):
+            return val.get('team', val.get('abbreviation', 'UNK'))
+        return str(val)
+
+    # TEAM sütununu temizle (Dict -> String)
+    df_players['TEAM'] = df_players['TEAM'].apply(extract_team_abbr)
+
     # Takım isimlerini eşleştir
     df_players['TEAM_FULL'] = df_players['TEAM'].map(TEAM_MAP).fillna(df_players['TEAM'])
+    
+    # --- EKSİK OLAN KISIM BURASIYDI ---
+    # all_teams değişkenini tanımlıyoruz
     all_teams = ["All Teams"] + sorted(df_players['TEAM_FULL'].unique().tolist())
 
     # --- RENDER FUNCTION ---

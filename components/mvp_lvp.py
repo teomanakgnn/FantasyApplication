@@ -96,7 +96,7 @@ def calculate_mvp_lvp_from_df(df: pd.DataFrame, weights: dict):
 
 
 def render_mvp_lvp_section(date_range, weights, label):
-    st.subheader(f"🏆 MVP / 💀 LVP — {label}")
+    st.subheader(f"MVP / LVP — {label}")
 
     df = st.session_state.get("period_df")
 
@@ -136,7 +136,7 @@ def render_mvp_lvp_section(date_range, weights, label):
 
     # Show stats info
     unique_days = df["DATE"].nunique()
-    st.caption(f"📊 Analyzing {unique_days} game day(s) • Top/Bottom 10 players per day")
+    st.caption(f"Analyzing {unique_days} game day(s) • Top/Bottom 10 players per day")
 
     col1, col2 = st.columns(2)
 
