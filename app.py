@@ -12,34 +12,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def inject_ga():
-    GA_ID = "G-L36E2X2BQK"
-    
-    # Hem component hem de markdown ile inject et
-    components.html(
-        f"""
-        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-        <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){{dataLayer.push(arguments);}}
-          gtag('js', new Date());
-          gtag('config', '{GA_ID}', {{
-            'cookie_domain': 'auto',
-            'send_page_view': true
-          }});
-          
-          // Page view gönder
-          gtag('event', 'page_view', {{
-            page_location: window.location.href,
-            page_path: window.location.pathname
-          }});
-        </script>
-        """,
-        height=0,
-    )
 
-# Sayfanın en başında çağırın (set_page_config'den SONRA)
-inject_ga()
+def inject_ga():
+    GA_ID = "google_tag_manager"
+    
+    # Google Analytics Kodu (Sizin verdiğiniz ID ile)
+    ga_code = """
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-L36E2X2BQK"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-L36E2X2BQK');
+    </script>
+    """
+    
+    # HTML kodunu sayfaya gizli bir iframe olarak ekler
+    components.html(ga_code, height=0, width=0)
+
+inject_ga()    
 
 # Authentication kontrolü (opsiyonel)
 from pages.auth import check_authentication, logout
