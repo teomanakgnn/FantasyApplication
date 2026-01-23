@@ -14,33 +14,27 @@ st.set_page_config(
 
 
 def inject_ga():
-    # ID'nizi buraya direkt yazdım, Secrets ile uğraşmanıza gerek yok
     GA_ID = "G-L36E2X2BQK"
     
-    # Bu Javascript kodu iframe'den kaçar ve ana sayfaya kodu yapıştırır
+    # Not: window.parent erişimi güvenlik nedeniyle engellendiği için
+    # kodu iframe'in içine hapsediyoruz ama veriyi doğru adresle gönderiyoruz.
+    
     index_html = f"""
+    <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
     <script>
-    (function() {{
-        // Eğer zaten eklendiyse tekrar ekleme
-        if (window.parent.document.getElementById("google-analytics")) return;
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
 
-        var script = window.parent.document.createElement("script");
-        script.id = "google-analytics";
-        script.async = true;
-        script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
-        
-        // Ana sayfanın head kısmına ekle
-        window.parent.document.head.appendChild(script);
-
-        window.parent.dataLayer = window.parent.dataLayer || [];
-        function gtag(){{window.parent.dataLayer.push(arguments);}}
-        gtag('js', new Date());
-        gtag('config', '{GA_ID}');
-        
-        console.log("GA4 Yüklendi: {GA_ID}");
-    }})();
+      gtag('config', '{GA_ID}', {{
+        'cookie_flags': 'SameSite=None;Secure',
+        'page_location': 'https://hooplifenba.com',
+        'page_title': 'HoopLife NBA'
+      }});
     </script>
     """
+    
+    # height=0, width=0 ile görünmez bir iframe içinde çalıştırıyoruz
     components.html(index_html, height=0, width=0)
 
 inject_ga() 
