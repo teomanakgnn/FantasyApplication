@@ -16,26 +16,40 @@ def inject_ga():
     GA_ID = st.secrets.get("GOOGLE_ANALYTICS_ID")
     
     if GA_ID:
-        # Not: Bu kod Javascript kullanarak iframe'den çıkar ve 
-        # kodu ana sayfanın (window.parent) içine zorla yazar.
         ga_js = f"""
         <script>
-            // Eğer daha önce eklenmediyse ekle
-            if (!window.parent.document.getElementById('google-analytics')) {{
-                var script = window.parent.document.createElement('script');
-                script.id = 'google-analytics';
-                script.async = true;
-                script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
-                window.parent.document.head.appendChild(script);
-
-                window.parent.dataLayer = window.parent.dataLayer || [];
-                function gtag(){{window.parent.dataLayer.push(arguments);}}
-                gtag('js', new Date());
-                gtag('config', '{GA_ID}');
-            }}
+            (function() {{
+                // Ana pencereyi hedefle
+                var targetDoc = window.parent.document;
+                
+                // Eğer daha önce eklenmediyse ekle
+                if (!targetDoc.getElementById('google-analytics-script')) {{
+                    // GA script'i ekle
+                    var script = targetDoc.createElement('script');
+                    script.id = 'google-analytics-script';
+                    script.async = true;
+                    script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
+                    targetDoc.head.appendChild(script);
+                    
+                    // GA initialization script'i ekle
+                    var initScript = targetDoc.createElement('script');
+                    initScript.id = 'google-analytics-init';
+                    initScript.innerHTML = `
+                        window.dataLayer = window.dataLayer || [];
+                        function gtag(){{dataLayer.push(arguments);}}
+                        gtag('js', new Date());
+                        gtag('config', '{GA_ID}', {{
+                            'send_page_view': true,
+                            'cookie_flags': 'SameSite=None;Secure'
+                        }});
+                    `;
+                    targetDoc.head.appendChild(initScript);
+                    
+                    console.log('Google Analytics initialized with ID: {GA_ID}');
+                }}
+            }})();
         </script>
         """
-        # components.html kullanarak JS'yi çalıştırıyoruz
         components.html(ga_js, height=0, width=0)
 
 # Sayfanın en başında çağırın
