@@ -16,3 +16,6 @@ base = "dark"
 [client]
 showErrorDetails = false
 toolbarMode = "minimal"
+
+[runner]
+magicEnabled = true
