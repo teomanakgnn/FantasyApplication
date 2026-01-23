@@ -16,19 +16,29 @@ def inject_ga():
     GA_ID = st.secrets.get("GOOGLE_ANALYTICS_ID")
     
     if GA_ID:
-        ga_code = f"""
-        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        # Not: Bu kod Javascript kullanarak iframe'den çıkar ve 
+        # kodu ana sayfanın (window.parent) içine zorla yazar.
+        ga_js = f"""
         <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){{dataLayer.push(arguments);}}
-            gtag('js', new Date());
-            gtag('config', '{GA_ID}');
+            // Eğer daha önce eklenmediyse ekle
+            if (!window.parent.document.getElementById('google-analytics')) {{
+                var script = window.parent.document.createElement('script');
+                script.id = 'google-analytics';
+                script.async = true;
+                script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
+                window.parent.document.head.appendChild(script);
+
+                window.parent.dataLayer = window.parent.dataLayer || [];
+                function gtag(){{window.parent.dataLayer.push(arguments);}}
+                gtag('js', new Date());
+                gtag('config', '{GA_ID}');
+            }}
         </script>
         """
-        # HTML kodunu sayfaya gizlice (görünmez şekilde) ekliyoruz
-        components.html(ga_code, height=0, width=0)
+        # components.html kullanarak JS'yi çalıştırıyoruz
+        components.html(ga_js, height=0, width=0)
 
-# Fonksiyonu hemen çalıştır
+# Sayfanın en başında çağırın
 inject_ga()
 
 # Authentication kontrolü (opsiyonel)
