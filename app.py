@@ -14,24 +14,36 @@ st.set_page_config(
 
 
 def inject_ga():
-    GA_ID = "google_tag_manager"
+    # ID'nizi buraya direkt yazdım, Secrets ile uğraşmanıza gerek yok
+    GA_ID = "G-L36E2X2BQK"
     
-    # Google Analytics Kodu (Sizin verdiğiniz ID ile)
-    ga_code = """
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-L36E2X2BQK"></script>
+    # Bu Javascript kodu iframe'den kaçar ve ana sayfaya kodu yapıştırır
+    index_html = f"""
     <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
+    (function() {{
+        // Eğer zaten eklendiyse tekrar ekleme
+        if (window.parent.document.getElementById("google-analytics")) return;
 
-        gtag('config', 'G-L36E2X2BQK');
+        var script = window.parent.document.createElement("script");
+        script.id = "google-analytics";
+        script.async = true;
+        script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
+        
+        // Ana sayfanın head kısmına ekle
+        window.parent.document.head.appendChild(script);
+
+        window.parent.dataLayer = window.parent.dataLayer || [];
+        function gtag(){{window.parent.dataLayer.push(arguments);}}
+        gtag('js', new Date());
+        gtag('config', '{GA_ID}');
+        
+        console.log("GA4 Yüklendi: {GA_ID}");
+    }})();
     </script>
     """
-    
-    # HTML kodunu sayfaya gizli bir iframe olarak ekler
-    components.html(ga_code, height=0, width=0)
+    components.html(index_html, height=0, width=0)
 
-inject_ga()    
+inject_ga() 
 
 # Authentication kontrolü (opsiyonel)
 from pages.auth import check_authentication, logout
