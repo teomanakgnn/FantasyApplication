@@ -13,46 +13,32 @@ st.set_page_config(
 )
 
 def inject_ga():
-    GA_ID = st.secrets.get("GOOGLE_ANALYTICS_ID")
+    GA_ID = "G-L36E2X2BQK"
     
-    if GA_ID:
-        ga_js = f"""
+    # Hem component hem de markdown ile inject et
+    components.html(
+        f"""
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
         <script>
-            (function() {{
-                // Ana pencereyi hedefle
-                var targetDoc = window.parent.document;
-                
-                // Eğer daha önce eklenmediyse ekle
-                if (!targetDoc.getElementById('google-analytics-script')) {{
-                    // GA script'i ekle
-                    var script = targetDoc.createElement('script');
-                    script.id = 'google-analytics-script';
-                    script.async = true;
-                    script.src = "https://www.googletagmanager.com/gtag/js?id={GA_ID}";
-                    targetDoc.head.appendChild(script);
-                    
-                    // GA initialization script'i ekle
-                    var initScript = targetDoc.createElement('script');
-                    initScript.id = 'google-analytics-init';
-                    initScript.innerHTML = `
-                        window.dataLayer = window.dataLayer || [];
-                        function gtag(){{dataLayer.push(arguments);}}
-                        gtag('js', new Date());
-                        gtag('config', '{GA_ID}', {{
-                            'send_page_view': true,
-                            'cookie_flags': 'SameSite=None;Secure'
-                        }});
-                    `;
-                    targetDoc.head.appendChild(initScript);
-                    
-                    console.log('Google Analytics initialized with ID: {GA_ID}');
-                }}
-            }})();
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', '{GA_ID}', {{
+            'cookie_domain': 'auto',
+            'send_page_view': true
+          }});
+          
+          // Page view gönder
+          gtag('event', 'page_view', {{
+            page_location: window.location.href,
+            page_path: window.location.pathname
+          }});
         </script>
-        """
-        components.html(ga_js, height=0, width=0)
+        """,
+        height=0,
+    )
 
-# Sayfanın en başında çağırın
+# Sayfanın en başında çağırın (set_page_config'den SONRA)
 inject_ga()
 
 # Authentication kontrolü (opsiyonel)
