@@ -14,11 +14,12 @@ class Database:
         if self.conn is None or self.conn.closed:
             try:
                 self.conn = psycopg2.connect(
-                    host=st.secrets.get("DB_HOST", "localhost"),
-                    database=st.secrets.get("DB_NAME", "nba_dashboard"),
-                    user=st.secrets.get("DB_USER", "postgres"),
-                    password=st.secrets.get("DB_PASSWORD", ""),
-                    port=st.secrets.get("DB_PORT", 5432)
+                    host=st.secrets.get("DB_HOST"),
+                    database=st.secrets.get("DB_NAME"),
+                    user=st.secrets.get("DB_USER"),
+                    password=st.secrets.get("DB_PASSWORD"),
+                    port=st.secrets.get("DB_PORT", 5432),
+                    sslmode='require'  # Bulut bağlantıları için bunu ekleyin
                 )
             except Exception as e:
                 st.error(f"Database connection error: {e}")
