@@ -59,24 +59,46 @@ if embed_mode:
         
         /* Streamlit watermark */
         [data-testid="stStatusWidget"] {display: none !important;}
+        
+        /* ALTTAKI FOOTER KISMI */
+        [data-testid="stBottom"] {display: none !important;}
+        .reportview-container .main footer {display: none !important;}
     """
 
 st.markdown(f"""
     <style>
         /* Mevcut ayarlarınız */
-        .stApp {{ background-image: none !important; }}
+        .stApp {{ 
+            background-image: none !important;
+            background-color: #0e1117;
+        }}
         .block-container {{ 
             padding-top: 2rem !important; 
             padding-bottom: 2rem !important; 
         }}
         
-        /* Genel temizlik */
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-        header {{visibility: hidden;}}
-        .stDeployButton {{display:none;}}
-        [data-testid="stToolbar"] {{visibility: hidden;}}
-        [data-testid="stDecoration"] {{display: none;}}
+        /* Genel temizlik - HER ZAMAN AKTIF */
+        #MainMenu {{display: none !important;}}
+        footer {{display: none !important;}}
+        header {{display: none !important;}}
+        .stDeployButton {{display: none !important;}}
+        [data-testid="stToolbar"] {{display: none !important;}}
+        [data-testid="stDecoration"] {{display: none !important;}}
+        [data-testid="stStatusWidget"] {{display: none !important;}}
+        
+        /* ALT KISIM - "Built with Streamlit" ve "Fullscreen" */
+        [data-testid="stBottom"] {{display: none !important;}}
+        .reportview-container .main footer {{display: none !important;}}
+        [class*="viewerBadge"] {{display: none !important;}}
+        .styles_viewerBadge__1yB5_ {{display: none !important;}}
+        footer {{visibility: hidden !important; height: 0 !important;}}
+        
+        /* Streamlit app footer */
+        .stApp > footer {{display: none !important;}}
+        .css-z5fcl4 {{display: none !important;}}
+        
+        /* Fullscreen button */
+        button[kind="header"] {{display: none !important;}}
         
         {extra_styles}
     </style>
@@ -630,3 +652,25 @@ def home_page():
     
 
 home_page()
+
+
+# En altta - home_page() fonksiyonundan sonra
+st.markdown("""
+<script>
+    // Footer'ı tamamen kaldır
+    const hideFooter = () => {
+        const footer = window.parent.document.querySelector('footer');
+        if (footer) footer.style.display = 'none';
+        
+        const stBottom = window.parent.document.querySelector('[data-testid="stBottom"]');
+        if (stBottom) stBottom.style.display = 'none';
+        
+        const viewerBadge = window.parent.document.querySelector('[class*="viewerBadge"]');
+        if (viewerBadge) viewerBadge.style.display = 'none';
+    };
+    
+    // Sayfa yüklendiğinde ve her 1 saniyede kontrol et
+    hideFooter();
+    setInterval(hideFooter, 1000);
+</script>
+""", unsafe_allow_html=True)
