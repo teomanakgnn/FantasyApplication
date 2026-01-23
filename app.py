@@ -5,7 +5,7 @@ import streamlit as st
 # 1. CONFIG (EN BAŞA EKLENMELİ)
 # --------------------
 st.set_page_config(
-    page_title="NBA Dashboard", 
+    page_title="HoopLife NBA", 
     layout="wide",
     page_icon="🏀",
     initial_sidebar_state="expanded"
@@ -32,43 +32,53 @@ try:
 except ImportError:
     pass 
 
+def is_embedded():
+    return st.query_params.get("embed") == "true"
+
 # --------------------
 # INIT & STYLES
 # --------------------
-# --------------------
-# INIT & STYLES
-# --------------------
-st.markdown("""
-    <style>
-        /* Ana container ayarları */
-        .stApp { 
-            background-image: none !important;
-            background-color: #0e1117;
-        }
-        .block-container { 
-            padding-top: 1rem !important;
-            padding-bottom: 1rem !important;
-            max-width: 100% !important;
-        }
-        
-        /* STREAMLIT ARAYÜZÜNÜ TAMAMEN GİZLE */
-        #MainMenu {visibility: hidden !important;}
-        footer {visibility: hidden !important;}
-        header {visibility: hidden !important;}
+embed_mode = is_embedded()
+
+# Embed modunda ekstra stil ekle
+extra_styles = ""
+if embed_mode:
+    extra_styles = """
+        /* EMBED MODE - Her şeyi gizle */
+        [data-testid="stHeader"] {display: none !important;}
+        [data-testid="stToolbar"] {display: none !important;}
+        header {display: none !important;}
+        #MainMenu {display: none !important;}
+        footer {display: none !important;}
         .stDeployButton {display: none !important;}
-        [data-testid="stToolbar"] {visibility: hidden !important;}
-        [data-testid="stDecoration"] {display: none !important;}
+        
+        /* Üst padding'i kaldır */
+        .main .block-container {
+            padding-top: 0.5rem !important;
+        }
+        
+        /* Streamlit watermark */
         [data-testid="stStatusWidget"] {display: none !important;}
+    """
+
+st.markdown(f"""
+    <style>
+        /* Mevcut ayarlarınız */
+        .stApp {{ background-image: none !important; }}
+        .block-container {{ 
+            padding-top: 2rem !important; 
+            padding-bottom: 2rem !important; 
+        }}
         
-        /* Üst boşluk ve header'ı kaldır */
-        .main > div:first-child {
-            padding-top: 0 !important;
-        }
+        /* Genel temizlik */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+        .stDeployButton {{display:none;}}
+        [data-testid="stToolbar"] {{visibility: hidden;}}
+        [data-testid="stDecoration"] {{display: none;}}
         
-        /* Sidebar temizleme (opsiyonel - sidebar'ı da gizlemek isterseniz) */
-        [data-testid="stSidebar"] > div:first-child {
-            padding-top: 1rem;
-        }
+        {extra_styles}
     </style>
 """, unsafe_allow_html=True)
 

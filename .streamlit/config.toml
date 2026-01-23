@@ -1,0 +1,10 @@
+[server]
+enableXsrfProtection = false
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
+
+[ui]
+hideTopBar = true
+hideSidebarNav = false
