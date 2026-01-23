@@ -37,8 +37,17 @@ except ImportError:
 # --------------------
 st.markdown("""
     <style>
+        /* Mevcut ayarlarınız */
         .stApp { background-image: none !important; }
         .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+        
+        /* EKLENEN KISIM: Streamlit arayüzünü temizleme */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stDeployButton {display:none;}
+        [data-testid="stToolbar"] {visibility: hidden;}
+        [data-testid="stDecoration"] {display: none;}
     </style>
 """, unsafe_allow_html=True)
 
