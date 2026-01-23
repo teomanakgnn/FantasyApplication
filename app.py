@@ -35,19 +35,40 @@ except ImportError:
 # --------------------
 # INIT & STYLES
 # --------------------
+# --------------------
+# INIT & STYLES
+# --------------------
 st.markdown("""
     <style>
-        /* Mevcut ayarlarınız */
-        .stApp { background-image: none !important; }
-        .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+        /* Ana container ayarları */
+        .stApp { 
+            background-image: none !important;
+            background-color: #0e1117;
+        }
+        .block-container { 
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 100% !important;
+        }
         
-        /* EKLENEN KISIM: Streamlit arayüzünü temizleme */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        .stDeployButton {display:none;}
-        [data-testid="stToolbar"] {visibility: hidden;}
-        [data-testid="stDecoration"] {display: none;}
+        /* STREAMLIT ARAYÜZÜNÜ TAMAMEN GİZLE */
+        #MainMenu {visibility: hidden !important;}
+        footer {visibility: hidden !important;}
+        header {visibility: hidden !important;}
+        .stDeployButton {display: none !important;}
+        [data-testid="stToolbar"] {visibility: hidden !important;}
+        [data-testid="stDecoration"] {display: none !important;}
+        [data-testid="stStatusWidget"] {display: none !important;}
+        
+        /* Üst boşluk ve header'ı kaldır */
+        .main > div:first-child {
+            padding-top: 0 !important;
+        }
+        
+        /* Sidebar temizleme (opsiyonel - sidebar'ı da gizlemek isterseniz) */
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 1rem;
+        }
     </style>
 """, unsafe_allow_html=True)
 
