@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # --------------------
 # 1. CONFIG (EN BAŞA EKLENMELİ)
@@ -10,6 +11,25 @@ st.set_page_config(
     page_icon="🏀",
     initial_sidebar_state="expanded"
 )
+
+def inject_ga():
+    GA_ID = st.secrets.get("GOOGLE_ANALYTICS_ID")
+    
+    if GA_ID:
+        ga_code = f"""
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){{dataLayer.push(arguments);}}
+            gtag('js', new Date());
+            gtag('config', '{GA_ID}');
+        </script>
+        """
+        # HTML kodunu sayfaya gizlice (görünmez şekilde) ekliyoruz
+        components.html(ga_code, height=0, width=0)
+
+# Fonksiyonu hemen çalıştır
+inject_ga()
 
 # Authentication kontrolü (opsiyonel)
 from pages.auth import check_authentication, logout
