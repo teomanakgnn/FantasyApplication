@@ -17,14 +17,37 @@ def apply_custom_style():
     
     st.markdown(f"""
     <style>
-        /* GENEL AYARLAR */
-        header[data-testid="stHeader"], footer {{ visibility: hidden; display: none; }}
+        /* --- HEADER VE SIDEBAR BUTONU DÜZELTMESİ --- */
         
-        /* MASAÜSTÜ İÇİN STANDART PADDING */
+        /* 1. Header'ı tamamen yok etme, şeffaf yap (Menü butonları için) */
+        header[data-testid="stHeader"] {{
+            background: transparent !important;
+            visibility: visible !important; /* Görünür yap */
+        }}
+        
+        /* 2. Header içindeki sadece dekorasyonu gizle ama butonları bırak */
+        header[data-testid="stHeader"] > div:first-child {{
+            display: none; /* Üstteki renkli şeridi gizle */
+        }}
+        
+        /* 3. Hamburger menü ikonunun rengini beyaz yap (Koyu tema için) */
+        button[data-testid="baseButton-header"] {{
+            color: white !important;
+        }}
+        
+        /* 4. Sidebar açıldığında z-index ayarı (Mobilde üstte kalsın) */
+        section[data-testid="stSidebar"] {{
+            z-index: 99999 !important;
+        }}
+
+        /* --- DİĞER CSS AYARLARI --- */
+        
         .block-container {{ 
-            padding-top: 1rem !important; 
+            padding-top: 3rem !important; /* Header görünür olduğu için biraz daha aşağı */
             padding-bottom: 5rem !important; 
         }}
+        
+        footer {{ visibility: hidden; display: none; }}
         
         .stApp {{
             background-image: url("{background_url}");
@@ -48,12 +71,18 @@ def apply_custom_style():
 
         /* --- MOBİL İÇİN KRİTİK DÜZELTMELER (@MEDIA) --- */
         @media only screen and (max-width: 768px) {{
-            /* 1. MOBİLDE EN ALTA EKSTRA BOŞLUK BIRAK (SCROLL İÇİN) */
-            .block-container {{
-                padding-bottom: 15rem !important; 
+            /* Header mobilde çok yer kaplamasın */
+            header[data-testid="stHeader"] {{
+                height: 3rem !important;
             }}
             
-            /* 2. KARTLARI BİRAZ KÜÇÜLT VE MARJLARI AZALT */
+            /* Mobilde scroll alanı */
+            .block-container {{
+                padding-bottom: 15rem !important; 
+                padding-top: 1rem !important;
+            }}
+            
+            /* Kartlar */
             .platform-selector {{
                 height: auto !important;
                 min-height: 180px !important;
@@ -61,14 +90,13 @@ def apply_custom_style():
                 padding: 10px !important;
             }}
             
-            /* 3. MOBİLDE YAZILARI BİRAZ KÜÇÜLT */
             div[class='platform-selector'] > div {{
-                font-size: 32px !important; /* Emoji boyutu */
+                font-size: 32px !important; 
                 margin-bottom: 0px !important;
             }}
             h3 {{ font-size: 1.2rem !important; margin: 5px 0 !important; }}
             
-            /* 4. MATCHUP SATIRLARINI DÜZENLE */
+            /* Matchup */
             .matchup-row {{
                 flex-direction: column !important;
                 align-items: flex-start !important;
@@ -433,6 +461,26 @@ def render_fantasy_league_page():
             
             # Yahoo authentication kontrolü
             is_authenticated = handle_yahoo_auth()
+
+            if is_authenticated:
+                try:
+                    # Token gerçekten geçerli mi anlamak için ufak bir API isteği atıyoruz.
+                    # Eğer ligler zaten hafızada varsa bile hata alıp almadığımızı kontrol etmek için try-except şart.
+                    if 'user_leagues' not in st.session_state:
+                        with st.spinner("Verifying Session..."):
+                            leagues = st.session_state.yahoo_service.get_user_leagues('nba')
+                            st.session_state.user_leagues = leagues
+                except Exception as e:
+                    # Eğer token süresi dolmuşsa API hata verir, biz de burada yakalarız
+                    error_msg = str(e).lower()
+                    if "token_expired" in error_msg or "401" in error_msg or "expired" in error_msg:
+                        # Hatalı tokenı session'dan siliyoruz
+                        if 'yahoo_token' in st.session_state:
+                            del st.session_state['yahoo_token']
+                        is_authenticated = False # Durumu giriş yapılmamışa çeviriyoruz
+                        st.rerun() # Sayfayı yeniliyoruz ki tekrar Login butonu gelsin
+                    else:
+                        st.error(f"Connection Error: {e}")
             
             if not is_authenticated:
                 st.warning("🔐 Authentication Required")
