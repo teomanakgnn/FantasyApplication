@@ -40,7 +40,7 @@ def inject_ga():
 inject_ga() 
 
 # Authentication kontrolü (opsiyonel)
-from pages.auth import check_authentication, logout
+from auth import check_authentication, logout
 
 from components.styles import load_styles
 from components.header import render_header
@@ -105,28 +105,39 @@ st.markdown(f"""
             padding-bottom: 2rem !important; 
         }}
         
-        /* Genel temizlik - HER ZAMAN AKTIF */
+        /* --- DÜZELTİLEN KISIM --- */
+        
+        /* 1. Header Görünür Olmalı (Sidebar düğmesi burada yaşar) */
+        header {{
+            display: block !important;
+            background: transparent !important; /* Arkaplanı şeffaf yap */
+        }}
+        
+        /* 2. Sidebar Açma/Kapama Düğmesi (Özellikle görünür yapıyoruz) */
+        [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarNavItems"] {{
+            display: block !important;
+        }}
+        
+        /* 3. İstenmeyen "Süsleri" Gizle (Renkli çizgi vb.) */
+        [data-testid="stDecoration"] {{
+            display: none !important;
+        }}
+        
+        /* 4. Sağ üstteki Hamburger Menüyü ve Toolbar'ı Gizle */
+        [data-testid="stToolbar"] {{
+            display: none !important;
+        }}
+        .stDeployButton {{
+            display: none !important;
+        }}
+        
+        /* 5. Footer Gizleme */
         #MainMenu {{display: none !important;}}
         footer {{display: none !important;}}
-        header {{display: none !important;}}
-        .stDeployButton {{display: none !important;}}
-        [data-testid="stToolbar"] {{display: none !important;}}
-        [data-testid="stDecoration"] {{display: none !important;}}
-        [data-testid="stStatusWidget"] {{display: none !important;}}
-        
-        /* ALT KISIM - "Built with Streamlit" ve "Fullscreen" */
         [data-testid="stBottom"] {{display: none !important;}}
-        .reportview-container .main footer {{display: none !important;}}
-        [class*="viewerBadge"] {{display: none !important;}}
-        .styles_viewerBadge__1yB5_ {{display: none !important;}}
-        footer {{visibility: hidden !important; height: 0 !important;}}
         
-        /* Streamlit app footer */
-        .stApp > footer {{display: none !important;}}
-        .css-z5fcl4 {{display: none !important;}}
-        
-        /* Fullscreen button */
-        button[kind="header"] {{display: none !important;}}
+        /* --- RİSKLİ SATIRLAR KALDIRILDI --- */
+        /* button[kind="header"] {{display: none !important;}}  <-- BU SATIR SİLİNDİ */
         
         {extra_styles}
     </style>
@@ -217,7 +228,7 @@ with st.sidebar:
 
 # Sayfa yönlendirmesi
 if st.session_state.page == "login":
-    from pages.auth import render_auth_page
+    from auth import render_auth_page
     render_auth_page()
     st.stop()
 
@@ -229,9 +240,6 @@ if st.session_state.page == "injury":
         st.rerun()
     st.stop()
 
-if st.button("⚖️ Trade Analyzer", use_container_width=True):
-        st.session_state.page = "trade_analyzer"
-        st.rerun()    
 
 if st.session_state.page == "trends":
     # PRO kontrolü

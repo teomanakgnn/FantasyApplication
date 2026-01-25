@@ -6,35 +6,6 @@ def render_sidebar():
     # ---------------------------------------------------------
     # 1. STREAMLIT DEFAULT NAVIGASYONU GİZLEME (CSS)
     # ---------------------------------------------------------
-    st.markdown("""
-        <style>
-            /* Streamlit'in otomatik sayfa listesini gizle */
-            [data-testid="stSidebarNav"] {
-                display: none !important;
-            }
-            /* Gerekirse üst boşluğu ayarla */
-            .st-emotion-cache-16txtl3 {
-                padding-top: 1rem !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.sidebar.markdown("### Navigation")
-
-    # Player Trends sayfasına git
-    if st.sidebar.button("📈 Player Trends", use_container_width=True, type="primary"):
-        st.session_state.page = "trends"
-        st.rerun()
-
-    # Injury Report sayfasına git
-    if st.sidebar.button("🏥 Injury Report", use_container_width=True):
-        st.session_state.page = "injury"
-        st.rerun()
-
-    if st.sidebar.button("🏆 Fantasy League", use_container_width=True):
-        st.session_state.page = "fantasy_league"
-        st.rerun()    
-
     # ---------------------------------------------------------
     # 2. MEVCUT KODUNUZ
     # ---------------------------------------------------------
