@@ -287,17 +287,19 @@ class YahooFantasyService:
         return matchups
     
     def _parse_team_stats(self, stats_data: Dict) -> Dict:
-        """Yahoo team stats'ları parse eder (FIXED VERSION)"""
+        """Yahoo stats verilerini parse eder (Hem Team hem Player için Universal)"""
         stats = {}
         
         try:
-            # KRİTİK DÜZELTME: Veri 'team_stats' anahtarı içinde mi geliyor kontrol et
+            # 1. Veri 'team_stats' veya 'player_stats' içinde mi diye kontrol et
             if 'team_stats' in stats_data:
                 stats_payload = stats_data['team_stats']
+            elif 'player_stats' in stats_data:
+                stats_payload = stats_data['player_stats']
             else:
                 stats_payload = stats_data
                 
-            # Şimdi stats listesini al
+            # 2. Stats listesini al
             stat_list = stats_payload.get('stats', [])
             
             # Eğer stat_list hala yoksa ve payload'ın kendisi listeyse
@@ -347,7 +349,9 @@ class YahooFantasyService:
                     stats[stat_name] = final_val
 
         except Exception as e:
-            print(f"Error parsing team stats details: {e}")
+            print(f"Error parsing stats details: {e}")
+        
+        return stats
         
         return stats
     def get_team_roster(self, team_key: str) -> List[Dict]:
@@ -380,6 +384,171 @@ class YahooFantasyService:
             print(f"Error parsing roster: {e}")
         
         return players
+    
+
+    # ... (YahooFantasyService sınıfının devamı) ...
+
+    def get_league_rosters(self, league_key: str) -> Dict:
+        """
+        Ligdeki tüm takımların kadrolarını getirir (Robust/Sağlamlaştırılmış Versiyon).
+        """
+        endpoint = f"league/{league_key}/teams;out=roster"
+        data = self._make_request(endpoint)
+        
+        rosters = {}
+        
+        try:
+            # League datasına ulaş
+            league_data = data['fantasy_content']['league']
+            
+            # 'teams' anahtarını içeren dictionary'i dinamik olarak bul
+            teams_wrapper = next((x for x in league_data if isinstance(x, dict) and 'teams' in x), None)
+            
+            if not teams_wrapper:
+                print("❌ API Yanıtında 'teams' verisi bulunamadı.")
+                return {}
+            
+            league_teams = teams_wrapper['teams']
+            
+            for key in league_teams:
+                if key == 'count': continue
+                
+                # Takım verisi [metadata, roster, ...] şeklinde gelir
+                team_payload = league_teams[key]['team']
+                
+                # 1. Takım Metadata'sını bul (İsim, Key)
+                # Genellikle listenin ilk elemanıdır ama garantiye alalım
+                team_meta = team_payload[0]
+                # Bazen metadata doğrudan dict olabilir, bazen liste içinde
+                # Yahoo genelde: [ {team_key...}, {team_id...}, {name...} ] gönderir
+                
+                # İsim verisini güvenli çekelim
+                team_name = "Unknown Team"
+                team_key = ""
+                
+                # Metadata içindeki 'name' alanını bulmaya çalış
+                if isinstance(team_meta, list):
+                     for meta_item in team_meta:
+                         if isinstance(meta_item, dict) and 'name' in meta_item:
+                             team_name = meta_item['name']
+                         if isinstance(meta_item, dict) and 'team_key' in meta_item:
+                             team_key = meta_item['team_key']
+                
+                # Eğer yukarıdaki döngü bulamazsa standart indeksi dene
+                if team_name == "Unknown Team" and len(team_meta) > 2:
+                     try:
+                         team_name = team_meta[2]['name']
+                         team_key = team_meta[0]['team_key']
+                     except: pass
+                
+                # 2. Roster'ı bul
+                roster_wrapper = next((x for x in team_payload if isinstance(x, dict) and 'roster' in x), None)
+                
+                players = []
+                if roster_wrapper:
+                    roster_data = roster_wrapper['roster']['0']['players']
+                    
+                    for p_key in roster_data:
+                        if p_key == 'count': continue
+                        
+                        p_payload = roster_data[p_key]['player']
+                        p_meta = p_payload[0] # Oyuncu metadata'sı
+                        
+                        # Oyuncu ismini bul
+                        full_name = "Unknown Player"
+                        display_pos = "-"
+                        player_key = ""
+                        
+                        # Metadata listesinde gezin
+                        for item in p_meta:
+                            if isinstance(item, dict):
+                                if 'name' in item:
+                                    full_name = item['name']['full']
+                                if 'display_position' in item:
+                                    display_pos = item['display_position']
+                                if 'player_key' in item:
+                                    player_key = item['player_key']
+                                    
+                        players.append({
+                            'player_key': player_key,
+                            'name': full_name,
+                            'position': display_pos
+                        })
+                
+                rosters[team_name] = {'team_key': team_key, 'players': players}
+                
+        except Exception as e:
+            print(f"Error fetching rosters: {e}")
+            # Hata ayıklama için JSON yapısını görmek istersen:
+            # import json
+            # print(json.dumps(data, indent=2))
+            
+        return rosters
+
+    def get_players_stats(self, league_key: str, player_keys: List[str]) -> List[Dict]:
+        """
+        Seçilen oyuncuların sezon ortalamalarını (Average Stats) getirir.
+        Trade analizi için kullanılır.
+        """
+        if not player_keys:
+            return []
+            
+        keys_str = ",".join(player_keys)
+        # Oyuncuların sezonluk ortalama istatistiklerini (stats=season) isteyelim
+        endpoint = f"league/{league_key}/players;player_keys={keys_str}/stats;type=season"
+        
+        data = self._make_request(endpoint)
+        players_stats = []
+        
+        try:
+            # players verisi league altında döner
+            league_data = data['fantasy_content']['league']
+            
+            # 'players' wrapper'ını bul
+            players_wrapper_parent = next((item for item in league_data if isinstance(item, dict) and 'players' in item), None)
+            
+            if not players_wrapper_parent:
+                print("❌ Player data wrapper not found.")
+                return []
+                
+            players_wrapper = players_wrapper_parent['players']
+            
+            for key in players_wrapper:
+                if key == 'count': continue
+                
+                # Player verisi: [ {metadata}, {player_stats}, ... ]
+                p_payload = players_wrapper[key]['player']
+                
+                # 1. Metadata bul (İsim için)
+                meta_item = p_payload[0]
+                full_name = "Unknown"
+                if isinstance(meta_item, list):
+                    for m in meta_item:
+                         if isinstance(m, dict) and 'name' in m:
+                             full_name = m['name']['full']
+                
+                # 2. İstatistik Wrapper'ını bul ('player_stats' içeren dict)
+                stats_data = next((item for item in p_payload if isinstance(item, dict) and 'player_stats' in item), None)
+                
+                if not stats_data:
+                    # Bazen doğrudan 'stats' listesi olarak gelebilir mi? Kontrol edelim
+                    print(f"⚠️ No stats found for {full_name}")
+                    parsed_stats = {}
+                else:
+                    # Parse fonksiyonuna 'player_stats' wrapper'ını gönder
+                    parsed_stats = self._parse_team_stats(stats_data)
+                
+                players_stats.append({
+                    'name': full_name,
+                    'stats': parsed_stats
+                })
+                
+        except Exception as e:
+            print(f"Error fetching player stats: {e}")
+            # import json
+            # print(json.dumps(data, indent=2))
+            
+        return players_stats
 
 
 # ============================

@@ -549,6 +549,7 @@ def render_fantasy_league_page():
                 
                 st.markdown("---")
                 
+                # 1. LOAD DATA BUTONU
                 if st.button("⚡ LOAD YAHOO DATA", type="primary", use_container_width=True):
                     if league_key:
                         with st.spinner("CONNECTING TO YAHOO SERVERS..."):
@@ -562,7 +563,21 @@ def render_fantasy_league_page():
                                 st.session_state['current_league_key'] = league_key
                                 st.success("✅ Yahoo data loaded successfully!")
                                 st.rerun()
-                
+
+                # 2. LOAD ROSTERS BUTONU (YENİ EKLENEN KISIM)
+                if st.button("👥 Load Rosters (For Trade)", use_container_width=True):
+                    if league_key:
+                        with st.spinner("Fetching all rosters..."):
+                            try:
+                                # yahoo_api.py içindeki get_league_rosters fonksiyonunu çağırıyoruz
+                                rosters = st.session_state.yahoo_service.get_league_rosters(league_key)
+                                st.session_state['rosters'] = rosters
+                                st.success(f"✅ Loaded {len(rosters)} teams!")
+                            except Exception as e:
+                                st.error(f"Error loading rosters: {str(e)}")
+                    else:
+                        st.warning("Please select a league first.")
+
                 st.markdown("---")
                 
                 if st.button("🚪 Logout Yahoo", use_container_width=True):
@@ -658,7 +673,7 @@ def render_fantasy_league_page():
         return
     
     # Veri yüklendiyse tabs göster
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 STANDINGS", "⚔️ MATCHUPS", "💪 H2H POWER RANK", "🎯 ROTO SIMULATION"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 STANDINGS", "⚔️ MATCHUPS", "💪 H2H POWER RANK", "🎯 ROTO SIMULATION", "TRADE ANALYZER"])
     
     # TAB 1: STANDINGS
     with tab1:
@@ -828,6 +843,114 @@ def render_fantasy_league_page():
                 )
         else:
             st.info("NO MATCHUP DATA AVAILABLE")
+
+    # TAB 5: TRADE ANALYZER
+    with tab5:
+        st.markdown("### 🔄 TRADE ANALYZER")
+        
+        rosters = st.session_state.get('rosters')
+        
+        if not rosters:
+            st.info("⚠️ Please click '👥 Load Rosters' in the sidebar to use the Trade Analyzer.")
+        else:
+            # Takım Seçimi
+            team_names = list(rosters.keys())
+            
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.subheader("Team A")
+                team_a_name = st.selectbox("Select Team A", team_names, key="trade_team_a")
+                team_a_players = rosters[team_a_name]['players']
+                
+                # Oyuncu listesi oluştur (İsim - Pozisyon)
+                p_list_a = {f"{p['name']} ({p['position']})": p['player_key'] for p in team_a_players}
+                
+                # Multiselect ile gönderilecek oyuncuları seç
+                trade_p_a = st.multiselect("Players giving away:", options=list(p_list_a.keys()))
+                
+            with c2:
+                st.subheader("Team B")
+                # Team A seçildiyse Team B listesinden onu çıkaralım
+                remaining_teams = [t for t in team_names if t != team_a_name]
+                team_b_name = st.selectbox("Select Team B", remaining_teams, key="trade_team_b")
+                team_b_players = rosters[team_b_name]['players']
+                
+                p_list_b = {f"{p['name']} ({p['position']})": p['player_key'] for p in team_b_players}
+                
+                trade_p_b = st.multiselect("Players receiving:", options=list(p_list_b.keys()))
+
+            st.markdown("---")
+            
+            # Analyze Butonu
+            if st.button("🚀 Analyze Trade Impact", type="primary", use_container_width=True):
+                if not trade_p_a and not trade_p_b:
+                    st.warning("Please select at least one player to trade.")
+                else:
+                    with st.spinner("Calculating stats impact..."):
+                        # Seçilen oyuncuların Key'lerini al
+                        keys_a = [p_list_a[name] for name in trade_p_a]
+                        keys_b = [p_list_b[name] for name in trade_p_b]
+                        
+                        # API'den bu oyuncuların istatistiklerini çek
+                        all_keys = keys_a + keys_b
+                        
+                        # Yahoo Service üzerinden stats çekme
+                        player_stats = st.session_state.yahoo_service.get_players_stats(
+                            st.session_state['current_league_key'], 
+                            all_keys
+                        )
+                        
+                        if not player_stats:
+                            st.error("Could not fetch player stats.")
+                        else:
+                            # İstatistikleri ayır
+                            stats_a = [p for p in player_stats if p['name'] in [n.split(' (')[0] for n in trade_p_a]]
+                            stats_b = [p for p in player_stats if p['name'] in [n.split(' (')[0] for n in trade_p_b]]
+                            
+                            # Gösterim
+                            res_c1, res_c2 = st.columns(2)
+                            
+                            with res_c1:
+                                st.markdown(f"**{team_a_name} Receives:**")
+                                for p in stats_b:
+                                    st.write(f"🔹 {p['name']}")
+                                    st.dataframe(pd.DataFrame([p['stats']]), hide_index=True)
+
+                            with res_c2:
+                                st.markdown(f"**{team_b_name} Receives:**")
+                                for p in stats_a:
+                                    st.write(f"🔸 {p['name']}")
+                                    st.dataframe(pd.DataFrame([p['stats']]), hide_index=True)
+                            
+                            # Net Impact Tablosu (Basit toplama)
+                            st.markdown("#### 📊 Net Statistical Impact (Season Average)")
+                            
+                            # Basit bir impact hesaplama (Gelen - Giden)
+                            impact_stats = {}
+                            cats = ['FG%', 'FT%', '3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']
+                            
+                            # Team A için Impact (Aldıkları - Verdikleri)
+                            total_in_a = {k: sum(p['stats'].get(k, 0) for p in stats_b) for k in cats}
+                            total_out_a = {k: sum(p['stats'].get(k, 0) for p in stats_a) for k in cats}
+                            
+                            # Yüzdeler için toplama yapılmaz, ortalama alınır
+                            for cat in ['FG%', 'FT%']:
+                                if stats_b: total_in_a[cat] /= len(stats_b)
+                                if stats_a: total_out_a[cat] /= len(stats_a)
+                            
+                            diff_a = {k: total_in_a[k] - total_out_a[k] for k in cats}
+                            
+                            # DataFrame oluştur
+                            impact_df = pd.DataFrame([diff_a])
+                            
+                            # Renklendirme
+                            def color_vals(val):
+                                color = 'green' if val > 0 else 'red' if val < 0 else 'grey'
+                                return f'color: {color}; font-weight: bold'
+                            
+                            st.markdown(f"**Impact for {team_a_name}:**")
+                            st.dataframe(impact_df.style.map(color_vals).format("{:+.2f}"), hide_index=True)        
 
 if __name__ == "__main__":
     render_fantasy_league_page()
