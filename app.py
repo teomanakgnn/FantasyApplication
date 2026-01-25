@@ -16,9 +16,7 @@ st.set_page_config(
 def inject_ga():
     GA_ID = "G-L36E2X2BQK"
     
-    # Not: window.parent erişimi güvenlik nedeniyle engellendiği için
-    # kodu iframe'in içine hapsediyoruz ama veriyi doğru adresle gönderiyoruz.
-    
+    # Google Analytics ve AdSense kodlarını tek bir HTML string içinde birleştiriyoruz
     index_html = f"""
     <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
     <script>
@@ -32,6 +30,9 @@ def inject_ga():
         'page_title': 'HoopLife NBA'
       }});
     </script>
+    
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3882980321453628"
+     crossorigin="anonymous"></script>
     """
     
     # height=0, width=0 ile görünmez bir iframe içinde çalıştırıyoruz
