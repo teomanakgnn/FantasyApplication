@@ -6,6 +6,11 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
+
+# Global driver pool for reuse
+_driver_pool = []
 
 def get_driver():
     chrome_options = Options()
@@ -17,6 +22,10 @@ def get_driver():
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-images")  # Resimleri yükleme
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_argument(
         "user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
     )
@@ -47,19 +56,18 @@ def get_team_id_from_matchup_card(card, team_index=0):
 
 def get_current_scoring_period(league_id: int):
     """
-    Mevcut scoring period'u (hafta numarası) çeker
+    Mevcut scoring period'u (hafta numarası) çeker - OPTIMIZED
     """
     url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     driver = get_driver()
     
     try:
         driver.get(url)
-        time.sleep(3)
+        time.sleep(1.5)  # 3'ten 1.5'e düşürüldü
         
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(driver.page_source, 'lxml')  # html.parser yerine lxml (daha hızlı)
         
         # "Week X" veya "Matchup Period X" gibi text'i ara
-        import re
         text = soup.get_text()
         week_match = re.search(r'Week\s+(\d+)|Matchup Period\s+(\d+)', text, re.IGNORECASE)
         
@@ -80,15 +88,7 @@ def get_current_scoring_period(league_id: int):
 
 def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = None):
     """
-    Takımın roster'ındaki oyuncuların o hafta toplam kaç maç oynayacağını hesaplar
-    
-    Args:
-        league_id: ESPN League ID
-        team_id: Takım ID'si
-        scoring_period: Hangi hafta (None ise mevcut hafta)
-    
-    Returns:
-        int: Toplam maç sayısı
+    Takımın roster'ındaki oyuncuların o hafta toplam kaç maç oynayacağını hesaplar - OPTIMIZED
     """
     if scoring_period:
         url = f"https://fantasy.espn.com/basketball/team?leagueId={league_id}&teamId={team_id}&scoringPeriodId={scoring_period}"
@@ -99,42 +99,44 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
     
     try:
         driver.get(url)
-        time.sleep(5)
+        time.sleep(2)  # 5'ten 2'ye düşürüldü
         
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(driver.page_source, 'lxml')  # lxml kullanımı
         
-        # Roster tablosunu bul
-        tables = soup.find_all('table')
-        roster_table = None
+        # Roster tablosunu bul - optimize edilmiş selector
+        roster_table = soup.find('table', text=re.compile(r'OPPONENT|OPP|MATCHUP', re.I))
         
-        for table in tables:
-            headers = table.find_all('th')
-            header_text = ' '.join([h.get_text() for h in headers])
-            
-            # "OPPONENT" veya "OPP" sütunu olan tabloyu bul
-            if any(keyword in header_text.upper() for keyword in ['OPPONENT', 'OPP', 'MATCHUP']):
-                roster_table = table
-                break
+        if not roster_table:
+            # Fallback: tüm tablolarda ara
+            tables = soup.find_all('table')
+            for table in tables:
+                headers = table.find_all('th')
+                header_text = ' '.join([h.get_text() for h in headers])
+                
+                if any(keyword in header_text.upper() for keyword in ['OPPONENT', 'OPP', 'MATCHUP']):
+                    roster_table = table
+                    break
         
         if not roster_table:
             print(f"⚠️ Roster table not found for team {team_id}")
             driver.quit()
             return 0
         
-        # Oyuncuları parse et
+        # Oyuncuları parse et - optimize edilmiş
         rows = roster_table.find_all('tr')
         total_games = 0
         player_count = 0
+        
+        # Pre-compile regex
+        matchup_pattern = re.compile(r'@|vs', re.I)
         
         for row in rows[1:]:  # İlk satır header
             cells = row.find_all('td')
             if len(cells) < 3:
                 continue
             
-            # Oyuncu adını al (ilk sütun genellikle)
             player_name = cells[0].get_text(strip=True)
             
-            # Boş satırları atla
             if not player_name or player_name == '-':
                 continue
             
@@ -142,30 +144,21 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
             matchup_text = ""
             for cell in cells:
                 text = cell.get_text(strip=True)
-                # "@" veya "vs" içeren hücreyi bul
-                if '@' in text or 'vs' in text.lower():
+                if matchup_pattern.search(text):
                     matchup_text = text
                     break
             
             if matchup_text:
-                # Maç sayısını hesapla
-                # Örnek formatlar:
-                # "@LAL" -> 1 maç
-                # "@LAL, vsBOS" -> 2 maç
-                # "@LAL, vsBOS, @NYK" -> 3 maç
-                
                 games_this_week = 0
                 
-                # Virgül ile ayrılmış maçları say
                 if ',' in matchup_text:
                     games_this_week = matchup_text.count(',') + 1
-                elif '@' in matchup_text or 'vs' in matchup_text.lower():
+                elif matchup_pattern.search(matchup_text):
                     games_this_week = 1
                 
                 total_games += games_this_week
                 player_count += 1
                 
-                # Debug
                 if games_this_week > 0:
                     print(f"    👤 {player_name}: {games_this_week} games ({matchup_text})")
         
@@ -181,21 +174,17 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
 
 def scrape_league_standings(league_id: int):
     """
-    Lig Puan Durumunu çeker.
-    
-    Args:
-        league_id: ESPN League ID
+    Lig Puan Durumunu çeker - OPTIMIZED
     """
-    # Standings her zaman sezonluk olduğu için time_filter parametresini kaldırdık
     url = f"https://fantasy.espn.com/basketball/league/standings?leagueId={league_id}"
     
     driver = get_driver()
     
     try:
         driver.get(url)
-        time.sleep(4)
+        time.sleep(2)  # 4'ten 2'ye düşürüldü
         
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(driver.page_source, 'lxml')
         html_io = StringIO(driver.page_source)
         dfs = pd.read_html(html_io)
         
@@ -222,21 +211,22 @@ def scrape_league_standings(league_id: int):
 
 def get_team_upcoming_games(league_id: int, team_id: int):
     """
-    Takımın roster'ındaki oyuncuların o hafta oynayacağı toplam maç sayısını hesaplar
+    Takımın roster'ındaki oyuncuların o hafta oynayacağı toplam maç sayısını hesaplar - OPTIMIZED
     """
     url = f"https://fantasy.espn.com/basketball/team?leagueId={league_id}&teamId={team_id}"
     driver = get_driver()
     
     try:
         driver.get(url)
-        time.sleep(4)
+        time.sleep(2)  # 4'ten 2'ye düşürüldü
         
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        soup = BeautifulSoup(driver.page_source, 'lxml')
         
-        # Roster tablosunu bul
+        # Optimize edilmiş table arama
         roster_table = None
-        for table in soup.find_all('table'):
-            if 'Opp' in table.get_text() and 'Status' in table.get_text():
+        for table in soup.find_all('table', limit=5):  # İlk 5 tablo yeterli
+            table_text = table.get_text()
+            if 'Opp' in table_text and 'Status' in table_text:
                 roster_table = table
                 break
         
@@ -247,20 +237,16 @@ def get_team_upcoming_games(league_id: int, team_id: int):
         total_games = 0
         rows = roster_table.find_all('tr')
         
-        for row in rows[1:]:  # Header'ı atla
+        matchup_pattern = re.compile(r'@|vs')
+        
+        for row in rows[1:]:
             cells = row.find_all('td')
             if len(cells) < 3:
                 continue
                 
-            # Oyuncu durumunu kontrol et (Bench'teki oyuncuları say)
-            player_text = row.get_text()
-            
-            # O hafta kaç maç oynayacağını bul
-            # ESPN'de genelde "@ LAL, vs BOS" gibi gösterilir
             for cell in cells:
                 text = cell.get_text(strip=True)
-                # Virgül sayısı = maç sayısı - 1
-                if '@' in text or 'vs' in text:
+                if matchup_pattern.search(text):
                     games_this_week = text.count(',') + 1
                     total_games += games_this_week
                     break
@@ -278,7 +264,7 @@ def extract_team_names_from_card(card):
     Aynı matchup kartı içinden GERÇEK takım isimlerini
     teamId içeren linklerden çeker (STABİL YÖNTEM)
     """
-    team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
+    team_links = card.find_all("a", href=lambda x: x and "teamId=" in x, limit=2)  # Limit eklendi
 
     names = []
     for link in team_links:
@@ -295,25 +281,12 @@ def extract_team_names_from_card(card):
 def get_scoring_period_params(time_filter: str):
     """
     Time filter'a göre scoringPeriodId parametrelerini döndürür.
-    
-    Args:
-        time_filter: "week", "month", "season"
-    
-    Returns:
-        str: URL parametreleri
     """
-    # ESPN Fantasy Basketball için:
-    # Haftalık view için herhangi bir parametre eklemeye gerek yok (default mevcut hafta)
-    # Aylık ve sezonluk için "view" parametresi kullanılır
-    
     if time_filter == "week":
-        # Mevcut hafta (default)
         return ""
     elif time_filter == "month":
-        # Matchup history view (genelde son birkaç hafta)
         return "&view=mMatchupScore"
     elif time_filter == "season":
-        # Sezon geneli görünüm
         return "&view=mTeam"
     else:
         return ""
@@ -321,31 +294,26 @@ def get_scoring_period_params(time_filter: str):
         
 def extract_team_games_count(card, team_index=0):
     """
-    Matchup kartından takımın o hafta toplam maç sayısını çeker.
-    ESPN'de genellikle takım adının yanında veya altında gösterilir.
-    Örn: "4-0 (12 GP)" veya sadece "GP: 12"
+    Matchup kartından takımın o hafta toplam maç sayısını çeker - OPTIMIZED
     """
     try:
-        # Tüm text'i al ve GP bilgisini ara
         card_text = card.get_text()
         
-        # "GP" içeren tüm span/div elementlerini bul
-        gp_elements = card.find_all(text=lambda t: t and 'GP' in t.upper())
+        # Pre-compiled regex
+        gp_pattern = re.compile(r'(\d+)\s*GP', re.IGNORECASE)
+        
+        gp_elements = card.find_all(text=gp_pattern)
         
         if gp_elements and len(gp_elements) > team_index:
             gp_text = gp_elements[team_index]
-            # Sayıyı çıkar (örn: "12 GP" -> 12)
-            import re
             numbers = re.findall(r'\d+', gp_text)
             if numbers:
                 return int(numbers[0])
         
-        # Alternatif: Parent container'da ara
-        team_containers = card.find_all("div", class_=lambda x: x and "team" in x.lower())
+        team_containers = card.find_all("div", class_=lambda x: x and "team" in x.lower(), limit=3)
         if len(team_containers) > team_index:
             container_text = team_containers[team_index].get_text()
-            import re
-            gp_match = re.search(r'(\d+)\s*GP', container_text, re.IGNORECASE)
+            gp_match = gp_pattern.search(container_text)
             if gp_match:
                 return int(gp_match.group(1))
         
@@ -356,9 +324,24 @@ def extract_team_games_count(card, team_index=0):
         return 0
 
 
+def _fetch_team_games_worker(args):
+    """Worker function for parallel team games fetching"""
+    league_id, team_id, current_period, time_filter, team_name = args
+    
+    if not team_id:
+        return team_name, 0
+    
+    games = get_team_weekly_games(
+        league_id, 
+        team_id,
+        current_period if time_filter == "week" else None
+    )
+    return team_name, games
+
+
 def scrape_matchups(league_id: int, time_filter: str = "week"):
     """
-    Matchup verilerini çeker + her takımın o hafta toplam maç sayısını hesaplar
+    Matchup verilerini çeker + her takımın o hafta toplam maç sayısını hesaplar - PARALLEL OPTIMIZED
     """
     base_url = f"https://fantasy.espn.com/basketball/league/scoreboard?leagueId={league_id}"
     params = get_scoring_period_params(time_filter)
@@ -371,12 +354,12 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
     try:
         driver.get(url)
-        time.sleep(8)
+        time.sleep(4)  # 8'den 4'e düşürüldü
 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)
+        time.sleep(1.5)  # 3'ten 1.5'e düşürüldü
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
+        soup = BeautifulSoup(driver.page_source, "lxml")  # lxml kullanımı
 
         # Mevcut scoring period'u al
         current_period = get_current_scoring_period(league_id)
@@ -385,9 +368,12 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         tables = soup.find_all("table")
         stat_tables = []
 
+        # Pre-compile pattern
+        stat_pattern = re.compile(r'FG%.*FT%.*REB.*AST.*PTS', re.DOTALL)
+        
         for table in tables:
             txt = table.get_text()
-            if all(x in txt for x in ["FG%", "FT%", "REB", "AST", "PTS"]):
+            if stat_pattern.search(txt):
                 stat_tables.append(table)
 
         print(f"✅ {len(stat_tables)} stat tablosu bulundu ({time_filter})")
@@ -403,15 +389,12 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             if not away_data or not home_data:
                 continue
 
-            # TABLOYU SARAN MATCHUP CARD
             card = table.find_parent("section") or table.find_parent("div")
             if not card:
                 continue
 
-            # Takım isimleri
             away_name, home_name = extract_team_names_from_card(card)
             
-            # Takım ID'lerini al
             away_team_id = get_team_id_from_matchup_card(card, team_index=0)
             home_team_id = get_team_id_from_matchup_card(card, team_index=1)
 
@@ -432,30 +415,40 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
         driver.quit()
         
-        # HER TAKIM İÇİN HAFTALIK MAÇ SAYISINI HESAPLA
-        print("\n🔄 Calculating weekly games for each team...")
+        # PARALEL İŞLEM: Tüm takımların maçlarını aynı anda çek
+        print("\n🔄 Calculating weekly games for each team (PARALLEL)...")
+        
+        # Tüm takım bilgilerini topla
+        team_tasks = []
         for match in matchups:
-            print(f"\n📊 Processing: {match['away_team']['name']} vs {match['home_team']['name']}")
+            team_tasks.append((
+                league_id,
+                match['away_team']['team_id'],
+                current_period,
+                time_filter,
+                match['away_team']['name']
+            ))
+            team_tasks.append((
+                league_id,
+                match['home_team']['team_id'],
+                current_period,
+                time_filter,
+                match['home_team']['name']
+            ))
+        
+        # Paralel olarak tüm takımları işle (max 4 thread)
+        team_games_dict = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(_fetch_team_games_worker, task): task for task in team_tasks}
             
-            if match['away_team']['team_id']:
-                away_games = get_team_weekly_games(
-                    league_id, 
-                    match['away_team']['team_id'],
-                    current_period if time_filter == "week" else None
-                )
-                match['away_team']['weekly_games'] = away_games
-            else:
-                match['away_team']['weekly_games'] = 0
-            
-            if match['home_team']['team_id']:
-                home_games = get_team_weekly_games(
-                    league_id,
-                    match['home_team']['team_id'],
-                    current_period if time_filter == "week" else None
-                )
-                match['home_team']['weekly_games'] = home_games
-            else:
-                match['home_team']['weekly_games'] = 0
+            for future in as_completed(futures):
+                team_name, games = future.result()
+                team_games_dict[team_name] = games
+        
+        # Sonuçları matchup'lara ata
+        for match in matchups:
+            match['away_team']['weekly_games'] = team_games_dict.get(match['away_team']['name'], 0)
+            match['home_team']['weekly_games'] = team_games_dict.get(match['home_team']['name'], 0)
         
         print(f"\n✅ Toplam {len(matchups)} matchup çekildi")
         return matchups
@@ -468,25 +461,24 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
     
 def parse_row_stats(row):
     """
-    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat + GP sözlüğü oluşturur.
-    Beklenen Sıra: FG%, FT%, 3PM, REB, AST, STL, BLK, TO, PTS (ve muhtemelen GP)
+    Bir HTML tablosu satırındaki (tr) hücreleri (td) okur ve 9-Cat + GP sözlüğü oluşturur - OPTIMIZED
     """
     cells = row.find_all("td")
     stats = {}
     values = []
     
+    # Optimize edilmiş text extraction
     for cell in cells:
         txt = cell.get_text(strip=True)
-        if any(char.isdigit() for char in txt):
+        if txt and any(c.isdigit() for c in txt):
             values.append(txt)
     
-    # GP genellikle ilk sütun olabilir, kontrol edelim
-    if len(values) >= 10:  # GP + 9 kategori
+    if len(values) >= 10:
         stats['GP'] = values[0]
         categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
         for i, cat in enumerate(categories):
             stats[cat] = values[i + 1]
-    elif len(values) >= 9:  # Sadece 9 kategori
+    elif len(values) >= 9:
         categories = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']
         relevant_values = values[-9:]
         for i, cat in enumerate(categories):
@@ -505,7 +497,8 @@ def extract_team_names_from_matchup(card):
 
     possible_headers = card.find_all(
         ["h1", "h2", "h3", "span"],
-        string=True
+        string=True,
+        limit=10  # Limit eklendi
     )
 
     for h in possible_headers:
@@ -524,30 +517,38 @@ def extract_team_names_from_matchup(card):
 
 
 def calculate_category_wins(team_a_stats, team_b_stats):
-    """9-Cat kazanma hesaplaması"""
+    """9-Cat kazanma hesaplaması - OPTIMIZED"""
     if not team_a_stats or not team_b_stats:
         return "0-0-0"
     
     wins = 0
     losses = 0
     ties = 0
-    inverse_cats = ['TO']
+    inverse_cats = {'TO'}  # Set kullanımı (daha hızlı lookup)
     
     for cat, val_a in team_a_stats.items():
-        if cat not in team_b_stats: continue
+        if cat not in team_b_stats: 
+            continue
+        
         try:
             val_a_clean = float(val_a.replace('%', ''))
             val_b_clean = float(team_b_stats[cat].replace('%', ''))
             
             if cat in inverse_cats:
-                if val_a_clean < val_b_clean: wins += 1
-                elif val_a_clean > val_b_clean: losses += 1
-                else: ties += 1
+                if val_a_clean < val_b_clean: 
+                    wins += 1
+                elif val_a_clean > val_b_clean: 
+                    losses += 1
+                else: 
+                    ties += 1
             else:
-                if val_a_clean > val_b_clean: wins += 1
-                elif val_a_clean < val_b_clean: losses += 1
-                else: ties += 1
-        except:
+                if val_a_clean > val_b_clean: 
+                    wins += 1
+                elif val_a_clean < val_b_clean: 
+                    losses += 1
+                else: 
+                    ties += 1
+        except (ValueError, AttributeError):
             continue
             
     return f"{wins}-{losses}-{ties}"
