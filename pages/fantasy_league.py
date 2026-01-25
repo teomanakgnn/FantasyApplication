@@ -17,73 +17,79 @@ def apply_custom_style():
     
     st.markdown(f"""
     <style>
-        header[data-testid="stHeader"] {{
-            visibility: hidden;
-            display: none;
-        }}
+        /* GENEL AYARLAR */
+        header[data-testid="stHeader"], footer {{ visibility: hidden; display: none; }}
         
-        .block-container {{
-            padding-top: 2rem !important;
-        }}
-        
-        footer {{
-            visibility: hidden;
-            display: none;
+        /* MASAÜSTÜ İÇİN STANDART PADDING */
+        .block-container {{ 
+            padding-top: 1rem !important; 
+            padding-bottom: 5rem !important; 
         }}
         
         .stApp {{
             background-image: url("{background_url}");
             background-attachment: fixed;
+            background-position: center;
             background-size: cover;
         }}
+        
+        /* CONTAINER VE TABLO STİLLERİ */
         .stDataFrame, .stContainer, div[data-testid="stExpander"] {{
-            background-color: rgba(15, 23, 42, 0.90); 
-            border-radius: 4px;
+            background-color: rgba(15, 23, 42, 0.95); 
+            border-radius: 8px;
             border: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }}
+        
         h1, h2, h3, h4, h5, h6, p, span, div, label {{
             color: #e2e8f0 !important;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }}
-        thead tr th {{
-            background-color: #0f172a !important;
-            color: #94a3b8 !important;
-            border-bottom: 2px solid #334155;
-            text-align: center !important;
+
+        /* --- MOBİL İÇİN KRİTİK DÜZELTMELER (@MEDIA) --- */
+        @media only screen and (max-width: 768px) {{
+            /* 1. MOBİLDE EN ALTA EKSTRA BOŞLUK BIRAK (SCROLL İÇİN) */
+            .block-container {{
+                padding-bottom: 15rem !important; 
+            }}
+            
+            /* 2. KARTLARI BİRAZ KÜÇÜLT VE MARJLARI AZALT */
+            .platform-selector {{
+                height: auto !important;
+                min-height: 180px !important;
+                margin: 10px 0 !important;
+                padding: 10px !important;
+            }}
+            
+            /* 3. MOBİLDE YAZILARI BİRAZ KÜÇÜLT */
+            div[class='platform-selector'] > div {{
+                font-size: 32px !important; /* Emoji boyutu */
+                margin-bottom: 0px !important;
+            }}
+            h3 {{ font-size: 1.2rem !important; margin: 5px 0 !important; }}
+            
+            /* 4. MATCHUP SATIRLARINI DÜZENLE */
+            .matchup-row {{
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 5px !important;
+            }}
+            .result-badge {{
+                width: 100% !important;
+                justify-content: center !important;
+            }}
         }}
-        tbody tr td {{
-            color: #f8fafc !important;
-            text-align: center !important;
-        }}
-        div[data-baseweb="select"] > div {{
-            background-color: #1e293b;
-            color: white;
-            border-color: #475569;
-        }}
-        .stTabs [data-baseweb="tab-list"] {{
-            gap: 10px;
-        }}
-        .stTabs [data-baseweb="tab"] {{
-            background-color: rgba(30, 41, 59, 0.9);
-            border: 1px solid #475569;
-            color: #cbd5e1;
-            padding: 10px 20px;
-        }}
-        .stTabs [aria-selected="true"] {{
-            background-color: #2563eb !important;
-            color: white !important;
-            border-bottom: none;
-        }}
+
+        /* BUTONLAR */
         button[kind="primary"] {{
             background-color: #2563eb;
             color: white;
             border: none;
             transition: 0.3s;
         }}
-        button[kind="primary"]:hover {{
-            background-color: #1d4ed8;
-        }}
-        
+        button[kind="primary"]:hover {{ background-color: #1d4ed8; }}
+
+        /* MATCHUP ROW (MASAÜSTÜ) */
         .matchup-row {{
             display: flex;
             justify-content: space-between;
@@ -98,70 +104,7 @@ def apply_custom_style():
         .matchup-row:hover {{
             background: rgba(30, 41, 59, 0.95);
             border-color: #475569;
-            transform: translateX(4px);
-        }}
-        .result-badge {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            line-height: 1;
-        }}
-        .result-badge svg {{
-            width: 16px;
-            height: 16px;
-        }}
-        
-        .time-badge {{
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: 1px solid #8b5cf6;
-            color: #fff;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1.2px;
-            margin-left: 12px;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-            text-transform: uppercase;
-        }}
-        
-        .platform-badge {{
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }}
-        
-        .espn-badge {{
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-            border: 2px solid #ef4444;
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-        }}
-        
-        .yahoo-badge {{
-            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-            color: white;
-            border: 2px solid #8b5cf6;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-        }}
-        
-        .auth-box {{
-            background: rgba(30, 41, 59, 0.9);
-            border: 2px solid #3b82f6;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
+            transform: translateX(2px);
         }}
         
         .platform-selector {{
@@ -173,17 +116,9 @@ def apply_custom_style():
             cursor: pointer;
             transition: all 0.3s ease;
         }}
-        
         .platform-selector:hover {{
             border-color: #60a5fa;
             background: rgba(37, 99, 235, 0.1);
-            transform: translateX(4px);
-        }}
-        
-        .platform-selector.selected {{
-            border-color: #3b82f6;
-            background: rgba(37, 99, 235, 0.2);
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -953,5 +888,5 @@ def render_fantasy_league_page():
                             st.dataframe(impact_df.style.map(color_vals).format("{:+.2f}"), hide_index=True)        
 
 if __name__ == "__main__":
-    
+
     render_fantasy_league_page()
