@@ -456,31 +456,14 @@ def render_fantasy_league_page():
                         st.success("✅ ESPN data loaded successfully!")
                         st.rerun()
         
+# --- YAHOO CONFIGURATION (Senin kod yapınla) ---
         elif st.session_state.get('selected_platform') == 'YAHOO':
             st.markdown("### 🟣 YAHOO CONFIGURATION")
             
             # Yahoo authentication kontrolü
             is_authenticated = handle_yahoo_auth()
-
-            if is_authenticated:
-                try:
-                    # Token gerçekten geçerli mi anlamak için ufak bir API isteği atıyoruz.
-                    # Eğer ligler zaten hafızada varsa bile hata alıp almadığımızı kontrol etmek için try-except şart.
-                    if 'user_leagues' not in st.session_state:
-                        with st.spinner("Verifying Session..."):
-                            leagues = st.session_state.yahoo_service.get_user_leagues('nba')
-                            st.session_state.user_leagues = leagues
-                except Exception as e:
-                    # Eğer token süresi dolmuşsa API hata verir, biz de burada yakalarız
-                    error_msg = str(e).lower()
-                    if "token_expired" in error_msg or "401" in error_msg or "expired" in error_msg:
-                        # Hatalı tokenı session'dan siliyoruz
-                        if 'yahoo_token' in st.session_state:
-                            del st.session_state['yahoo_token']
-                        is_authenticated = False # Durumu giriş yapılmamışa çeviriyoruz
-                        st.rerun() # Sayfayı yeniliyoruz ki tekrar Login butonu gelsin
-                    else:
-                        st.error(f"Connection Error: {e}")
+            
+            # NOT: Buradaki otomatik "Verifying Session" bloğunu kaldırdık (Donma çözümü).
             
             if not is_authenticated:
                 st.warning("🔐 Authentication Required")
@@ -498,9 +481,9 @@ def render_fantasy_league_page():
                     
                     if st.button("✅ Complete Auth", use_container_width=True) and auth_code:
                         try:
-                            from services.yahoo_api import save_yahoo_token
                             token = st.session_state.yahoo_service.fetch_token(auth_code)
-                            save_yahoo_token(token)
+                            # Session'a kaydet (save_yahoo_token fonksiyonunu kullanmadık, session yeterli)
+                            st.session_state.yahoo_token = token
                             st.session_state.yahoo_authenticated = True
                             st.success("✅ Authentication successful!")
                             st.rerun()
@@ -509,6 +492,14 @@ def render_fantasy_league_page():
             else:
                 st.success("✅ Authenticated")
                 
+                # Çıkış butonu (Session temizliği için gerekli)
+                if st.button("🚪 Logout Yahoo", use_container_width=True):
+                    keys_to_remove = ['yahoo_token', 'yahoo_service', 'selected_platform', 'df_standings', 'matchups', 'rosters', 'user_leagues']
+                    for key in keys_to_remove:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.rerun()
+                
                 # League listesi yükle
                 if st.button("🔄 Load My Leagues", use_container_width=True):
                     with st.spinner("Fetching leagues..."):
@@ -516,7 +507,14 @@ def render_fantasy_league_page():
                             leagues = st.session_state.yahoo_service.get_user_leagues('nba')
                             st.session_state.user_leagues = leagues
                         except Exception as e:
-                            st.error(f"Error: {str(e)}")
+                            # Hata kontrolü buraya eklendi (Otomatik blok yerine)
+                            err_str = str(e).lower()
+                            if "token_expired" in err_str or "401" in err_str or "expired" in err_str:
+                                if 'yahoo_token' in st.session_state: del st.session_state['yahoo_token']
+                                st.error("Token expired. Please login again.")
+                                st.rerun()
+                            else:
+                                st.error(f"Error: {str(e)}")
                 
                 # League seçimi
                 if 'user_leagues' in st.session_state and st.session_state.user_leagues:
@@ -532,34 +530,50 @@ def render_fantasy_league_page():
                 
                 st.markdown("---")
                 
+                c_load, c_ros = st.columns(2)
+                
                 # 1. LOAD DATA BUTONU
-                if st.button("⚡ LOAD YAHOO DATA", type="primary", use_container_width=True):
-                    if league_key:
-                        with st.spinner("CONNECTING TO YAHOO SERVERS..."):
-                            df_standings, matchups, error = load_yahoo_data(league_key, week_number)
-                            
-                            if error:
-                                st.error(f"❌ YAHOO ERROR: {error}")
-                            else:
-                                st.session_state['df_standings'] = df_standings
-                                st.session_state['matchups'] = matchups
-                                st.session_state['current_league_key'] = league_key
-                                st.success("✅ Yahoo data loaded successfully!")
-                                st.rerun()
+                with c_load:
+                    if st.button("⚡ LOAD YAHOO DATA", type="primary", use_container_width=True):
+                        if league_key:
+                            with st.spinner("CONNECTING TO YAHOO SERVERS..."):
+                                df_standings, matchups, error = load_yahoo_data(league_key, week_number)
+                                
+                                if error:
+                                    # Hata kontrolü
+                                    err_str = str(error).lower()
+                                    if "token_expired" in err_str or "401" in err_str:
+                                        if 'yahoo_token' in st.session_state: del st.session_state['yahoo_token']
+                                        st.error("Session expired.")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ YAHOO ERROR: {error}")
+                                else:
+                                    st.session_state['df_standings'] = df_standings
+                                    st.session_state['matchups'] = matchups
+                                    st.session_state['current_league_key'] = league_key
+                                    st.success("✅ Yahoo data loaded successfully!")
+                                    st.rerun()
 
-                # 2. LOAD ROSTERS BUTONU (YENİ EKLENEN KISIM)
-                if st.button("👥 Load Rosters (For Trade)", use_container_width=True):
-                    if league_key:
-                        with st.spinner("Fetching all rosters..."):
-                            try:
-                                # yahoo_api.py içindeki get_league_rosters fonksiyonunu çağırıyoruz
-                                rosters = st.session_state.yahoo_service.get_league_rosters(league_key)
-                                st.session_state['rosters'] = rosters
-                                st.success(f"✅ Loaded {len(rosters)} teams!")
-                            except Exception as e:
-                                st.error(f"Error loading rosters: {str(e)}")
-                    else:
-                        st.warning("Please select a league first.")
+                # 2. LOAD ROSTERS BUTONU
+                with c_ros:
+                    if st.button("👥 Load Rosters (For Trade)", use_container_width=True):
+                        if league_key:
+                            with st.spinner("Fetching all rosters..."):
+                                try:
+                                    rosters = st.session_state.yahoo_service.get_league_rosters(league_key)
+                                    st.session_state['rosters'] = rosters
+                                    st.success(f"✅ Loaded {len(rosters)} teams!")
+                                except Exception as e:
+                                    err_str = str(e).lower()
+                                    if "token_expired" in err_str or "401" in err_str:
+                                        if 'yahoo_token' in st.session_state: del st.session_state['yahoo_token']
+                                        st.error("Session expired.")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Error loading rosters: {str(e)}")
+                        else:
+                            st.warning("Please select a league first.")
 
                 st.markdown("---")
                 
