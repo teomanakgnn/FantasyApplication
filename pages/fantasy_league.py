@@ -345,10 +345,7 @@ def handle_yahoo_auth():
     if 'yahoo_authenticated' not in st.session_state:
         st.session_state.yahoo_authenticated = False
         
-        saved_token = load_yahoo_token()
-        if saved_token:
-            st.session_state.yahoo_service.set_token(saved_token)
-            st.session_state.yahoo_authenticated = True
+
     
     return st.session_state.yahoo_authenticated
 
