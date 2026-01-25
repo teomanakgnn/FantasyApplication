@@ -953,4 +953,5 @@ def render_fantasy_league_page():
                             st.dataframe(impact_df.style.map(color_vals).format("{:+.2f}"), hide_index=True)        
 
 if __name__ == "__main__":
+    
     render_fantasy_league_page()
