@@ -12,6 +12,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+    <meta name="google-adsense-account" content="ca-pub-3882980321453628">
+""", unsafe_allow_html=True)
 
 def render_adsense():
     try:
