@@ -12,6 +12,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def render_adsense():
+    try:
+        # Dosyayı "okuma" modunda açıyoruz
+        with open("adsense.html", 'r', encoding='utf-8') as f:
+            source_code = f.read()
+        
+        # Streamlit içinde gösteriyoruz
+        # height=250 reklam boyutu için genelde idealdir, 
+        # ama reklamın türüne göre (kare, dikey) artırabilirsin.
+        components.html(source_code, height=250, scrolling=False)
+        
+    except FileNotFoundError:
+        st.error("adsense.html dosyası bulunamadı!")
+
 
 def inject_ga():
     GA_ID = "G-L36E2X2BQK"
