@@ -264,14 +264,42 @@ def extract_team_names_from_card(card):
     Aynı matchup kartı içinden GERÇEK takım isimlerini
     teamId içeren linklerden çeker (STABİL YÖNTEM)
     """
-    team_links = card.find_all("a", href=lambda x: x and "teamId=" in x, limit=2)  # Limit eklendi
+    # Önce teamId linklerini dene
+    team_links = card.find_all("a", href=lambda x: x and "teamId=" in x)
 
     names = []
     for link in team_links:
         text = link.get_text(strip=True)
         if text and len(text) > 3:
             names.append(text)
+            if len(names) >= 2:  # İlk 2 bulunca dur
+                break
 
+    if len(names) >= 2:
+        return names[0], names[1]
+    
+    # Fallback: Takım isimlerini başka yollarla bul
+    # Class veya ID'si "team" içeren elementleri ara
+    team_elements = card.find_all(['div', 'span', 'a'], class_=re.compile(r'team.*name', re.I))
+    for elem in team_elements:
+        text = elem.get_text(strip=True)
+        if text and len(text) > 3 and text not in names:
+            names.append(text)
+            if len(names) >= 2:
+                break
+    
+    if len(names) >= 2:
+        return names[0], names[1]
+    
+    # Son fallback: h2, h3 başlıkları kontrol et
+    headers = card.find_all(['h2', 'h3', 'h4'])
+    for header in headers:
+        text = header.get_text(strip=True)
+        if text and len(text) > 3 and not any(x in text.upper() for x in ['VS', 'SCORE', 'MATCHUP']):
+            names.append(text)
+            if len(names) >= 2:
+                break
+    
     if len(names) >= 2:
         return names[0], names[1]
 
