@@ -12,47 +12,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 def render_adsense():
     try:
-        # Dosyayı "okuma" modunda açıyoruz
         with open("adsense.html", 'r', encoding='utf-8') as f:
             source_code = f.read()
         
-        # Streamlit içinde gösteriyoruz
-        # height=250 reklam boyutu için genelde idealdir, 
-        # ama reklamın türüne göre (kare, dikey) artırabilirsin.
-        components.html(source_code, height=250, scrolling=False)
+        # Height'i artıralım ki reklam görünsün
+        components.html(source_code, height=300, scrolling=False)
         
     except FileNotFoundError:
         st.error("adsense.html dosyası bulunamadı!")
 
-
-def inject_ga():
-    GA_ID = "G-L36E2X2BQK"
-    
-    # Google Analytics ve AdSense kodlarını tek bir HTML string içinde birleştiriyoruz
-    index_html = f"""
-    <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){{dataLayer.push(arguments);}}
-      gtag('js', new Date());
-
-      gtag('config', '{GA_ID}', {{
-        'cookie_flags': 'SameSite=None;Secure',
-        'page_location': 'https://hooplifenba.com',
-        'page_title': 'HoopLife NBA'
-      }});
-    </script>
-    
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3882980321453628"
-     crossorigin="anonymous"></script>
-    """
-    
-    # height=0, width=0 ile görünmez bir iframe içinde çalıştırıyoruz
-    components.html(index_html, height=0, width=0)
-
-inject_ga() 
 
 # Authentication kontrolü (opsiyonel)
 from auth import check_authentication, logout
@@ -540,6 +511,11 @@ def home_page():
         prefs = db.get_user_preferences(user_id)
     else:
         prefs = None
+
+    if not is_pro:
+        st.markdown("---")
+        render_adsense()
+        st.markdown("---")    
     
     # Sidebar'dan weights'i de alıyoruz
     date, weights, run = render_sidebar()
