@@ -3,12 +3,8 @@ from datetime import datetime, timedelta
 
 
 def render_sidebar():
-    # ---------------------------------------------------------
-    # 1. STREAMLIT DEFAULT NAVIGASYONU GİZLEME (CSS)
-    # ---------------------------------------------------------
-    # ---------------------------------------------------------
-    # 2. MEVCUT KODUNUZ
-    # ---------------------------------------------------------
+
+
     st.sidebar.markdown("### Analysis Parameters")
 
     date = st.sidebar.date_input(
