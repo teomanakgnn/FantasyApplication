@@ -256,6 +256,107 @@ class Database:
             return [dict(item) for item in watchlist]
         except Exception as e:
             return []
+        
+    # ==================== DAILY TRIVIA ====================
+    
+    def get_daily_trivia(self):
+        """Bugünün trivia sorusunu getir"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                "SELECT * FROM trivia_questions WHERE game_date = %s",
+                (datetime.now().date(),)
+            )
+            question = cursor.fetchone()
+            cursor.close()
+            return dict(question) if question else None
+        except Exception as e:
+            st.error(f"Trivia error: {e}")
+            return None
+
+    def get_user_streak(self, user_id):
+        """Kullanıcının mevcut serisini getir"""
+        conn = self.get_connection()
+        if not conn:
+            return 0
+            
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT current_streak FROM users WHERE id = %s", (user_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result and result[0] is not None else 0
+        except Exception as e:
+            return 0
+
+    def mark_user_trivia_played(self, user_id):
+        """Kullanıcının bugün trivia oynadığını işaretle ve STREAK hesapla"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+        
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Önce kullanıcının son oynama tarihini ve mevcut serisini al
+            cursor.execute("SELECT last_trivia_date, current_streak FROM users WHERE id = %s", (user_id,))
+            result = cursor.fetchone()
+            
+            last_date = result[0]
+            current_streak = result[1] if result[1] is not None else 0
+            
+            today = datetime.now().date()
+            yesterday = today - timedelta(days=1)
+            
+            new_streak = 1 # Varsayılan: Zincir kırıldı veya yeni başladı
+            
+            if last_date == today:
+                # Zaten bugün oynanmış (Hata önlemi)
+                new_streak = current_streak
+            elif last_date == yesterday:
+                # Dün oynamış, seriyi artır!
+                new_streak = current_streak + 1
+            else:
+                # Dün oynamamış, seri 1'e döner
+                new_streak = 1
+            
+            # 2. Veritabanını güncelle
+            cursor.execute(
+                "UPDATE users SET last_trivia_date = %s, current_streak = %s WHERE id = %s",
+                (today, new_streak, user_id)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            conn.rollback()
+            st.error(f"Streak update error: {e}")
+            return False
+            
+    def check_user_played_trivia_today(self, user_id):
+        """Kullanıcı bugün trivia oynadı mı?"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+            
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT last_trivia_date FROM users WHERE id = %s",
+                (user_id,)
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            
+            if result and result[0] == datetime.now().date():
+                return True
+            return False
+        except Exception as e:
+            return False
     
     def remove_from_watchlist(self, watchlist_id):
         """Watchlist'ten oyuncu sil"""

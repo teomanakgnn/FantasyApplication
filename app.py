@@ -1,6 +1,8 @@
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from datetime import datetime
+import textwrap
 
 # --------------------
 # 1. CONFIG (EN BAŞA EKLENMELİ)
@@ -12,9 +14,113 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
-    <meta name="google-adsense-account" content="ca-pub-3882980321453628">
-""", unsafe_allow_html=True)
+
+# --------------------
+# TRIVIA LOGIC
+# --------------------
+# Bu import'u dosyanın en başına eklemeyi unutmayın
+import textwrap 
+
+@st.dialog("🏀 Günün NBA Sorusu", width="small")
+def show_trivia_modal(question, user_id=None, current_streak=0):
+    
+    # 1. HTML İÇERİĞİNİ HAZIRLA
+    # Not: Boşluk sorunu olmaması için HTML'i tek satırda veya sola yaslı yazıyoruz
+    if user_id:
+        # Giriş yapmış kullanıcı: Kırmızı/Alevli Stil
+        badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
+        icon = "🔥"
+        text = f"{current_streak} Gün"
+    else:
+        # Misafir kullanıcı: Şeffaf/Beyaz Stil
+        badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
+        icon = "🔒"
+        text = "Giriş Yapılmadı"
+
+    # HTML stringini girintisiz oluşturuyoruz
+    html_content = f"""
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <div style="font-weight: 600; font-size: 1rem;">
+            📅 {datetime.now().strftime('%d %B')}
+        </div>
+        <div style="{badge_style} padding: 5px 10px; border-radius: 12px; font-size: 0.85em; display: flex; align-items: center; gap: 5px;">
+            <span>{icon}</span> {text}
+        </div>
+    </div>
+    """
+
+    # 2. HTML'İ EKRANA BAS
+    # textwrap.dedent ile baştaki gereksiz boşlukları siliyoruz ki Markdown kod sanmasın
+    st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
+    
+    # ---------------------------------------------------------
+    # SORU VE FORM KISMI
+    st.markdown(f"#### {question['question']}")
+    
+    with st.form("trivia_form", border=False):
+        options = {
+            "A": question['option_a'],
+            "B": question['option_b'],
+            "C": question['option_c'],
+            "D": question['option_d']
+        }
+        
+        choice = st.radio(
+            "Cevabınız:",
+            list(options.keys()),
+            format_func=lambda x: f"{x}) {options[x]}",
+            index=None
+        )
+        
+        submitted = st.form_submit_button("Yanıtla", use_container_width=True, type="primary")
+        
+    if submitted:
+        if not choice:
+            st.warning("Lütfen bir şık seçin.")
+        else:
+            is_correct = (choice == question['correct_option'])
+            
+            if is_correct:
+                st.success("✅ Doğru Cevap!")
+                st.balloons()
+            else:
+                correct_text = options[question['correct_option']]
+                st.error(f"❌ Yanlış. Doğru cevap: {question['correct_option']}) {correct_text}")
+            
+            if question.get('explanation'):
+                st.info(f"ℹ️ {question['explanation']}")
+            
+            if user_id:
+                db.mark_user_trivia_played(user_id)
+                st.toast(f"Seri Güncellendi! ({current_streak} -> {current_streak + 1 if is_correct else 1})", icon="🔥")
+            else:
+                st.session_state['guest_trivia_played_date'] = str(datetime.now().date())
+                
+            st.caption("Pencereyi kapatmak için dışarı tıklayabilirsiniz.")
+
+def handle_daily_trivia():
+    # 1. Bugünün sorusu var mı?
+    trivia = db.get_daily_trivia()
+    if not trivia:
+        return
+
+    # 2. Kullanıcıyı Session State'ten güvenli şekilde al
+    current_user = st.session_state.get('user')
+
+    if current_user:
+        # DB Kontrolü: Bugün oynadı mı?
+        has_played = db.check_user_played_trivia_today(current_user['id'])
+        
+        if not has_played:
+            # Oynamadıysa, mevcut serisini çek
+            streak = db.get_user_streak(current_user['id'])
+            show_trivia_modal(trivia, current_user['id'], streak)
+            
+    else:
+        # Misafir Kullanıcı Kontrolü
+        today_str = str(datetime.now().date())
+        if st.session_state.get('guest_trivia_played_date') != today_str:
+            show_trivia_modal(trivia, None, 0)
 
 def render_adsense():
     try:
@@ -506,6 +612,7 @@ def show_boxscore_dialog(game_info):
 # MAIN PAGE
 # --------------------
 def home_page():
+    handle_daily_trivia()
     render_header()
     
     # Load user preferences if logged in
