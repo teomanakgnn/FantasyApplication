@@ -30,11 +30,6 @@ def get_cookie_manager():
     return manager
 
 # --------------------
-# TRIVIA LOGIC
-# --------------------
-# Bu import'u dosyanın en başına eklemeyi unutmayın
-
-# --------------------
 # TRIVIA LOGIC (GÜNCELLENMİŞ - COOKIE DESTEKLİ)
 # --------------------
 @st.dialog("🏀 Günün NBA Sorusu", width="small")
@@ -44,9 +39,9 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     # Eğer kullanıcı az önce cevapladıysa ve pencere yenilendiyse,
     # formu tekrar göstermek yerine direkt başarı mesajını gösteriyoruz.
     if st.session_state.get('trivia_success_state', False):
-        st.success("✅ Doğru Cevap!")
+        st.success("✅ Correct Answer!")
         st.info(f"ℹ️ {question.get('explanation', '')}")
-        st.caption("Yarınki soruda görüşmek üzere! 👋")
+        st.caption("See you on tomorrow! 👋")
         
         # Kapat butonu (Opsiyonel, zaten dışarı tıklayınca kapanır)
         if st.button("Kapat", type="primary"):
@@ -62,12 +57,12 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         # Giriş yapmış: Alevli
         badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
         icon = "🔥"
-        text = f"{current_streak} Gün"
+        text = f"{current_streak} Day"
     else:
         # Misafir: Kilitli
         badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
         icon = "🔒"
-        text = "Giriş Yapılmadı"
+        text = "Login to save your daily streak."
 
     html_content = f"""
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -86,12 +81,12 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     
     with st.form("trivia_form", border=False):
         options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
-        choice = st.radio("Cevabınız:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
-        submitted = st.form_submit_button("Yanıtla", use_container_width=True, type="primary")
+        choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
+        submitted = st.form_submit_button("Answer", use_container_width=True, type="primary")
         
     if submitted:
         if not choice:
-            st.warning("Lütfen bir şık seçin.")
+            st.warning("Please select an option.")
         else:
             is_correct = (choice == question['correct_option'])
             if is_correct:
@@ -102,7 +97,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
                 today_str = str(datetime.now().date())
                 if user_id:
                     db.mark_user_trivia_played(user_id)
-                    st.toast(f"Seri Güncellendi!", icon="🔥")
+                    st.toast(f"Daily streak updated!", icon="🔥")
                 else:
                     cookie_manager = get_cookie_manager()
                     cookie_manager.set('guest_trivia_date', today_str, key="set_trivia_cookie")
@@ -116,7 +111,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             else:
                 # --- YANLIŞ CEVAP ---
                 correct_text = options[question['correct_option']]
-                st.error(f"❌ Yanlış. Doğru cevap: {question['correct_option']}) {correct_text}")
+                st.error(f"❌ Wrong. Correct Answer: {question['correct_option']}) {correct_text}")
                 if question.get('explanation'):
                     st.info(f"ℹ️ {question['explanation']}")
 
@@ -154,7 +149,7 @@ def handle_daily_trivia():
     # Karar verildiyse Modalı Aç
     if should_show:
         show_trivia_modal(trivia, u_id, streak)
-        
+
 def render_adsense():
     try:
         with open("adsense.html", 'r', encoding='utf-8') as f:
