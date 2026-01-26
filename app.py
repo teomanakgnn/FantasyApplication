@@ -15,6 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # Çerez Yöneticisini Önbelleğe Alarak Başlat
 # --- ESKİ HALİNDEKİ @st.cache_resource SATIRINI SİLİN ---
 # Sadece şu fonksiyonu kullanın:
@@ -219,6 +220,7 @@ if embed_mode:
 st.markdown(f"""
     <style>
         /* Mevcut ayarlarınız */
+            
         .stApp {{ 
             background-image: none !important;
             background-color: #0e1117;
@@ -284,6 +286,12 @@ if "slider_index" not in st.session_state:
 is_authenticated = check_authentication()
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
+
+
+st.sidebar.image(
+        "HoopLifeNBA_logo.png",             # Resim yolu veya URL'si
+        use_container_width=True   # Sidebar genişliğine otomatik sığdırır
+    )
 
 # Sidebar - User Section
 with st.sidebar:
