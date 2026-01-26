@@ -16,9 +16,18 @@ st.set_page_config(
 )
 
 # Çerez Yöneticisini Önbelleğe Alarak Başlat
-@st.cache_resource(experimental_allow_widgets=True)
+# --- ESKİ HALİNDEKİ @st.cache_resource SATIRINI SİLİN ---
+# Sadece şu fonksiyonu kullanın:
 def get_cookie_manager():
-    return stx.CookieManager()
+    # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
+    if 'cookie_manager' in st.session_state:
+        return st.session_state.cookie_manager
+    
+    # Yoksa yeni oluştur ve session state'e kaydet
+    # key="nba_cookies" ekleyerek benzersiz olmasını sağlıyoruz
+    manager = stx.CookieManager(key="nba_cookies")
+    st.session_state.cookie_manager = manager
+    return manager
 
 # --------------------
 # TRIVIA LOGIC
@@ -31,17 +40,34 @@ def get_cookie_manager():
 @st.dialog("🏀 Günün NBA Sorusu", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
     
-    # 1. HTML İÇERİK HAZIRLIĞI
+    # --- 1. OTURUM KONTROLÜ (CEVAPLANDI MI?) ---
+    # Eğer kullanıcı az önce cevapladıysa ve pencere yenilendiyse,
+    # formu tekrar göstermek yerine direkt başarı mesajını gösteriyoruz.
+    if st.session_state.get('trivia_success_state', False):
+        st.success("✅ Doğru Cevap!")
+        st.info(f"ℹ️ {question.get('explanation', '')}")
+        st.caption("Yarınki soruda görüşmek üzere! 👋")
+        
+        # Kapat butonu (Opsiyonel, zaten dışarı tıklayınca kapanır)
+        if st.button("Kapat", type="primary"):
+            # Durumu sıfırla ve sayfayı yenile
+            del st.session_state['trivia_success_state']
+            if 'trivia_force_open' in st.session_state:
+                del st.session_state['trivia_force_open']
+            st.rerun()
+        return
+
+    # --- 2. HTML BAŞLIK KISMI ---
     if user_id:
         # Giriş yapmış: Alevli
         badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
         icon = "🔥"
-        text = f"{current_streak} Day"
+        text = f"{current_streak} Gün"
     else:
         # Misafir: Kilitli
         badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
         icon = "🔒"
-        text = "Login to record your daily streak."
+        text = "Giriş Yapılmadı"
 
     html_content = f"""
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -55,51 +81,46 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     """
     st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
     
-    # 2. SORU GÖSTERİMİ
+    # --- 3. SORU VE FORM ---
     st.markdown(f"#### {question['question']}")
     
     with st.form("trivia_form", border=False):
         options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
-        choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
+        choice = st.radio("Cevabınız:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
         submitted = st.form_submit_button("Yanıtla", use_container_width=True, type="primary")
         
     if submitted:
         if not choice:
-            st.warning("Please select an option.")
+            st.warning("Lütfen bir şık seçin.")
         else:
             is_correct = (choice == question['correct_option'])
             if is_correct:
-                st.success("✅ Correct Answer!")
+                # --- DOĞRU CEVAP İŞLEMLERİ ---
                 st.balloons()
+                
+                # Veritabanı/Cookie İşlemleri
+                today_str = str(datetime.now().date())
+                if user_id:
+                    db.mark_user_trivia_played(user_id)
+                    st.toast(f"Seri Güncellendi!", icon="🔥")
+                else:
+                    cookie_manager = get_cookie_manager()
+                    cookie_manager.set('guest_trivia_date', today_str, key="set_trivia_cookie")
+
+                # ÖNEMLİ: "Pencereyi Açık Tut" bayrağını kaldırıyoruz
+                # Çünkü "Success State" bayrağını dikiyoruz.
+                st.session_state['trivia_success_state'] = True
+                st.session_state['trivia_force_open'] = True # Handle fonksiyonu için ipucu
+                st.rerun() # Sayfayı yenile ki "Başarı Modu" (en üstteki blok) çalışsın
+                
             else:
+                # --- YANLIŞ CEVAP ---
                 correct_text = options[question['correct_option']]
-                st.error(f"❌ Wrong. Corrent Answer: {question['correct_option']}) {correct_text}")
-            
-            if question.get('explanation'):
-                st.info(f"ℹ️ {question['explanation']}")
-            
-            # --- KAYIT İŞLEMLERİ ---
-            today_str = str(datetime.now().date())
-            
-            if user_id:
-                # Üye için veritabanına kaydet
-                db.mark_user_trivia_played(user_id)
-                st.toast(f"Streak Updated!", icon="🔥")
-            else:
-                # Misafir için ÇEREZ (Cookie) kaydet
-                # Expires: 1 gün sonra silinsin
-                cookie_manager = get_cookie_manager()
-                cookie_manager.set('guest_trivia_date', today_str, key="set_trivia_cookie")
-            
-            # Session state'i de güncelle (Anlık kapanma için)
-            st.session_state['trivia_just_played'] = True
-            st.caption("Close the window by clicking elsewhere.")
+                st.error(f"❌ Yanlış. Doğru cevap: {question['correct_option']}) {correct_text}")
+                if question.get('explanation'):
+                    st.info(f"ℹ️ {question['explanation']}")
 
 def handle_daily_trivia():
-    # Bu oturumda zaten çözdüyse çık
-    if st.session_state.get('trivia_just_played', False):
-        return
-
     # Soru verisini çek
     trivia = db.get_daily_trivia()
     if not trivia:
@@ -107,24 +128,33 @@ def handle_daily_trivia():
 
     current_user = st.session_state.get('user')
     today_str = str(datetime.now().date())
+    
+    # Pencere açılmalı mı? Varsayılan: Hayır
+    should_show = False
+    streak = 0
+    u_id = None
 
     if current_user:
-        # --- ÜYE KONTROLÜ (DB) ---
-        has_played = db.check_user_played_trivia_today(current_user['id'])
-        if not has_played:
-            streak = db.get_user_streak(current_user['id'])
-            show_trivia_modal(trivia, current_user['id'], streak)
-            
+        u_id = current_user['id']
+        has_played = db.check_user_played_trivia_today(u_id)
+        # Eğer oynamadıysa VEYA az önce oynayıp başarı ekranındaysa göster
+        if not has_played or st.session_state.get('trivia_force_open', False):
+            should_show = True
+            streak = db.get_user_streak(u_id)
     else:
-        # --- MİSAFİR KONTROLÜ (COOKIE) ---
+        # Misafir
         cookie_manager = get_cookie_manager()
-        # Çerezi oku
         last_played_cookie = cookie_manager.get('guest_trivia_date')
         
-        # Çerez yoksa veya bugünün tarihi değilse göster
-        if last_played_cookie != today_str:
-            show_trivia_modal(trivia, None, 0)
+        # Eğer cookie yoksa VEYA az önce oynayıp başarı ekranındaysa göster
+        if last_played_cookie != today_str or st.session_state.get('trivia_force_open', False):
+            should_show = True
+            streak = 0
 
+    # Karar verildiyse Modalı Aç
+    if should_show:
+        show_trivia_modal(trivia, u_id, streak)
+        
 def render_adsense():
     try:
         with open("adsense.html", 'r', encoding='utf-8') as f:
