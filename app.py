@@ -4,6 +4,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 import textwrap
 import extra_streamlit_components as stx
+import time 
 
 # --------------------
 # 1. CONFIG (EN BAŞA EKLENMELİ)
@@ -33,34 +34,45 @@ def get_cookie_manager():
 # --------------------
 # TRIVIA LOGIC (GÜNCELLENMİŞ - COOKIE DESTEKLİ)
 # --------------------
+
 @st.dialog("🏀 Günün NBA Sorusu", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
     
-    # --- 1. OTURUM KONTROLÜ (CEVAPLANDI MI?) ---
-    # Eğer kullanıcı az önce cevapladıysa ve pencere yenilendiyse,
-    # formu tekrar göstermek yerine direkt başarı mesajını gösteriyoruz.
+    # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_success_state', False):
         st.success("✅ Correct Answer!")
         st.info(f"ℹ️ {question.get('explanation', '')}")
-        st.caption("See you on tomorrow! 👋")
+        st.caption("See you tomorrow! 👋")
         
-        # Kapat butonu (Opsiyonel, zaten dışarı tıklayınca kapanır)
-        if st.button("Kapat", type="primary"):
-            # Durumu sıfırla ve sayfayı yenile
+        if st.button("Close", type="primary"):
             del st.session_state['trivia_success_state']
             if 'trivia_force_open' in st.session_state:
                 del st.session_state['trivia_force_open']
             st.rerun()
         return
 
-    # --- 2. HTML BAŞLIK KISMI ---
+    # --- 2. HATA EKRANI (YANLIŞ CEVAP VERİLDİYSE) ---
+    if st.session_state.get('trivia_error_state', False):
+        error_info = st.session_state.get('trivia_error_info', {})
+        st.error(f"❌ Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
+        if error_info.get('explanation'):
+            st.info(f"ℹ️ {error_info.get('explanation')}")
+        st.caption("Better luck tomorrow! 👋")
+        
+        if st.button("Close", type="primary", key="close_error"):
+            del st.session_state['trivia_error_state']
+            del st.session_state['trivia_error_info']
+            if 'trivia_force_open' in st.session_state:
+                del st.session_state['trivia_force_open']
+            st.rerun()
+        return
+
+    # --- 3. HTML BAŞLIK KISMI ---
     if user_id:
-        # Giriş yapmış: Alevli
         badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
         icon = "🔥"
         text = f"{current_streak} Day"
     else:
-        # Misafir: Kilitli
         badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
         icon = "🔒"
         text = "Login to save your daily streak."
@@ -77,7 +89,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     """
     st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
     
-    # --- 3. SORU VE FORM ---
+    # --- 4. SORU VE FORM ---
     st.markdown(f"#### {question['question']}")
     
     with st.form("trivia_form", border=False):
@@ -90,67 +102,131 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             st.warning("Please select an option.")
         else:
             is_correct = (choice == question['correct_option'])
+            today_str = str(datetime.now().date())
+            
+            if not user_id:
+                cookie_manager = get_cookie_manager()
+            
             if is_correct:
-                # --- DOĞRU CEVAP İŞLEMLERİ ---
                 st.balloons()
-                
-                # Veritabanı/Cookie İşlemleri
-                today_str = str(datetime.now().date())
                 if user_id:
                     db.mark_user_trivia_played(user_id)
                     st.toast(f"Daily streak updated!", icon="🔥")
                 else:
-                    cookie_manager = get_cookie_manager()
-                    cookie_manager.set('guest_trivia_date', today_str, key="set_trivia_cookie")
+                    # Key her seferinde benzersiz olsun ki zorla update etsin
+                    unique_key = f"set_correct_{int(datetime.now().timestamp())}"
+                    cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
+                    # Session state'i de hemen güncelle (yedek)
+                    st.session_state[f'trivia_played_{today_str}'] = True
 
-                # ÖNEMLİ: "Pencereyi Açık Tut" bayrağını kaldırıyoruz
-                # Çünkü "Success State" bayrağını dikiyoruz.
                 st.session_state['trivia_success_state'] = True
-                st.session_state['trivia_force_open'] = True # Handle fonksiyonu için ipucu
-                st.rerun() # Sayfayı yenile ki "Başarı Modu" (en üstteki blok) çalışsın
+                st.session_state['trivia_force_open'] = True
+                st.rerun()
                 
             else:
-                # --- YANLIŞ CEVAP ---
+                if user_id:
+                    db.mark_user_trivia_played(user_id)
+                else:
+                    unique_key = f"set_wrong_{int(datetime.now().timestamp())}"
+                    cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
+                    # Session state'i de hemen güncelle (yedek)
+                    st.session_state[f'trivia_played_{today_str}'] = True
+                
                 correct_text = options[question['correct_option']]
-                st.error(f"❌ Wrong. Correct Answer: {question['correct_option']}) {correct_text}")
-                if question.get('explanation'):
-                    st.info(f"ℹ️ {question['explanation']}")
+                st.session_state['trivia_error_state'] = True
+                st.session_state['trivia_error_info'] = {
+                    'correct_option': question['correct_option'],
+                    'correct_text': correct_text,
+                    'explanation': question.get('explanation', '')
+                }
+                st.session_state['trivia_force_open'] = True
+                st.rerun()
 
 def handle_daily_trivia():
-    # Soru verisini çek
+    # 1. Soru verisi yoksa hiç uğraşma
     trivia = db.get_daily_trivia()
     if not trivia:
         return
 
-    current_user = st.session_state.get('user')
+    # 2. Temel Değişkenler
     today_str = str(datetime.now().date())
+    current_user = st.session_state.get('user')
+    force_open = st.session_state.get('trivia_force_open', False)
     
-    # Pencere açılmalı mı? Varsayılan: Hayır
+    # Session state yedeği (Çerez silinse bile oturum boyunca hatırlasın)
+    session_played_key = f'trivia_played_{today_str}'
+    session_played = st.session_state.get(session_played_key, False)
+    
+    # Cookie yüklenme durumu için flag
+    cookie_ready_key = f'cookie_ready_{today_str}'
+    cookie_is_ready = st.session_state.get(cookie_ready_key, False)
+
     should_show = False
     streak = 0
     u_id = None
 
+    # -------------------------------------------------------
+    # SENARYO A: GİRİŞ YAPMIŞ KULLANICI (Çerez derdi yok)
+    # -------------------------------------------------------
     if current_user:
         u_id = current_user['id']
         has_played = db.check_user_played_trivia_today(u_id)
-        # Eğer oynamadıysa VEYA az önce oynayıp başarı ekranındaysa göster
-        if not has_played or st.session_state.get('trivia_force_open', False):
+        
+        if force_open: # Sonuç ekranı
             should_show = True
             streak = db.get_user_streak(u_id)
-    else:
-        # Misafir
-        cookie_manager = get_cookie_manager()
-        last_played_cookie = cookie_manager.get('guest_trivia_date')
-        
-        # Eğer cookie yoksa VEYA az önce oynayıp başarı ekranındaysa göster
-        if last_played_cookie != today_str or st.session_state.get('trivia_force_open', False):
+        elif not has_played: # Oynamamış
             should_show = True
-            streak = 0
+            streak = db.get_user_streak(u_id)
+        else: # Oynamış
+            should_show = False
+
+    # -------------------------------------------------------
+    # SENARYO B: MİSAFİR KULLANICI (Çerez Kontrolü)
+    # -------------------------------------------------------
+    else:
+        # ÖNCELİK 1: Session state'den kontrol
+        if session_played:
+            # Bugün zaten oynamış
+            if force_open:
+                should_show = True
+                streak = 0
+            else:
+                should_show = False
+        else:
+            # ÖNCELİK 2: Cookie kontrol et
+            cookie_manager = get_cookie_manager()
+            cookies = cookie_manager.get_all()
+
+            # KRİTİK: Cookie yüklenene kadar BEKLE
+            if cookies is None:
+                # Cookie henüz yüklenmedi - HİÇBİR ŞEY GÖSTERME
+                return
+
+            # Cookie yüklendi, ama ilk kez mi yüklendi kontrol et
+            if not cookie_is_ready:
+                # İlk kez yüklendi, flag'i set et ve BİR DAHA BEKLE
+                st.session_state[cookie_ready_key] = True
+                return
+
+            # Artık güvenli bir şekilde cookie'yi okuyabiliriz
+            last_played_cookie = cookies.get('guest_trivia_date')
+
+            if force_open:
+                should_show = True
+            elif last_played_cookie == today_str:
+                # Bugün oynamış - session state'e de kaydet
+                st.session_state[session_played_key] = True
+                should_show = False
+            else:
+                # Bugün oynamamış
+                should_show = True
+                streak = 0
 
     # Karar verildiyse Modalı Aç
     if should_show:
         show_trivia_modal(trivia, u_id, streak)
-
+        
 def render_adsense():
     try:
         with open("adsense.html", 'r', encoding='utf-8') as f:
