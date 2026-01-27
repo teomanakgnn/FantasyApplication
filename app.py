@@ -35,7 +35,7 @@ def get_cookie_manager():
 # TRIVIA LOGIC (GÜNCELLENMİŞ - COOKIE DESTEKLİ)
 # --------------------
 
-@st.dialog("🏀 Günün NBA Sorusu", width="small")
+@st.dialog("🏀 Daily NBA Trivia Question", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
     
     # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
@@ -226,7 +226,7 @@ def handle_daily_trivia():
     # Karar verildiyse Modalı Aç
     if should_show:
         show_trivia_modal(trivia, u_id, streak)
-        
+
 def render_adsense():
     try:
         with open("adsense.html", 'r', encoding='utf-8') as f:
