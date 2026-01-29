@@ -5,6 +5,8 @@ from datetime import datetime
 import textwrap
 import extra_streamlit_components as stx
 import time 
+from services.espn_api import (calculate_game_score, get_score_color)
+
 
 # --------------------
 # 1. CONFIG (EN BAŞA EKLENMELİ)
@@ -293,89 +295,53 @@ if embed_mode:
         .reportview-container .main footer {display: none !important;}
     """
 
+# --------------------
+# STYLES & CSS
+# --------------------
 st.markdown(f"""
     <style>
-        /* 1. GENEL AYARLAR */
-        .stApp {{ 
-            background-image: none !important;
-            background-color: #0e1117;
+        /* 1. TEMEL SAYFA DÜZENİ */
+        .main .block-container {{
+            padding-top: 1.5rem !important;
         }}
         
-        /* ----------------------------------------------------------- */
-        /* 2. HEADER GİZLEME VE BUTONU KURTARMA (VISIBILITY YÖNTEMİ) */
-        /* ----------------------------------------------------------- */
-        
-        /* Header'ı tamamen görünmez yap (yer kaplamasın diye height 0 değil, visibility kullanıyoruz) */
-        [data-testid="stHeader"] {{
-            visibility: hidden !important;  /* Görünmez yap */
-            height: 0px !important;         /* Yer kaplamasın */
-            padding-top: 0px !important;
-        }}
-
-        /* Süslemeleri gizle */
+        /* 2. GEREKSİZ ELEMENTLERİ GİZLE */
+        [data-testid="stHeader"],
+        [data-testid="stToolbar"],
         [data-testid="stDecoration"] {{
             display: none !important;
         }}
-
-        /* BUTONU ZORLA GÖRÜNÜR YAP (Çocuğu ebeveynden kurtar) */
+        
+        /* 3. SADECE SIDEBAR TOGGLE BUTON STİLLERİ - ÇOK BASİT TUT */
         [data-testid="stSidebarCollapsedControl"] {{
-            visibility: visible !important; /* Ebeveyni gizli olsa bile sen görün! */
-            display: block !important;
-            
-            /* Konumlandırma - Ekranın sol üst köşesine çivile */
             position: fixed !important;
-            top: 20px !important;
-            left: 20px !important;
-            z-index: 1000005 !important; /* Her şeyin üstünde */
-            
-            /* Stil - Rahat görünsün */
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            top: 12px !important;
+            left: 12px !important;
+            z-index: 999999 !important;
+            background: rgba(14, 17, 23, 0.9) !important;
+            border: 1px solid rgba(255,255,255,0.3) !important;
             border-radius: 8px !important;
-            padding: 0.5rem !important;
-            width: 44px !important;
-            height: 44px !important;
+            padding: 8px !important;
+            width: 40px !important;
+            height: 40px !important;
+            transition: background-color 0.2s ease !important;
         }}
         
-        /* Hover efekti */
         [data-testid="stSidebarCollapsedControl"]:hover {{
-            background-color: rgba(255, 255, 255, 0.3) !important;
-            cursor: pointer;
+            background: #ff4b4b !important;
+            border-color: #ff4b4b !important;
         }}
-
-        /* İKON RENGİNİ GARANTİLEME (Bazen ikon siyah kalabiliyor) */
+        
         [data-testid="stSidebarCollapsedControl"] svg {{
-            fill: white !important;
-            stroke: white !important;
+            color: white !important;
         }}
-
-        /* ----------------------------------------------------------- */
-        /* 3. LOGOYU EN ÜSTE ALMA (FLEX ORDER) */
-        /* ----------------------------------------------------------- */
-        [data-testid="stSidebarContent"] {{
-            display: flex;
-            flex-direction: column;
+        
+        /* 4. FOOTER VE DİĞER ELEMENTLER */
+        [data-testid="stStatusWidget"],
+        footer,
+        [data-testid="stBottom"] {{
+            display: none !important;
         }}
-        [data-testid="stSidebarUserContent"] {{
-            order: 1;
-            padding-top: 20px;
-        }}
-        [data-testid="stSidebarNav"] {{
-            order: 2;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            margin-top: 1rem;
-            padding-top: 1rem;
-        }}
-
-        /* ----------------------------------------------------------- */
-        /* 4. DİĞER GİZLEMELER */
-        /* ----------------------------------------------------------- */
-        [data-testid="stToolbar"] {{ display: none !important; }}
-        .stDeployButton {{ display: none !important; }}
-        #MainMenu {{ display: none !important; }}
-        footer {{ display: none !important; }}
-        [data-testid="stBottom"] {{ display: none !important; }}
         
         {extra_styles}
     </style>
@@ -760,6 +726,7 @@ def show_boxscore_dialog(game_info):
 # --------------------
 # MAIN PAGE
 # --------------------
+
 def home_page():
     handle_daily_trivia()
     render_header()
@@ -833,6 +800,22 @@ def home_page():
             for i, g in enumerate(row_games):
                 with cols[i]:
                     with st.container(border=True):
+                        # --- YENİ EKLENEN KISIM: HEYECAN PUANI ---
+                        game_score = calculate_game_score(g.get('home_score'), g.get('away_score'), g.get('status'))
+                        
+                        # Maç bitmişse veya oynanıyorsa puanı göster
+                        if game_score:
+                            score_color = get_score_color(game_score)
+                            st.markdown(f"""
+                                <div style="position: absolute; top: 10px; right: 10px; 
+                                            background-color: {score_color}; color: white; 
+                                            padding: 2px 8px; border-radius: 10px; 
+                                            font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                    ★ {game_score}
+                                </div>
+                            """, unsafe_allow_html=True)
+                        # ------------------------------------------
+
                         st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:10px;'>{g.get('status')}</div>", unsafe_allow_html=True)
                         
                         c_away, c_score, c_home = st.columns([1, 1.5, 1])
@@ -959,4 +942,6 @@ st.markdown("""
     hideFooter();
     setInterval(hideFooter, 1000);
 </script>
+            
 """, unsafe_allow_html=True)
+

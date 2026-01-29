@@ -1002,6 +1002,206 @@ def get_active_players_stats(days=None, season_stats=True):
 
 
 
+def calculate_game_score(home_score, away_score, status_desc, 
+                        home_offensive_rating=None, away_offensive_rating=None,
+                        home_defensive_rating=None, away_defensive_rating=None,
+                        lead_changes=None, home_team_stats=None, away_team_stats=None):
+    """
+    Maçın heyecan düzeyini 10 üzerinden hesaplar.
+    
+    Parametreler:
+        home_score, away_score: Maç skoru
+        status_desc: Maç durumu ("OT", "Final" vb.)
+        home_offensive_rating, away_offensive_rating: Takım sezon ortalaması offensive rating
+        home_defensive_rating, away_defensive_rating: Takım sezon ortalaması defensive rating
+        lead_changes: Maçtaki liderlik değişim sayısı
+        home_team_stats, away_team_stats: Takım sezon istatistikleri (dict: {'offensive_rating': x, 'defensive_rating': y})
+    
+    Kriterler:
+        - Skor farkı (40%)
+        - Tempo/Toplam skor (15%)
+        - Liderlik değişimleri (25%)
+        - Offensive/Defensive performans (15%)
+        - Uzatma bonusu (5%)
+    """
+    try:
+        h = int(home_score)
+        a = int(away_score)
+    except (ValueError, TypeError):
+        return None  # Maç başlamamış
+
+    # Stats'ten rating'leri al (eğer dict olarak gönderildiyse)
+    if home_team_stats:
+        home_offensive_rating = home_team_stats.get('offensive_rating', home_offensive_rating)
+        home_defensive_rating = home_team_stats.get('defensive_rating', home_defensive_rating)
+    if away_team_stats:
+        away_offensive_rating = away_team_stats.get('offensive_rating', away_offensive_rating)
+        away_defensive_rating = away_team_stats.get('defensive_rating', away_defensive_rating)
+
+    # ============================================
+    # 1. TEMEL PUAN
+    # ============================================
+    score = 5.0
+    
+    diff = abs(h - a)
+    total_points = h + a
+    
+    # ============================================
+    # 2. FARK FAKTÖRÜ (%40 Etki - En Önemli)
+    # ============================================
+    if diff == 0:
+        score += 4.0       # Berabere (Canlı maç için)
+    elif diff <= 3:
+        score += 3.5       # Tek sayı farkı - kritik
+    elif diff <= 6:
+        score += 3.0       # İki top maçı
+    elif diff <= 10:
+        score += 2.0       # Yakın maç
+    elif diff <= 15:
+        score += 0.8       # Normal
+    elif diff <= 20:
+        score -= 0.5       # Fark açılıyor
+    elif diff <= 30:
+        score -= 2.0       # Blowout
+    else:
+        score -= 3.5       # Çok sıkıcı
+    
+    # ============================================
+    # 3. TEMPO/OFFENSIVE RATING FAKTÖRÜ (%15 Etki)
+    # ============================================
+    # NBA 2024-25 sezonu ortalamaları:
+    # - Maç başı toplam skor: ~225-235
+    # - Offensive Rating: ~114-116
+    
+    if total_points > 260:
+        score += 1.5       # All-Star seviyesi tempo
+    elif total_points > 245:
+        score += 1.2       # Çok yüksek tempo
+    elif total_points > 230:
+        score += 0.8       # Yüksek tempo
+    elif total_points > 215:
+        score += 0.3       # Ortalama
+    elif total_points < 200:
+        score -= 0.8       # Düşük tempo
+    elif total_points < 185:
+        score -= 1.5       # Çok kısır oyun
+    
+    # ============================================
+    # 4. LİDERLİK DEĞİŞİMLERİ (%25 Etki - ÇOK ÖNEMLİ)
+    # ============================================
+    if lead_changes is not None:
+        if lead_changes >= 20:
+            score += 2.5       # Sürekli değişen liderlik
+        elif lead_changes >= 15:
+            score += 2.0       # Çok heyecanlı
+        elif lead_changes >= 10:
+            score += 1.5       # Heyecanlı
+        elif lead_changes >= 6:
+            score += 1.0       # İyi mücadele
+        elif lead_changes >= 3:
+            score += 0.5       # Ortalama
+        else:
+            score -= 0.5       # Tek taraflı oyun
+    
+    # ============================================
+    # 5. OFFENSIVE/DEFENSIVE PERFORMANS (%15 Etki)
+    # ============================================
+    # Her iki takımın da sezon ortalamasının üstünde oynaması
+    
+    performance_bonus = 0
+    
+    # Offensive Rating kontrolü
+    if home_offensive_rating and away_offensive_rating:
+        # Maçtaki ortalama offensive rating (basitleştirilmiş hesaplama)
+        # Gerçek ORtg = 100 * (Sayılar / Possessions) ama biz yaklaşık hesap yapalım
+        # Ortalama 48 dakika için ~100 possession varsayalım
+        estimated_possessions = (total_points / 2.2)  # Yaklaşık
+        avg_ortg_in_game = (total_points / estimated_possessions) * 100
+        avg_season_ortg = (home_offensive_rating + away_offensive_rating) / 2
+        
+        if avg_ortg_in_game > avg_season_ortg + 5:
+            performance_bonus += 1.0      # Çok iyi hücum performansı
+        elif avg_ortg_in_game > avg_season_ortg + 2:
+            performance_bonus += 0.5      # İyi hücum
+        elif avg_ortg_in_game < avg_season_ortg - 5:
+            performance_bonus -= 0.8      # Kötü hücum
+    
+    # Defensive Rating kontrolü (düşük = iyi savunma)
+    if home_defensive_rating and away_defensive_rating:
+        avg_season_drtg = (home_defensive_rating + away_defensive_rating) / 2
+        # Eğer maçta az sayı var ama takımlar normalde kötü savunma yapıyorsa bu iyi savunma demek
+        if total_points < 210 and avg_season_drtg > 115:
+            performance_bonus += 0.8      # Beklenmedik savunma şovu
+        elif total_points < 200 and avg_season_drtg > 113:
+            performance_bonus += 0.5      # İyi savunma
+    
+    # Performans bonusunu ekle
+    score += performance_bonus
+    
+    # ============================================
+    # 6. UZATMA FAKTÖRÜ (%5 Bonus)
+    # ============================================
+    if "OT" in status_desc:
+        ot_count = status_desc.count("OT")
+        if ot_count >= 2:
+            score += 2.5      # Çift/üçlü uzatma - efsane
+        else:
+            score += 1.5      # Tek uzatma
+    
+    # ============================================
+    # FINAL: Puanı 1-10 arasına sabitle
+    # ============================================
+    final_score = min(max(score, 1.0), 10.0)
+    
+    return round(final_score, 1)
+
+
+# ============================================
+# KULLANIM ÖRNEKLERİ
+# ============================================
+
+# Örnek 1: Basit kullanım (sadece skor)
+score1 = calculate_game_score(115, 113, "Final")
+print(f"Basit skor: {score1}")
+
+# Örnek 2: Liderlik değişimleriyle
+score2 = calculate_game_score(128, 126, "Final OT", lead_changes=18)
+print(f"Uzatmalı + çok liderlik değişimi: {score2}")
+
+# Örnek 3: Tam veri ile
+score3 = calculate_game_score(
+    home_score=145,
+    away_score=142,
+    status_desc="Final 2OT",
+    home_offensive_rating=118.5,  # Sezon ortalaması
+    away_offensive_rating=116.2,
+    home_defensive_rating=112.0,
+    away_defensive_rating=114.5,
+    lead_changes=22
+)
+print(f"Tüm verilerle: {score3}")
+
+# Örnek 4: Dict ile stats gönderimi
+lakers_stats = {'offensive_rating': 115.5, 'defensive_rating': 113.2}
+celtics_stats = {'offensive_rating': 119.8, 'defensive_rating': 110.5}
+
+score4 = calculate_game_score(
+    home_score=122,
+    away_score=118,
+    status_desc="Final",
+    home_team_stats=lakers_stats,
+    away_team_stats=celtics_stats,
+    lead_changes=12
+)
+print(f"Stats dict ile: {score4}")
+
+def get_score_color(score):
+    """Puana göre renk kodu döndürür"""
+    if score >= 8.5: return "#22c55e" # Yeşil (Harika)
+    elif score >= 7.0: return "#eab308" # Sarı (İyi)
+    elif score >= 5.0: return "#f97316" # Turuncu (Eh)
+    return "#ef4444" # Kırmızı (Sıkıcı)
+
 # KULLANIM ÖRNEKLERİ:
 
 # Sezon başından itibaren (varsayılan):
