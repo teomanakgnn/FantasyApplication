@@ -18,6 +18,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17915489918"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'AW-17915489918');
+    </script>
+""", unsafe_allow_html=True)
+
 
 # Çerez Yöneticisini Önbelleğe Alarak Başlat
 # --- ESKİ HALİNDEKİ @st.cache_resource SATIRINI SİLİN ---
