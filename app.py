@@ -19,6 +19,14 @@ st.set_page_config(
 )
 
 st.markdown("""
+    <div style="display: none;">
+        HoopLife NBA: Günlük NBA oyuncu istatistikleri, fantasy basketbol analizleri, 
+        canlı maç skorları, MVP/LVP sıralamaları ve oyuncu trendleri için en kapsamlı 
+        basketbol analiz platformu.
+    </div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17915489918"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
