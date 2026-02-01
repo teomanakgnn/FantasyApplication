@@ -38,8 +38,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Çerez Yöneticisini Önbelleğe Alarak Başlat
-# --- ESKİ HALİNDEKİ @st.cache_resource SATIRINI SİLİN ---
+st.markdown("""
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3882980321453628"
+     crossorigin="anonymous"></script>
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-3882980321453628"
+     data-ad-slot="REKLAM_ID_BURAYA"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+""", unsafe_allow_html=True)
+
 # Sadece şu fonksiyonu kullanın:
 def get_cookie_manager():
     # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
@@ -58,6 +70,8 @@ def get_cookie_manager():
 
 @st.dialog("🏀 Daily NBA Trivia Question", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
+    st.session_state.active_dialog = 'trivia'
+   
     
     # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_success_state', False):
@@ -69,9 +83,9 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             del st.session_state['trivia_success_state']
             if 'trivia_force_open' in st.session_state:
                 del st.session_state['trivia_force_open']
+            st.session_state.active_dialog = None  # Clear active dialog
             st.rerun()
         return
-
     # --- 2. HATA EKRANI (YANLIŞ CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_error_state', False):
         error_info = st.session_state.get('trivia_error_info', {})
@@ -164,6 +178,10 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
                 st.rerun()
 
 def handle_daily_trivia():
+
+    active = st.session_state.get('active_dialog')
+    if active is not None and active != 'trivia':
+        return
     # 1. Soru verisi yoksa hiç uğraşma
     trivia = db.get_daily_trivia()
     if not trivia:
@@ -331,30 +349,24 @@ st.markdown(f"""
             display: none !important;
         }}
         
-        /* 3. SADECE SIDEBAR TOGGLE BUTON STİLLERİ - ÇOK BASİT TUT */
+        /* 3. SIDEBAR TOGGLE BUTON - MINIMAL STİL (KLIK ARANINI KORUMA) */
         [data-testid="stSidebarCollapsedControl"] {{
-            position: fixed !important;
-            top: 12px !important;
-            left: 12px !important;
             z-index: 999999 !important;
             background: rgba(14, 17, 23, 0.9) !important;
             border: 1px solid rgba(255,255,255,0.3) !important;
             border-radius: 8px !important;
-            padding: 8px !important;
-            width: 40px !important;
-            height: 40px !important;
             transition: background-color 0.2s ease !important;
         }}
-        
+
         [data-testid="stSidebarCollapsedControl"]:hover {{
             background: #ff4b4b !important;
             border-color: #ff4b4b !important;
         }}
-        
+
         [data-testid="stSidebarCollapsedControl"] svg {{
             color: white !important;
         }}
-        
+                
         /* 4. FOOTER VE DİĞER ELEMENTLER */
         [data-testid="stStatusWidget"],
         footer,
@@ -596,6 +608,7 @@ st.markdown("""
 # --------------------
 @st.dialog("Game Details", width="large")
 def show_boxscore_dialog(game_info):
+    st.session_state.active_dialog = 'boxscore'
     game_id = game_info['game_id']
     
     # 1. Header
@@ -747,7 +760,12 @@ def show_boxscore_dialog(game_info):
 # --------------------
 
 def home_page():
-    handle_daily_trivia()
+    if 'active_dialog' not in st.session_state:
+        st.session_state.active_dialog = None
+    
+    # Only show trivia if no other dialog is active
+    if st.session_state.active_dialog is None:
+        handle_daily_trivia()
     render_header()
     
     # Load user preferences if logged in
@@ -861,7 +879,11 @@ def home_page():
                         st.markdown("---")
                         
                         if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
-                            show_boxscore_dialog(g)
+                            # Only open if no dialog is active
+                            if st.session_state.active_dialog is None:
+                                show_boxscore_dialog(g)
+                            else:
+                                st.warning("Please close the current dialog first")
     
     if total_games > games_to_show:
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -942,25 +964,34 @@ def home_page():
 home_page()
 
 
-# En altta - home_page() fonksiyonundan sonra
 st.markdown("""
 <script>
-    // Footer'ı tamamen kaldır
-    const hideFooter = () => {
-        const footer = window.parent.document.querySelector('footer');
-        if (footer) footer.style.display = 'none';
-        
-        const stBottom = window.parent.document.querySelector('[data-testid="stBottom"]');
-        if (stBottom) stBottom.style.display = 'none';
-        
-        const viewerBadge = window.parent.document.querySelector('[class*="viewerBadge"]');
-        if (viewerBadge) viewerBadge.style.display = 'none';
-    };
-    
-    // Sayfa yüklendiğinde ve her 1 saniyede kontrol et
-    hideFooter();
-    setInterval(hideFooter, 1000);
-</script>
-            
-""", unsafe_allow_html=True)
+    const targetNode = window.parent.document.body;
+    const config = { childList: true, subtree: true };
 
+    const callback = function(mutationsList, observer) {
+        // Gizlenecek elementlerin listesi
+        const selectors = [
+            'footer', 
+            '[data-testid="stBottom"]', 
+            '[data-testid="stSidebarCollapsedControl"]',
+            '[data-testid="stHeader"]',
+            '.viewerBadge_container__1QSob'
+        ];
+        
+        selectors.forEach(selector => {
+            const el = window.parent.document.querySelector(selector);
+            if (el) {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+            }
+        });
+    };
+
+    const observer = new MutationObserver(callback);
+    observer.observe(targetNode, config);
+    
+    // İlk yükleme için hemen çalıştır
+    callback();
+</script>
+""", unsafe_allow_html=True)
