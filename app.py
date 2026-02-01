@@ -349,22 +349,40 @@ st.markdown(f"""
             display: none !important;
         }}
         
-        /* 3. SIDEBAR TOGGLE BUTON - MINIMAL STİL (KLIK ARANINI KORUMA) */
+        /* 3. SIDEBAR TOGGLE - Streamlit default gizleme + custom btn */
         [data-testid="stSidebarCollapsedControl"] {{
-            z-index: 999999 !important;
-            background: rgba(14, 17, 23, 0.9) !important;
-            border: 1px solid rgba(255,255,255,0.3) !important;
-            border-radius: 8px !important;
-            transition: background-color 0.2s ease !important;
+            display: none !important;
+            pointer-events: none !important;
         }}
 
-        [data-testid="stSidebarCollapsedControl"]:hover {{
+        #st-sidebar-toggle-btn {{
+            position: fixed !important;
+            top: 14px !important;
+            left: 10px !important;
+            z-index: 9999999 !important;
+            width: 38px !important;
+            height: 38px !important;
+            background: rgba(14, 17, 23, 0.93) !important;
+            border: 1px solid rgba(255,255,255,0.35) !important;
+            border-radius: 8px !important;
+            color: #fff !important;
+            font-size: 1.2rem !important;
+            line-height: 38px !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
+            transition: background 0.2s, border-color 0.2s !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }}
+        #st-sidebar-toggle-btn:hover {{
             background: #ff4b4b !important;
             border-color: #ff4b4b !important;
         }}
 
-        [data-testid="stSidebarCollapsedControl"] svg {{
-            color: white !important;
+        #sidebar-toggle-btn:hover {{
+            background: #ff4b4b;
+            border-color: #ff4b4b;
         }}
                 
         /* 4. FOOTER VE DİĞER ELEMENTLER */
@@ -375,6 +393,221 @@ st.markdown(f"""
         }}
         
         {extra_styles}
+
+
+        /* ============================================================
+           MOBİL RESPONSIVE — @media (max-width: 768px)
+           Desktop'ta hiçbir şey değişmez. Sadece dar ekranlarda aktive olur.
+           ============================================================ */
+
+        /* --- GENEL SAYFA --- */
+        @media (max-width: 768px) {{
+            .main .block-container {{
+                padding-top: 0.75rem !important;
+                padding-left: 0.6rem !important;
+                padding-right: 0.6rem !important;
+            }}
+        }}
+
+        /* --- GAME CARD GRID: 3 sütun → 1 sütun --- */
+        @media (max-width: 768px) {{
+            /* Streamlit st.columns → flex wrap ile 1 sütun yap */
+            .stColumns {{
+                flex-wrap: wrap !important;
+            }}
+            .stColumns > div {{
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
+                min-width: 100% !important;
+            }}
+        }}
+
+        /* --- GAME CARD İÇİ: away / score / home satırı --- */
+        @media (max-width: 768px) {{
+            .game-card-row {{
+                flex-direction: row !important;   /* yine yatay kalsın */
+                align-items: center !important;
+                justify-content: space-between !important;
+            }}
+            .game-card-row > div {{
+                flex: 1 !important;
+            }}
+        }}
+
+        /* --- GAME SCORE BADGE (★ score) --- */
+        @media (max-width: 768px) {{
+            .game-score-badge {{
+                position: relative !important;
+                top: auto !important;
+                right: auto !important;
+                display: inline-block !important;
+                margin-bottom: 4px !important;
+                float: right !important;
+            }}
+        }}
+
+        /* --- SCOREBOARD: team logo + name stacking --- */
+        @media (max-width: 768px) {{
+            .team-block {{
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+            }}
+            .team-block img {{
+                width: 42px !important;
+                height: 42px !important;
+            }}
+            .team-block .team-label {{
+                font-size: 0.78em !important;
+                margin-top: 3px !important;
+                text-align: center !important;
+            }}
+            .score-block {{
+                font-size: 1.25em !important;
+                font-weight: 800 !important;
+                text-align: center !important;
+                white-space: nowrap !important;
+            }}
+        }}
+
+        /* --- BOX SCORE DIALOG: full-width on mobile --- */
+        @media (max-width: 768px) {{
+            /* Streamlit dialog overlay */
+            [data-testid="stDialog"] {{
+                width: 100vw !important;
+                max-width: 100vw !important;
+                margin: 0 !important;
+                border-radius: 12px 12px 0 0 !important;
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+            }}
+        }}
+
+        /* --- GAME HEADER İN DIALOG (away logo - score - home logo) --- */
+        @media (max-width: 768px) {{
+            .game-header-container {{
+                padding: 12px 8px !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+            }}
+            .game-header-container .team-info {{
+                width: 28% !important;
+            }}
+            .game-header-container .team-info img {{
+                width: 44px !important;
+            }}
+            .game-header-container .team-name {{
+                font-size: 0.78rem !important;
+                margin-top: 4px !important;
+            }}
+            .game-header-container .score-board {{
+                width: 44% !important;
+            }}
+            .game-header-container .main-score {{
+                font-size: 1.7rem !important;
+            }}
+            .game-header-container .game-status {{
+                font-size: 0.7rem !important;
+                padding: 2px 8px !important;
+            }}
+        }}
+
+        /* --- DATAFRAME (boxscore table): horizontal scroll + küçük font --- */
+        @media (max-width: 768px) {{
+            .stDataframe,
+            [data-testid="stDataframe"] {{
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }}
+            .stDataframe table,
+            [data-testid="stDataframe"] table {{
+                font-size: 0.75rem !important;
+                min-width: 520px !important;
+            }}
+            .stDataframe th,
+            [data-testid="stDataframe"] th {{
+                padding: 4px 6px !important;
+                font-size: 0.72rem !important;
+            }}
+            .stDataframe td,
+            [data-testid="stDataframe"] td {{
+                padding: 4px 6px !important;
+            }}
+        }}
+
+        /* --- SIDEBAR: mobilde daha kompakt --- */
+        @media (max-width: 768px) {{
+            [data-testid="stSidebar"] {{
+                width: 85vw !important;
+                max-width: 320px !important;
+            }}
+            [data-testid="stSidebar"] .stButton button {{
+                font-size: 0.85rem !important;
+                padding: 0.4rem 0.6rem !important;
+            }}
+        }}
+
+        /* --- TRIVIA MODAL: radio label font küçüt --- */
+        @media (max-width: 768px) {{
+            .trivia-modal .stRadio label {{
+                font-size: 0.88rem !important;
+            }}
+            .trivia-modal .stForm button {{
+                font-size: 0.95rem !important;
+            }}
+        }}
+
+        /* --- "Show All / Show Less" BUTTON: tam genişlik --- */
+        @media (max-width: 768px) {{
+            .show-all-btn-row {{
+                flex-direction: column !important;
+            }}
+            .show-all-btn-row > div {{
+                width: 100% !important;
+            }}
+        }}
+
+        /* --- ADSENSE CONTAINER: mobilde height azalt --- */
+        @media (max-width: 768px) {{
+            .adsense-container iframe,
+            .adsense-container {{
+                max-height: 200px !important;
+            }}
+        }}
+
+        /* --- SUBHEADER / DIVIDER SPACING --- */
+        @media (max-width: 768px) {{
+            h2, h3 {{
+                margin-top: 0.6rem !important;
+                margin-bottom: 0.3rem !important;
+            }}
+            hr {{
+                margin: 0.5rem 0 !important;
+            }}
+        }}
+
+        /* --- PRO FEATURE EXPANDER: kompakt --- */
+        @media (max-width: 768px) {{
+            .streamlit-expander {{
+                margin: 0.3rem 0 !important;
+            }}
+            .streamlit-expander .stMarkdown li {{
+                font-size: 0.82rem !important;
+                margin: 0.15rem 0 !important;
+            }}
+        }}
+
+        /* --- QUICK ADD COLUMNS: stack on mobile --- */
+        @media (max-width: 480px) {{
+            .quick-add-row {{
+                flex-direction: column !important;
+            }}
+            .quick-add-row > div {{
+                width: 100% !important;
+                flex: none !important;
+            }}
+        }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -813,90 +1046,123 @@ def home_page():
 
     if st.session_state.page == "trade_analyzer":
         from pages.trade_analyzer import render_trade_analyzer_page
-        # Home'dan weights alınmadıysa default oluşturmamız gerekebilir,
-        # ama genelde home bir kere render olduğu için session_state'de vardır.
         render_trade_analyzer_page()
         st.stop()
     
     if st.session_state.show_all_games:
         visible_games = games
-        cols_per_row = 3
     else:
         visible_games = games[:games_to_show]
-        cols_per_row = 3
-    
+
     num_visible = len(visible_games)
     
     if num_visible == 0:
          st.info("No games to display.")
     else:
-        for row_start in range(0, num_visible, cols_per_row):
-            row_games = visible_games[row_start:row_start + cols_per_row]
+        # --- MOBİL: 1 sütun, Desktop: 3 sütun ---
+        # JS ile viewport kontrol et ve sütun sayısını belirle
+        st.markdown("""
+            <script>
+                // Mobile column override: Streamlit columns'u 1 sütuna yap
+                (function() {
+                    function fixColumns() {
+                        if (window.innerWidth <= 768) {
+                            document.querySelectorAll('.stColumns').forEach(function(row) {
+                                row.style.flexWrap = 'wrap';
+                                row.querySelectorAll(':scope > div').forEach(function(col) {
+                                    col.style.flex = '1 1 100%';
+                                    col.style.maxWidth = '100%';
+                                    col.style.minWidth = '100%';
+                                });
+                            });
+                        }
+                    }
+                    fixColumns();
+                    window.addEventListener('resize', fixColumns);
+                    // Streamlit re-render sonrasında tekrar çalıştır
+                    new MutationObserver(fixColumns).observe(document.body, {childList: true, subtree: true});
+                })();
+            </script>
+        """, unsafe_allow_html=True)
+
+        for row_start in range(0, num_visible, 3):
+            row_games = visible_games[row_start:row_start + 3]
             cols = st.columns(len(row_games))
             
             for i, g in enumerate(row_games):
                 with cols[i]:
                     with st.container(border=True):
-                        # --- YENİ EKLENEN KISIM: HEYECAN PUANI ---
+                        # --- HEYECAN PUANI (score badge) ---
                         game_score = calculate_game_score(g.get('home_score'), g.get('away_score'), g.get('status'))
                         
-                        # Maç bitmişse veya oynanıyorsa puanı göster
                         if game_score:
                             score_color = get_score_color(game_score)
+                            # Mobilde float:right ile position:absolute yerine relative flow
                             st.markdown(f"""
-                                <div style="position: absolute; top: 10px; right: 10px; 
-                                            background-color: {score_color}; color: white; 
-                                            padding: 2px 8px; border-radius: 10px; 
-                                            font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                    ★ {game_score}
+                                <div style="
+                                    display: flex; 
+                                    justify-content: flex-end; 
+                                    margin-bottom: 2px;
+                                ">
+                                    <span style="
+                                        background-color: {score_color}; 
+                                        color: white; 
+                                        padding: 2px 8px; 
+                                        border-radius: 10px; 
+                                        font-weight: bold; 
+                                        font-size: 0.78em; 
+                                        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                                        display: inline-block;
+                                    ">
+                                        ★ {game_score}
+                                    </span>
                                 </div>
                             """, unsafe_allow_html=True)
-                        # ------------------------------------------
 
-                        st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:10px;'>{g.get('status')}</div>", unsafe_allow_html=True)
+                        # Status
+                        st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
                         
-                        c_away, c_score, c_home = st.columns([1, 1.5, 1])
+                        # Away / Score / Home — 3 sütun (mobilde de yatay kalır, dar olsa bile)
+                        c_away, c_score, c_home = st.columns([1, 1.2, 1])
                         
                         with c_away:
                             st.markdown(f"""
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                <img src="{g.get('away_logo')}" style="width: 50px; height: 50px; object-fit: contain;">
-                                <div style="font-size:0.9em; font-weight:bold; margin-top: 5px;">{g.get('away_team')}</div>
+                                <img src="{g.get('away_logo')}" style="width: 46px; height: 46px; object-fit: contain;">
+                                <div style="font-size:0.78em; font-weight:bold; margin-top: 4px; text-align:center; line-height:1.2;">{g.get('away_team')}</div>
                             </div>
                             """, unsafe_allow_html=True)
                         
                         with c_score:
-                            st.markdown(f"<div style='font-size:1.4em; font-weight:800; text-align:center; line-height: 2.5; white-space: nowrap;'>{g.get('away_score')}&nbsp;&nbsp;-&nbsp;&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:1.25em; font-weight:800; text-align:center; line-height: 3; white-space: nowrap;'>{g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
 
                         with c_home:
                             st.markdown(f"""
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                <img src="{g.get('home_logo')}" style="width: 50px; height: 50px; object-fit: contain;">
-                                <div style="font-size:0.9em; font-weight:bold; margin-top: 5px;">{g.get('home_team')}</div>
+                                <img src="{g.get('home_logo')}" style="width: 46px; height: 46px; object-fit: contain;">
+                                <div style="font-size:0.78em; font-weight:bold; margin-top: 4px; text-align:center; line-height:1.2;">{g.get('home_team')}</div>
                             </div>
                             """, unsafe_allow_html=True)
                         
-                        st.markdown("---")
+                        st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
                         
                         if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
-                            # Only open if no dialog is active
                             if st.session_state.active_dialog is None:
                                 show_boxscore_dialog(g)
                             else:
                                 st.warning("Please close the current dialog first")
     
+    # Show All / Show Less — tam genişlik buton
     if total_games > games_to_show:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.session_state.show_all_games:
-                if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
-                    st.session_state.show_all_games = False
-                    st.rerun()
-            else:
-                remaining = total_games - games_to_show
-                if st.button(f"⬇️ Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
-                    st.session_state.show_all_games = True
-                    st.rerun()
+        if st.session_state.show_all_games:
+            if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
+                st.session_state.show_all_games = False
+                st.rerun()
+        else:
+            remaining = total_games - games_to_show
+            if st.button(f"⬇️ Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
+                st.session_state.show_all_games = True
+                st.rerun()
 
     st.divider()
 
@@ -927,6 +1193,7 @@ def home_page():
                 available_players = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
                 
                 if available_players:
+                    # Mobilde stack, desktopda yan yana
                     col1, col2 = st.columns([4, 1])
                     with col1:
                         quick_add_players = st.multiselect(
@@ -945,7 +1212,6 @@ def home_page():
                 else:
                     st.info("All players are already in your watchlist!")
         elif not is_pro:
-            # Show PRO teaser
             st.info("⭐ **PRO Feature:** Login with a PRO account to add players to your watchlist and track their performance!")
 
         render_tables(df, weights=weights) 
@@ -964,34 +1230,261 @@ def home_page():
 home_page()
 
 
+# ============================================================
+# SIDEBAR TOGGLE BUTTON + SCRIPT
+# ============================================================
+
 st.markdown("""
+<style>
+    #st-sidebar-toggle-btn {
+        position: fixed !important;
+        top: 14px !important;
+        left: 10px !important;
+        z-index: 9999999 !important;
+        width: 38px !important;
+        height: 38px !important;
+        background: rgba(14, 17, 23, 0.93) !important;
+        border: 1px solid rgba(255,255,255,0.35) !important;
+        border-radius: 8px !important;
+        color: #fff !important;
+        font-size: 1.2rem !important;
+        line-height: 38px !important;
+        text-align: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
+        transition: background 0.2s, border-color 0.2s !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+    }
+    #st-sidebar-toggle-btn:hover {
+        background: #ff4b4b !important;
+        border-color: #ff4b4b !important;
+    }
+    /* Streamlit'in default toggle'ı gizle (sidebar kapalı olunca çıkan << buton) */
+    [data-testid="stSidebarCollapsedControl"] {
+        display: none !important;
+        pointer-events: none !important;
+    }
+
+    /* collapseSidebar ikon değişimi JS ile yapılıyor (aşağıda poll içinde) */
+
+    /* --- MOBİL: Sidebar overlay modunda tam ekran kapan buton --- */
+    @media (max-width: 768px) {
+        /* Sidebar açık olunca overlay backdrop */
+        [data-testid="stSidebar"] {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            height: 100vh !important;
+            width: 85vw !important;
+            max-width: 320px !important;
+            z-index: 999998 !important;
+            overflow-y: auto !important;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.4) !important;
+        }
+        /* Kapan butonu: sidebar açıkken sağ üste */
+        #st-sidebar-close-btn {
+            position: fixed !important;
+            top: 14px !important;
+            right: 14px !important;
+            z-index: 999999 !important;
+            width: 36px !important;
+            height: 36px !important;
+            background: rgba(14, 17, 23, 0.93) !important;
+            border: 1px solid rgba(255,255,255,0.35) !important;
+            border-radius: 8px !important;
+            color: #fff !important;
+            font-size: 1.3rem !important;
+            line-height: 36px !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
+            display: none;
+        }
+        #st-sidebar-close-btn:hover {
+            background: #ff4b4b !important;
+            border-color: #ff4b4b !important;
+        }
+        /* Dark overlay arkada */
+        #st-sidebar-overlay {
+            display: none;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0,0,0,0.5) !important;
+            z-index: 999997 !important;
+        }
+    }
+</style>
 <script>
-    const targetNode = window.parent.document.body;
-    const config = { childList: true, subtree: true };
+(function(){
+    // ============================================================
+    // Sidebar kapalı mı?
+    // ============================================================
+    function isSidebarClosed() {
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        if (!sb) return true;
+        return sb.offsetWidth < 50;
+    }
 
-    const callback = function(mutationsList, observer) {
-        // Gizlenecek elementlerin listesi
-        const selectors = [
-            'footer', 
-            '[data-testid="stBottom"]', 
-            '[data-testid="stSidebarCollapsedControl"]',
-            '[data-testid="stHeader"]',
-            '.viewerBadge_container__1QSob'
-        ];
-        
-        selectors.forEach(selector => {
-            const el = window.parent.document.querySelector(selector);
-            if (el) {
-                el.style.display = 'none';
-                el.style.visibility = 'hidden';
-            }
+    // ============================================================
+    // Sidebar açma
+    // ============================================================
+    function openSidebar() {
+        var collapseBtn = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+        if (collapseBtn) {
+            collapseBtn.style.display = 'block';
+            collapseBtn.style.pointerEvents = 'auto';
+            collapseBtn.click();
+            setTimeout(function() {
+                collapseBtn.style.display = 'none';
+                collapseBtn.style.pointerEvents = 'none';
+            }, 100);
+        }
+    }
+
+    // ============================================================
+    // Sidebar kapatma — FULL kapatma için stSidebarCollapsedControl
+    // kullanız. collapseSidebar.click() sadece "biraz karar" yapar,
+    // ama stSidebarCollapsedControl Streamlit'in "kapalı" state'ini
+    // doğrudan tetikler.
+    // ============================================================
+    function closeSidebar() {
+        // Önce Streamlit'in "kapalı state" butonunu bul
+        var collapsedCtrl = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+        if (collapsedCtrl) {
+            // Geçici olarak görünür yap
+            collapsedCtrl.style.display = 'block';
+            collapsedCtrl.style.pointerEvents = 'auto';
+            collapsedCtrl.style.visibility = 'visible';
+            // Tıkla — bu Streamlit'e "sidebar kapalı" state'ini set eder
+            collapsedCtrl.click();
+            // Tekrar gizle
+            setTimeout(function() {
+                collapsedCtrl.style.display = 'none';
+                collapsedCtrl.style.pointerEvents = 'none';
+                collapsedCtrl.style.visibility = 'hidden';
+            }, 150);
+            return;
+        }
+        // Fallback: sidebar içindeki collapseSidebar butonuna tıkla
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        if (!sb) return;
+        var collapseInsideBtn = sb.querySelector('[data-testid="collapseSidebar"]');
+        if (collapseInsideBtn) {
+            collapseInsideBtn.click();
+        }
+    }
+
+    // ============================================================
+    // Overlay + Close button oluştur (mobil için)
+    // ============================================================
+    function ensureMobileElements() {
+        if (!document.getElementById('st-sidebar-overlay')) {
+            var overlay = document.createElement('div');
+            overlay.id = 'st-sidebar-overlay';
+            overlay.addEventListener('click', function() { closeSidebar(); });
+            document.body.appendChild(overlay);
+        }
+        if (!document.getElementById('st-sidebar-close-btn')) {
+            var closeBtn = document.createElement('div');
+            closeBtn.id = 'st-sidebar-close-btn';
+            closeBtn.innerHTML = '&#10005;';
+            closeBtn.setAttribute('title', 'Close');
+            closeBtn.addEventListener('click', function() { closeSidebar(); });
+            document.body.appendChild(closeBtn);
+        }
+    }
+
+    // ============================================================
+    // Toggle button oluştur (hamburger)
+    // ============================================================
+    function createToggleBtn() {
+        var btn = document.createElement('div');
+        btn.id = 'st-sidebar-toggle-btn';
+        btn.innerHTML = '&#9776;';
+        btn.setAttribute('title', 'Open Sidebar');
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            openSidebar();
         });
-    };
+        document.body.insertBefore(btn, document.body.firstChild);
+    }
 
-    const observer = new MutationObserver(callback);
-    observer.observe(targetNode, config);
-    
-    // İlk yükleme için hemen çalıştır
-    callback();
+    // ============================================================
+    // Polling — her 300ms
+    // ============================================================
+    function poll() {
+        var closed = isSidebarClosed();
+        var btn = document.getElementById('st-sidebar-toggle-btn');
+        var isMobile = window.innerWidth <= 768;
+
+        // --- collapseSidebar butonunun ikonunu hamburger'a değiştir ---
+        // CSS ::before çalışmadığı için innerHTML'i doğrudan yaz.
+        // Streamlit re-render yapınca buton yeniden oluşabilir,
+        // o yüzden her poll'da kontrol et.
+        var collapseBtn = document.querySelector('[data-testid="collapseSidebar"]');
+        if (collapseBtn && !collapseBtn.getAttribute('data-icon-patched')) {
+            // SVG orijinal arrow yerine hamburger SVG koy
+            collapseBtn.innerHTML =
+                '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" ' +
+                'fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="3" y1="6" x2="21" y2="6"/>' +
+                '<line x1="3" y1="12" x2="21" y2="12"/>' +
+                '<line x1="3" y1="18" x2="21" y2="18"/>' +
+                '</svg>';
+            // Marker ekle ki tekrar tekrar yazmasın
+            collapseBtn.setAttribute('data-icon-patched', 'true');
+        }
+
+        // Hamburger buton
+        if (closed) {
+            if (!btn) { createToggleBtn(); }
+            else { btn.style.display = 'flex'; }
+        } else {
+            if (btn) { btn.style.display = 'none'; }
+        }
+
+        // Mobil overlay + close buton
+        if (isMobile) {
+            ensureMobileElements();
+            var overlay = document.getElementById('st-sidebar-overlay');
+            var closeBtn = document.getElementById('st-sidebar-close-btn');
+            if (!closed) {
+                overlay.style.display = 'block';
+                closeBtn.style.display = 'flex';
+                closeBtn.style.alignItems = 'center';
+                closeBtn.style.justifyContent = 'center';
+            } else {
+                overlay.style.display = 'none';
+                closeBtn.style.display = 'none';
+            }
+        }
+    }
+
+    // ============================================================
+    // Diğer elementleri gizle
+    // ============================================================
+    function hideExtra() {
+        ['footer','[data-testid="stBottom"]','[data-testid="stHeader"]','.viewerBadge_container__1QSob'].forEach(function(sel){
+            var el = document.querySelector(sel);
+            if (el) { el.style.display='none'; el.style.visibility='hidden'; }
+        });
+    }
+
+    // ============================================================
+    // START
+    // ============================================================
+    poll();
+    hideExtra();
+    setInterval(function() {
+        poll();
+        hideExtra();
+    }, 300);
+
+})();
 </script>
 """, unsafe_allow_html=True)
