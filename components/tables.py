@@ -261,159 +261,467 @@ def aggregate_player_stats(all_game_data, weights):
 # =================================================================
 @st.dialog("Player Insights", width="large")
 def show_player_analysis(player_row, weights):
+    st.session_state.active_dialog = 'player_analysis'
     """
-    Player detailed analysis - Large Visuals and Text, Frameless Design.
+    Gelişmiş oyuncu analizi - Akıllı yorumlar ve temiz tasarım
     """
     
     # ======================================================
-    # A. DATA PREPARATION
+    # A. DATA PREPARATION & CONTEXT DETECTION
     # ======================================================
     name = player_row["PLAYER"]
     raw_team = player_row["TEAM"]
     
-    # Team variable check (Extract Abbreviation First)
+    # Team handling
     if isinstance(raw_team, dict):
         team_abbr = raw_team.get('team', 'UNK')
     else:
         team_abbr = str(raw_team) if raw_team else "UNK"
     
-    # --- TEAM NAME MAPPING (GÜNCELLEME BURADA) ---
-    # Kısaltmayı alıp (örn: LAL) TAM İSMİNE çeviriyoruz
     team = TEAM_MAP.get(team_abbr.upper(), team_abbr)
-        
+    
+    # CONTEXT DETECTION: Tek maç mı, yoksa ortalama mı?
+    is_single_game = player_row.get("GAMES", 1) == 1
+    games = int(player_row.get("GAMES", 1))
+    
+    # Basic Stats
     score = float(player_row["USER_SCORE"])
     mins = float(player_row.get("MIN_INT", 0))
 
-    # Fetch stats safely
+    # Detailed Stats
     def get_val(key): return float(player_row.get(key, 0))
-    fgm = get_val("FGM")
-    fga = get_val("FGA")
-    ftm = get_val("FTM")
-    fta = get_val("FTA")
-    pts = get_val("PTS")
-    reb = get_val("REB")
-    ast = get_val("AST")
-    stl = get_val("STL")
-    blk = get_val("BLK")
-    to = get_val("TO")
-    three_pm = get_val("3Pts")
-
-    stocks = stl + blk
     
-    # Fantasy Point per Minute
+    fgm, fga = get_val("FGM"), get_val("FGA")
+    ftm, fta = get_val("FTM"), get_val("FTA")
+    three_pm, three_pa = get_val("3Pts"), get_val("3PTA")
+    pts, reb, ast = get_val("PTS"), get_val("REB"), get_val("AST")
+    stl, blk, to = get_val("STL"), get_val("BLK"), get_val("TO")
+    plus_minus = get_val("+/-")
+
+    # Advanced Metrics
+    stocks = stl + blk
     fp_min = score / mins if mins > 0 else 0
     
-    # Percentages
+    # Shooting Efficiency
     fg_pct = (fgm / fga * 100) if fga > 0 else 0
     ft_pct = (ftm / fta * 100) if fta > 0 else 0
-
-    # -------------------------------------------------------
-    # UPDATED METRICS CALCULATION (BASED ON WEIGHTS)
-    # -------------------------------------------------------
-    usage_proxy = fga + (0.44 * fta) + ast
-
-    def w(key): return float(weights.get(key, 0))
-
-    impact_score = (
-        (pts * w("PTS")) +
-        (reb * w("REB")) +
-        (ast * w("AST")) +
-        (stl * w("STL")) +
-        (blk * w("BLK")) +
-        (to  * w("TO")) +
-        (fga * w("FGA")) +
-        (fgm * w("FGM")) +
-        (fta * w("FTA")) +
-        (ftm * w("FTM")) +
-        (three_pm * w("3Pts"))
-    )
+    three_pct = (three_pm / three_pa * 100) if three_pa > 0 else 0
+    
+    # True Shooting %
+    ts_attempts = fga + (0.44 * fta)
+    ts_pct = (pts / (2 * ts_attempts) * 100) if ts_attempts > 0 else 0
+    
+    # Usage & Efficiency
+    usage_proxy = fga + (0.44 * fta) + to
+    ast_to_ratio = ast / to if to > 0 else ast
+    
+    # Game Impact Score
+    game_impact = pts + reb + ast + stl + blk - to
     
     traded_info = player_row.get("TRADED", "")
     
-    # --- IMAGE URL LOGIC ---
+    # Player Image
     player_id = player_row.get("PLAYER_ID")
     if player_id and str(player_id).isdigit():
-        # ESPN Headshot URL
         player_img_url = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{player_id}.png&w=500&h=364"
     else:
-        # Fallback
         player_img_url = f"https://ui-avatars.com/api/?name={name.replace(' ', '+')}&size=400&background=667eea&color=fff&bold=true"
 
     # ======================================================
-    # B. CSS STYLES (UPDATED: LARGE AND FRAMELESS)
+    # B. INTELLIGENT ANALYSIS ENGINE
+    # ======================================================
+    
+    def generate_performance_analysis():
+        """Akıllı performans analizi oluşturur"""
+        analysis = []
+        
+        # 1. EFFICIENCY ANALYSIS
+        if fp_min >= 1.5:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Elite Efficiency',
+                'text': f'{fp_min:.2f} fantasy points per minute is elite territory. This level of production in limited time shows true impact.'
+            })
+        elif fp_min >= 1.2:
+            analysis.append({
+                'type': 'positive', 
+                'title': 'Strong Efficiency',
+                'text': f'Producing {fp_min:.2f} FP/min is well above league average. Solid fantasy contributor.'
+            })
+        elif fp_min < 0.8 and mins > 20:
+            analysis.append({
+                'type': 'negative',
+                'title': 'Inefficient Performance',
+                'text': f'Only {fp_min:.2f} FP/min despite {mins:.0f} minutes is concerning. Poor fantasy value relative to opportunity.'
+            })
+        
+        # 2. SCORING ANALYSIS
+        if pts >= 30:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Dominant Scoring',
+                'text': f'{pts:.1f} points {"in this game" if is_single_game else "per game"} - carrying the offensive load as the clear first option.'
+            })
+        elif pts >= 20 and fg_pct >= 50:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Efficient Scoring',
+                'text': f'{pts:.1f} points on {fg_pct:.1f}% shooting. Quality over quantity - taking smart shots and converting.'
+            })
+        elif pts >= 20 and fg_pct < 40:
+            analysis.append({
+                'type': 'warning',
+                'title': 'Volume Scorer',
+                'text': f'{pts:.1f} points but only {fg_pct:.1f}% FG%. High usage but forcing the issue - efficiency needs improvement.'
+            })
+        elif fga >= 15 and pts < 15:
+            analysis.append({
+                'type': 'negative',
+                'title': 'Shot Selection Issues',
+                'text': f'{fga:.0f} field goal attempts but only {pts:.1f} points. Empty possessions hurting the team and fantasy value.'
+            })
+        
+        # 3. PLAYMAKING ANALYSIS
+        if ast >= 10 and ast_to_ratio >= 2.5:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Elite Playmaking',
+                'text': f'{ast:.1f} assists with {ast_to_ratio:.1f} AST/TO ratio. Orchestrating the offense with exceptional decision-making.'
+            })
+        elif ast >= 7:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Strong Facilitator',
+                'text': f'{ast:.1f} assists shows excellent court vision. Creating quality scoring opportunities for teammates.'
+            })
+        elif ast >= 5 and to > ast:
+            analysis.append({
+                'type': 'warning',
+                'title': 'Turnover Issues',
+                'text': f'{to:.1f} turnovers vs {ast:.1f} assists. Ball security needs improvement - giving away too many possessions.'
+            })
+        
+        # 4. REBOUNDING ANALYSIS
+        if reb >= 15:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Dominant on the Glass',
+                'text': f'{reb:.1f} rebounds - controlling the paint and creating extra possessions for the team.'
+            })
+        elif reb >= 10:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Strong Rebounder',
+                'text': f'{reb:.1f} rebounds showing excellent positioning and effort. Crashing the boards consistently.'
+            })
+        
+        # 5. DEFENSIVE IMPACT
+        if stocks >= 5:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Defensive Menace',
+                'text': f'{stl:.1f} steals + {blk:.1f} blocks = {stocks:.1f} stocks. Wreaking havoc on defense and creating turnovers.'
+            })
+        elif stocks >= 3:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Solid Defender',
+                'text': f'{stocks:.1f} stocks shows active hands and good timing. Contributing beyond the box score.'
+            })
+        
+        # 6. SHOOTING ANALYSIS
+        if ts_pct >= 65:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Exceptional Shooting',
+                'text': f'{ts_pct:.1f}% True Shooting is elite. Getting quality looks and converting at a high rate.'
+            })
+        elif ts_pct < 50 and fga >= 12:
+            analysis.append({
+                'type': 'negative',
+                'title': 'Poor Shot Selection',
+                'text': f'{ts_pct:.1f}% TS% on {fga:.0f} attempts. Taking too many low-percentage shots - needs to be more selective.'
+            })
+        
+        # 7. THREE-POINT SHOOTING
+        if three_pm >= 5:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Sharpshooting Display',
+                'text': f'{three_pm:.0f} three-pointers made. Stretching the floor and punishing defenses from deep.'
+            })
+        elif three_pa >= 8 and three_pct < 30:
+            analysis.append({
+                'type': 'warning',
+                'title': 'Cold from Three',
+                'text': f'Only {three_pm:.0f}/{three_pa:.0f} from three ({three_pct:.1f}%). Needs to find rhythm or attack the basket more.'
+            })
+        
+        # 8. MINUTES & OPPORTUNITY
+        if mins >= 38 and is_single_game:
+            analysis.append({
+                'type': 'info',
+                'title': 'Heavy Minutes',
+                'text': f'{mins:.0f} minutes is a massive workload. Coach clearly trusts them in crunch time.'
+            })
+        elif mins < 20 and score >= 25:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Ultra-Efficient',
+                'text': f'{score:.1f} fantasy points in only {mins:.0f} minutes. Maximizing every second on the floor.'
+            })
+        elif mins < 15 and is_single_game:
+            analysis.append({
+                'type': 'warning',
+                'title': 'Limited Opportunity',
+                'text': f'Only {mins:.0f} minutes suggests limited role or foul trouble. Hard to produce with this little playing time.'
+            })
+        
+        # 9. OVERALL IMPACT
+        if plus_minus >= 15:
+            analysis.append({
+                'type': 'positive',
+                'title': 'Game Changer',
+                'text': f'+{plus_minus:.0f} plus/minus. Team dominated when they were on the floor.'
+            })
+        elif plus_minus <= -10:
+            analysis.append({
+                'type': 'negative',
+                'title': 'Negative Impact',
+                'text': f'{plus_minus:.0f} plus/minus. Team struggled with them on the court - defense or chemistry issues.'
+            })
+        
+        return analysis
+    
+    def generate_fantasy_outlook():
+        """Fantasy için akıllı öneri oluşturur - İyileştirilmiş"""
+        if is_single_game:
+            # Tek maç için değerlendirme
+            if score >= 60:
+                return {
+                    'rating': 'elite',
+                    'title': '🔥 Historic Performance',
+                    'text': f'{score:.1f} fantasy points is an absolute monster game. Generational performance that wins you the week.'
+                }
+            elif score >= 45:
+                return {
+                    'rating': 'elite',
+                    'title': '⭐ Elite Production',
+                    'text': f'{score:.1f} fantasy points is elite-tier output. When healthy and involved, this player can carry your team.'
+                }
+            elif score >= 35:
+                return {
+                    'rating': 'good',
+                    'title': '✅ Strong Performance',
+                    'text': f'{score:.1f} fantasy points is exactly what you want from a starter. Consistent production at this level makes them reliable.'
+                }
+            elif score >= 25:
+                return {
+                    'rating': 'good',
+                    'title': '👍 Solid Contributor',
+                    'text': f'{score:.1f} fantasy points is solid production. Dependable role player who provides steady value.'
+                }
+            elif score >= 18:
+                return {
+                    'rating': 'neutral',
+                    'title': '⚖️ Decent Output',
+                    'text': f'{score:.1f} fantasy points is acceptable. Streaming option or flex play in deeper leagues.'
+                }
+            elif score >= 10:
+                return {
+                    'rating': 'warning',
+                    'title': '⚠️ Below Expectations',
+                    'text': f'{score:.1f} fantasy points is underwhelming. Only valuable if this is an off-game and they typically produce more.'
+                }
+            else:
+                return {
+                    'rating': 'poor',
+                    'title': '❌ Poor Output',
+                    'text': f'Only {score:.1f} fantasy points. Not rosterable unless circumstances drastically change.'
+                }
+        else:
+            # Sezon ortalaması için değerlendirme
+            if score >= 50:
+                return {
+                    'rating': 'elite',
+                    'title': '🏆 MVP Caliber',
+                    'text': f'{score:.1f} FP per game over {games} games is MVP-level production. First round talent and centerpiece of any fantasy team.'
+                }
+            elif score >= 40:
+                return {
+                    'rating': 'elite',
+                    'title': '🌟 All-Star Level',
+                    'text': f'{score:.1f} FP per game is elite consistency. Top-20 player who delivers night in and night out.'
+                }
+            elif score >= 32:
+                return {
+                    'rating': 'good',
+                    'title': '💪 High-End Starter',
+                    'text': f'{score:.1f} FP average over {games} games is strong production. Reliable starter who rarely disappoints.'
+                }
+            elif score >= 25:
+                return {
+                    'rating': 'good',
+                    'title': '✅ Solid Starter',
+                    'text': f'{score:.1f} FP per game shows consistent value. Safe option who provides a stable floor with upside.'
+                }
+            elif score >= 18:
+                return {
+                    'rating': 'neutral',
+                    'title': '🔄 Flex/Streamer',
+                    'text': f'{score:.1f} FP average is useful in 12+ team leagues. Good for streaming or as injury replacement.'
+                }
+            elif score >= 12:
+                return {
+                    'rating': 'warning',
+                    'title': '📉 Deep League Only',
+                    'text': f'{score:.1f} FP average has limited appeal. Only relevant in 14+ team formats or desperate times.'
+                }
+            else:
+                return {
+                    'rating': 'poor',
+                    'title': '🚫 Not Fantasy Relevant',
+                    'text': f'{score:.1f} FP per game is not enough. Waiver wire fodder in all but the deepest leagues.'
+                }
+
+    # ======================================================
+    # C. MINIMAL CSS - CLEAN DESIGN
     # ======================================================
     st.markdown("""
     <style>
-    /* --- HEADER AREA UPDATES --- */
-    .player-image {
-        width: 260px;
-        height: auto;
-        object-fit: contain;
-        border-radius: 12px;
+    .player-image-container {
+        width: 280px;
+        height: 280px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        margin: 0 auto;
+        position: relative;
+        overflow: hidden;
     }
 
-    /* New Large Text Classes */
+    .player-image {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        object-position: bottom center;
+        display: block;
+    }
+
     .big-player-name {
-        font-size: 3.2rem !important;
+        font-size: 3.2rem;
         font-weight: 900;
         line-height: 1.1;
         margin-bottom: 8px;
-        color: #212529;
     }
+
     .big-team-info {
-        font-size: 1.4rem !important;
+        font-size: 1.4rem;
         font-weight: 500;
         color: #6c757d;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
     }
+
     .main-score { 
         font-size: 6.5rem; 
         font-weight: 900; 
-        color:#212529; 
         line-height: 1;
     }
+
     .score-label {
-        font-size: 1.3rem;
-        font-weight: 700;
+        font-size: 1.2rem;
+        font-weight: 600;
         color: #868e96;
         text-transform: uppercase;
         letter-spacing: 1px;
+        margin-top: 8px;
     }
 
-    /* --- OTHER STYLES (KPI etc.) --- */
     .kpi-box { 
-        text-align:center; padding:12px; border-radius:10px; 
-        background:#f8f9fa; border: 2px solid #dee2e6;
+        text-align: center; 
+        padding: 16px; 
+        border-radius: 10px; 
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
     }
+
     .kpi-label { 
-        font-size:0.75rem; color:#6c757d; font-weight: 600; text-transform: uppercase;
+        font-size: 0.75rem; 
+        color: #6c757d; 
+        font-weight: 600; 
+        text-transform: uppercase;
+        margin-bottom: 4px;
     }
+
     .kpi-value { 
-        font-size:1.6rem; font-weight:800; color:#212529; margin-top: 4px;
+        font-size: 1.8rem; 
+        font-weight: 800;
+        margin-top: 4px;
     }
-    
-    /* Dark mode compatibility */
+
+    .insight-box {
+        padding: 16px;
+        border-radius: 8px;
+        margin: 12px 0;
+        border-left: 4px solid;
+    }
+
+    .insight-positive {
+        background: #d1fae5;
+        border-color: #10b981;
+    }
+
+    .insight-negative {
+        background: #fee2e2;
+        border-color: #ef4444;
+    }
+
+    .insight-warning {
+        background: #fef3c7;
+        border-color: #f59e0b;
+    }
+
+    .insight-info {
+        background: #dbeafe;
+        border-color: #3b82f6;
+    }
+
+    .insight-title {
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 6px;
+    }
+
+    .insight-text {
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
     @media (prefers-color-scheme: dark) {
-        .big-player-name { color: #ffffff !important; }
-        .big-team-info { color: #b0b0b0 !important; }
-        .main-score { color:#ffffff; }
-        .score-label { color: #b0b0b0; }
-        .kpi-box { background:#262730; border-color: #404040; }
-        .kpi-label { color:#a0a0a0; }
-        .kpi-value { color:#ffffff; }
+        .big-team-info { color: #b0b0b0; }
+        .score-label { color: #9ca3af; }
+        .kpi-box { background: #1f2937; border-color: #374151; }
+        .kpi-label { color: #9ca3af; }
+        .insight-positive { background: #064e3b; border-color: #10b981; }
+        .insight-negative { background: #7f1d1d; border-color: #ef4444; }
+        .insight-warning { background: #78350f; border-color: #f59e0b; }
+        .insight-info { background: #1e3a8a; border-color: #3b82f6; }
     }
     </style>
     """, unsafe_allow_html=True)
 
     # ======================================================
-    # C. HEADER
+    # D. HEADER SECTION
     # ======================================================
     header_col1, header_col2, header_col3 = st.columns([1.5, 2, 1.2])
     
     with header_col1:
         st.markdown(f"""
-            <div style='text-align: center; margin-bottom: -32px; position: relative; z-index: 1;'>
-                <img src='{player_img_url}' class='player-image' onerror="this.src='https://ui-avatars.com/api/?name={name.replace(' ', '+')}&size=400'">
+            <div style='text-align: center;'>
+                <img src='{player_img_url}' class='player-image' 
+                     onerror="this.src='https://ui-avatars.com/api/?name={name.replace(' ', '+')}&size=400'">
             </div>
         """, unsafe_allow_html=True)
     
@@ -425,99 +733,123 @@ def show_player_analysis(player_row, weights):
             </div>
         """, unsafe_allow_html=True)
         
-        # Analysis Tags logic
-        analysis_tags = []
-        if fga >= 20: analysis_tags.append(("🔥 High Volume", "high"))
-        elif fga <= 5 and mins > 20: analysis_tags.append(("👻 Passive", "low"))
-        if fp_min >= 1.4: analysis_tags.append(("💎 Elite Eff", "high"))
-        elif fp_min < 0.8 and mins > 15: analysis_tags.append(("❄️ Cold", "low"))
-        if stocks >= 4: analysis_tags.append(("🔒 Lockdown", "high"))
-        if ast >= 10: analysis_tags.append(("🧠 Playmaker", "high"))
-        if fga > 18 and fp_min < 0.9: analysis_tags.append(("🟡 Empty Vol", "mid"))
-        if mins < 22 and fp_min > 1.3: analysis_tags.append(("⚠️ Volatile", "mid"))
-
-        if analysis_tags:
-            for tag, level in analysis_tags:
-                if level == "high": color, text_color = "#d4edda", "#155724"
-                elif level == "mid": color, text_color = "#fff3cd", "#856404"
-                else: color, text_color = "#f8d7da", "#721c24"
-                st.markdown(f"<span style='background:{color};color:{text_color};padding:6px 14px;border-radius:12px;font-size:1rem;margin-right:8px;font-weight:700;display:inline-block;margin-bottom:6px;'>{tag}</span>", unsafe_allow_html=True)
-
+        if not is_single_game:
+            st.caption(f"📊 Stats averaged over {games} games")
+    
     with header_col3:
         st.markdown(f"""
-            <div style='text-align:center; display: flex; flex-direction: column; justify-content: center; height: 100%;'>
+            <div style='text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%;'>
                 <div class='main-score'>{int(score)}</div>
-                <div class='score-label'>Fantasy PTS</div>
+                <div class='score-label'>Fantasy Points</div>
             </div>
         """, unsafe_allow_html=True)
 
     st.divider()
 
     # ======================================================
-    # D. KPI STRIP
+    # E. KEY METRICS
     # ======================================================
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown(f"<div class='kpi-box'><div class='kpi-label'>FP / Min</div><div class='kpi-value'>{fp_min:.2f}</div></div>", unsafe_allow_html=True)
-    with k2: st.markdown(f"<div class='kpi-box'><div class='kpi-label'>Usage</div><div class='kpi-value'>{usage_proxy:.1f}</div></div>", unsafe_allow_html=True)
-    with k3: st.markdown(f"<div class='kpi-box'><div class='kpi-label'>Impact</div><div class='kpi-value'>{impact_score:.1f}</div></div>", unsafe_allow_html=True)
-    with k4: st.markdown(f"<div class='kpi-box'><div class='kpi-label'>Stocks</div><div class='kpi-value'>{int(stocks)}</div></div>", unsafe_allow_html=True)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    
+    with k1:
+        st.markdown(f"<div class='kpi-box'><div class='kpi-label'>FP / Min</div><div class='kpi-value'>{fp_min:.2f}</div></div>", unsafe_allow_html=True)
+    
+    with k2:
+        st.markdown(f"<div class='kpi-box'><div class='kpi-label'>TS%</div><div class='kpi-value'>{ts_pct:.1f}%</div></div>", unsafe_allow_html=True)
+    
+    with k3:
+        st.markdown(f"<div class='kpi-box'><div class='kpi-label'>Impact</div><div class='kpi-value'>{int(game_impact)}</div></div>", unsafe_allow_html=True)
+    
+    with k4:
+        st.markdown(f"<div class='kpi-box'><div class='kpi-label'>AST/TO</div><div class='kpi-value'>{ast_to_ratio:.1f}</div></div>", unsafe_allow_html=True)
+    
+    with k5:
+        st.markdown(f"<div class='kpi-box'><div class='kpi-label'>+/-</div><div class='kpi-value'>{plus_minus:+.0f}</div></div>", unsafe_allow_html=True)
 
     st.divider()
 
     # ======================================================
-    # E. BOTTOM SECTION
+    # F. INTELLIGENT INSIGHTS
     # ======================================================
-    # Injury Context
-    all_injuries = get_injuries()
-    # Check abbreviations in injuries too
-    team_injuries = [
-        inj for inj in all_injuries 
-        if inj.get("team", "").upper() == team_abbr.upper() and "Out" in inj.get("status", "")
-    ]
-    missing = [i["player"] for i in team_injuries]
-    context_msg = ""
-    if missing:
-        context_msg = f"Shouldered the offensive load in the absence of **{', '.join(missing[:2])}**." if fga >= 15 else f"Couldn't step up on offense despite **{len(missing)}** absences on the team."
-
-    # Scout Report
-    scout_report = f"""
-**{name}** stayed on the court for **{int(mins)} minutes** in this period and 
-produced **{score:.1f} fantasy points**.
-
-Took a significant role on offense attempting **{int(fga)} shots**. 
-Production per minute is at **{fp_min:.2f} FP/Min**.
-"""
-    if traded_info: scout_report += f"\n\n🔄 **Traded:** {traded_info}"
-    if fp_min >= 1.3: scout_report += "\n\nThis level falls into the **elite fantasy efficiency** band."
-    elif fp_min < 0.8: scout_report += "\n\nThis performance remained **weak** for fantasy purposes."
-
-    left, right = st.columns([1.5, 1])
-    with left:
-        st.subheader("📋 Scout Report")
-        st.markdown(scout_report)
-        if context_msg: st.info(context_msg, icon="🩺")
-
-        st.subheader("🔮 Fantasy Outlook")
-        if fp_min >= 1.2 and mins >= 28: st.success("🔒 Safe starter – high floor", icon="✅")
-        elif fp_min >= 1.2 and mins < 25: st.warning("⚠️ Boom/Bust – potential breakout if minutes increase", icon="⚡")
-        elif fp_min < 0.8: st.error("❄️ Fade – weak fantasy contribution", icon="❌")
-        else: st.info("🟡 Average fantasy contribution", icon="ℹ️")
-
-    with right:
-        st.subheader("🎯 Shooting Stats")
-        st.markdown(f"**Field Goals:** {int(fgm)}/{int(fga)} ({fg_pct:.1f}%)")
-        st.progress(min(fg_pct/100, 1.0))
+    
+    col_left, col_right = st.columns([1.4, 1])
+    
+    with col_left:
+        st.markdown("### 📊 Performance Analysis")
         
-        if fta > 0:
-            st.markdown(f"**Free Throws:** {int(ftm)}/{int(fta)} ({ft_pct:.1f}%)")
-            st.progress(min(ft_pct/100, 1.0))
+        insights = generate_performance_analysis()
         
-        if float(player_row.get("3PTA", 0)) > 0:
-            three_pts = float(player_row.get("3Pts", 0))
-            three_pta = float(player_row.get("3PTA", 0))
-            three_pct = (three_pts / three_pta * 100)
-            st.markdown(f"**Three Pointers:** {int(three_pts)}/{int(three_pta)} ({three_pct:.1f}%)")
-            st.progress(min(three_pct/100, 1.0))
+        if insights:
+            for insight in insights[:5]:  # En önemli 5 insight
+                insight_type = insight['type']
+                st.markdown(f"""
+                <div class='insight-box insight-{insight_type}'>
+                    <div class='insight-title'>{insight['title']}</div>
+                    <div class='insight-text'>{insight['text']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Standard performance - no significant highlights.")
+        
+        # INJURY CONTEXT
+        st.markdown("### 🩺 Team Context")
+        all_injuries = get_injuries()
+        team_injuries = [
+            inj for inj in all_injuries 
+            if inj.get("team", "").upper() == team_abbr.upper() and "Out" in inj.get("status", "")
+        ]
+        
+        if team_injuries:
+            missing_names = [inj.get('player', 'Unknown') for inj in team_injuries[:3]]
+            st.warning(f"**{len(team_injuries)} teammates out:** {', '.join(missing_names)}")
+            
+            if fga >= 15 or usage_proxy >= 20:
+                st.markdown("""
+                <div class='insight-box insight-info'>
+                    <div class='insight-title'>Elevated Opportunity</div>
+                    <div class='insight-text'>Increased usage due to missing teammates. This workload may not be sustainable when the roster is healthy.</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.success("✅ Team at full strength - role is established")
+
+    with col_right:
+        st.markdown("### 📋 Box Score")
+        
+        # Clean stats display
+        st.markdown(f"""
+        **Scoring**
+        - Points: **{pts:.1f}**
+        - FG: {fgm:.1f}/{fga:.1f} ({fg_pct:.1f}%)
+        - 3PT: {three_pm:.1f}/{three_pa:.1f} ({three_pct:.1f}%)
+        - FT: {ftm:.1f}/{fta:.1f} ({ft_pct:.1f}%)
+        
+        **Other Stats**
+        - Rebounds: **{reb:.1f}**
+        - Assists: **{ast:.1f}**
+        - Steals: **{stl:.1f}**
+        - Blocks: **{blk:.1f}**
+        - Turnovers: **{to:.1f}**
+        
+        **Time & Impact**
+        - Minutes: **{mins:.0f}**
+        - Plus/Minus: **{plus_minus:+.1f}**
+        """)
+        
+        st.markdown("---")
+        
+        st.markdown("### 🔮 Fantasy Outlook")
+        
+        outlook = generate_fantasy_outlook()
+        
+        if outlook['rating'] == 'elite':
+            st.success(f"**{outlook['title']}**\n\n{outlook['text']}")
+        elif outlook['rating'] == 'good':
+            st.info(f"**{outlook['title']}**\n\n{outlook['text']}")
+        elif outlook['rating'] == 'neutral':
+            st.warning(f"**{outlook['title']}**\n\n{outlook['text']}")
+        else:
+            st.error(f"**{outlook['title']}**\n\n{outlook['text']}")
 
 
 # =================================================================
