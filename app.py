@@ -1260,13 +1260,11 @@ st.markdown("""
         background: #ff4b4b !important;
         border-color: #ff4b4b !important;
     }
-    /* Streamlit'in default toggle'ı gizle (sidebar kapalı olunca çıkan << buton) */
+    /* Streamlit'in default toggle'ı gizle */
     [data-testid="stSidebarCollapsedControl"] {
         display: none !important;
         pointer-events: none !important;
     }
-
-    /* collapseSidebar ikon değişimi JS ile yapılıyor (aşağıda poll içinde) */
 
     /* --- MOBİL: Sidebar overlay modunda tam ekran kapan buton --- */
     @media (max-width: 768px) {
@@ -1346,32 +1344,12 @@ st.markdown("""
     }
 
     // ============================================================
-    // Sidebar kapatma — FULL kapatma için stSidebarCollapsedControl
-    // kullanız. collapseSidebar.click() sadece "biraz karar" yapar,
-    // ama stSidebarCollapsedControl Streamlit'in "kapalı" state'ini
-    // doğrudan tetikler.
+    // Sidebar kapatma (Streamlit collapse butonuna tıkla)
     // ============================================================
     function closeSidebar() {
-        // Önce Streamlit'in "kapalı state" butonunu bul
-        var collapsedCtrl = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
-        if (collapsedCtrl) {
-            // Geçici olarak görünür yap
-            collapsedCtrl.style.display = 'block';
-            collapsedCtrl.style.pointerEvents = 'auto';
-            collapsedCtrl.style.visibility = 'visible';
-            // Tıkla — bu Streamlit'e "sidebar kapalı" state'ini set eder
-            collapsedCtrl.click();
-            // Tekrar gizle
-            setTimeout(function() {
-                collapsedCtrl.style.display = 'none';
-                collapsedCtrl.style.pointerEvents = 'none';
-                collapsedCtrl.style.visibility = 'hidden';
-            }, 150);
-            return;
-        }
-        // Fallback: sidebar içindeki collapseSidebar butonuna tıkla
         var sb = document.querySelector('[data-testid="stSidebar"]');
         if (!sb) return;
+        // Streamlit'in collapse toggle'ı sidebar içinde
         var collapseInsideBtn = sb.querySelector('[data-testid="collapseSidebar"]');
         if (collapseInsideBtn) {
             collapseInsideBtn.click();
@@ -1421,24 +1399,6 @@ st.markdown("""
         var closed = isSidebarClosed();
         var btn = document.getElementById('st-sidebar-toggle-btn');
         var isMobile = window.innerWidth <= 768;
-
-        // --- collapseSidebar butonunun ikonunu hamburger'a değiştir ---
-        // CSS ::before çalışmadığı için innerHTML'i doğrudan yaz.
-        // Streamlit re-render yapınca buton yeniden oluşabilir,
-        // o yüzden her poll'da kontrol et.
-        var collapseBtn = document.querySelector('[data-testid="collapseSidebar"]');
-        if (collapseBtn && !collapseBtn.getAttribute('data-icon-patched')) {
-            // SVG orijinal arrow yerine hamburger SVG koy
-            collapseBtn.innerHTML =
-                '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" ' +
-                'fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-                '<line x1="3" y1="6" x2="21" y2="6"/>' +
-                '<line x1="3" y1="12" x2="21" y2="12"/>' +
-                '<line x1="3" y1="18" x2="21" y2="18"/>' +
-                '</svg>';
-            // Marker ekle ki tekrar tekrar yazmasın
-            collapseBtn.setAttribute('data-icon-patched', 'true');
-        }
 
         // Hamburger buton
         if (closed) {
