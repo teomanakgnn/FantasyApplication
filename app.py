@@ -403,30 +403,50 @@ components.html("""
         }
 
         function updateVisibility() {
-            // Eğer triggerElement henüz oluşmadıysa DOM'dan çekmeyi dene
             const trigger = window.parent.document.getElementById('hooplife-master-trigger');
             if (!trigger) return;
             
-            const state = getSidebarState(); // Sidebar durumunu al (isClosed true/false)
+            const state = getSidebarState(); 
             const isMobile = window.parent.innerWidth <= 768;
+            const sidebarWidth = 350; // Sidebar genişliğinize göre burayı güncelleyin
 
-            // ANA MANTIK: Sidebar kapalıyken (isClosed: true) göster, açıkken gizle
             if (state) {
-                if (state.isClosed) {
-                    trigger.style.display = 'flex';
-                    // Kısa bir gecikmeyle opacity verilirse animasyon daha şık durur
-                    setTimeout(() => { trigger.style.opacity = '1'; }, 10);
-                } else {
-                    trigger.style.display = 'none';
-                }
+                if (!state.isClosed) {
+                    // SIDEBAR AÇIKKEN (Premium Görünüm)
+                    Object.assign(trigger.style, {
+                        position: 'fixed',             // Ekranın üstüne sabitlemek için
+                        top: '15px',
+                        left: isMobile ? 'calc(100% - 60px)' : `${sidebarWidth - 20}px`,
+                        background: 'rgba(255, 75, 75, 0.9)', // Hafif şeffaf canlı kırmızı
+                        backdropFilter: 'blur(8px)',          // Cam efekti
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '12px',                 // Daha modern yumuşak köşeler
+                        boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)', // Derinlik için gölge
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    });
 
-                // Mobil Backdrop Yönetimi
-                if (isMobile) {
-                    if (!state.isClosed) {
-                        createBackdrop();
-                    } else {
-                        removeBackdrop();
-                    }
+                    // Daha zarif, ince hatlı X ikonu
+                    trigger.innerHTML = `
+                        <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
+                        </div>
+                    `;
+                } else {
+                    // SIDEBAR KAPALIYKEN (Şık Basketbol Çentiği)
+                    trigger.style.left = '0';
+                    trigger.style.width = '45px';
+                    trigger.style.background = '#1a1c24';
+                    trigger.style.borderRadius = '0 15px 15px 0';
+                    trigger.innerHTML = `
+                        <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
+                    `;
                 }
             }
         }
