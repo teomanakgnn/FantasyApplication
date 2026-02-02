@@ -4,7 +4,462 @@ from datetime import datetime, timedelta
 import concurrent.futures
 import sys
 import os
+import streamlit.components.v1 as components
 
+
+def is_embedded():
+    return st.query_params.get("embed") == "true"
+
+embed_mode = is_embedded()
+
+# Embed modunda ekstra stil ekle
+extra_styles = ""
+if embed_mode:
+    extra_styles = """
+        /* EMBED MODE - Her şeyi gizle */
+        [data-testid="stHeader"] {display: none !important;}
+        [data-testid="stToolbar"] {display: none !important;}
+        header {display: none !important;}
+        #MainMenu {display: none !important;}
+        footer {display: none !important;}
+        .stDeployButton {display: none !important;}
+        
+        /* Üst padding'i kaldır */
+        .main .block-container {
+            padding-top: 0.5rem !important;
+        }
+        
+        /* Streamlit watermark */
+        [data-testid="stStatusWidget"] {display: none !important;}
+        
+        /* ALTTAKI FOOTER KISMI */
+        [data-testid="stBottom"] {display: none !important;}
+        .reportview-container .main footer {display: none !important;}
+    """
+
+st.markdown(f"""
+    <style>
+        /* ============================================
+           MOBİL SIDEBAR SCROLL DÜZELTMESİ
+           ============================================ */
+        
+        @media (max-width: 768px) {{
+            /* Sidebar'ı scroll edilebilir yap */
+            [data-testid="stSidebar"] {{
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                height: 100vh !important;
+                width: 85vw !important;
+                max-width: 320px !important;
+                z-index: 999999 !important;
+                overflow-y: auto !important;  /* ← ÖNEMLİ */
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch !important;  /* ← iOS için smooth scroll */
+            }}
+            
+            /* Sidebar içeriği için scroll container */
+            [data-testid="stSidebar"] > div {{
+                height: 100% !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+            }}
+            
+            /* Sidebar inner content */
+            [data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+                height: auto !important;
+                min-height: 100vh !important;
+                overflow-y: visible !important;
+                padding-bottom: 60px !important;  /* Alt kısım için ekstra padding */
+            }}
+            
+            /* Kapalı durumda gizle */
+            [data-testid="stSidebar"][aria-expanded="false"] {{
+                display: none !important;
+                transform: translateX(-100%) !important;
+            }}
+            
+            /* Açık durumda göster */
+            [data-testid="stSidebar"][aria-expanded="true"] {{
+                display: flex !important;
+                transform: translateX(0) !important;
+            }}
+            
+            /* Main content mobilde full width */
+            [data-testid="stMain"] {{
+                margin-left: 0 !important;
+                width: 100% !important;
+            }}
+            
+            /* Sidebar backdrop (tıklanınca kapat) */
+            [data-testid="stSidebar"][aria-expanded="true"]::before {{
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 85vw;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: -1;
+            }}
+        }}
+        
+        /* ============================================
+           SIDEBAR GENEL (MOBİL + DESKTOP)
+           ============================================ */
+        
+        /* Streamlit'in default toggle butonunu gizle */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] {{
+            display: none !important;
+        }}
+        
+        /* Sidebar temel geçişler */
+        [data-testid="stSidebar"] {{
+            transition: transform 0.3s ease, width 0.3s ease !important;
+        }}
+        
+        /* ============================================
+           HOOPLIFE DOCK
+           ============================================ */
+        
+        #hooplife-master-trigger {{
+            z-index: 999999999 !important;
+            transform: translateZ(0);
+            will-change: transform, width;
+        }}
+        
+        @media (max-width: 768px) {{
+            #hooplife-master-trigger {{
+                width: 40px !important;
+            }}
+            
+            #hooplife-master-trigger #hl-text {{
+                display: none !important;
+            }}
+        }}
+        
+        /* ============================================
+           DİĞER SAYFA ELEMENTLERİ
+           ============================================ */
+        
+        .main .block-container {{
+            padding-top: 1.5rem !important;
+        }}
+        
+        @media (max-width: 768px) {{
+            .main .block-container {{
+                padding-top: 0.75rem !important;
+                padding-left: 0.6rem !important;
+                padding-right: 0.6rem !important;
+            }}
+        }}
+        
+        /* Streamlit header/toolbar/footer gizle */
+        [data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        footer,
+        [data-testid="stBottom"] {{
+            display: none !important;
+        }}
+        
+        {extra_styles}
+    </style>
+""", unsafe_allow_html=True)
+
+# MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
+# Bu JavaScript bloğunu kullanın
+
+components.html("""
+<script>
+    (function() {
+        'use strict';
+        
+        var triggerElement = null;
+        var backdropElement = null;
+        
+        // SIDEBAR DURUMUNU KONTROL ET
+        function getSidebarState() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return null;
+            
+            const rect = sidebar.getBoundingClientRect();
+            const computed = window.parent.getComputedStyle(sidebar);
+            
+            return {
+                element: sidebar,
+                width: rect.width,
+                display: computed.display,
+                isClosed: rect.width < 50 || computed.display === 'none'
+            };
+        }
+        
+        // SIDEBAR'I AÇ/KAPA
+        function toggleSidebar() {
+            const state = getSidebarState();
+            if (!state) return;
+            
+            const isMobile = window.parent.innerWidth <= 768;
+            
+            // YÖNTEM 1: Toggle butonunu bul ve tıkla
+            const selectors = [
+                '[data-testid="stSidebarCollapsedControl"] button',
+                '[data-testid="collapsedControl"] button',
+                'button[kind="header"]',
+                '[data-testid="baseButton-header"]'
+            ];
+            
+            for (let selector of selectors) {
+                const btn = window.parent.document.querySelector(selector);
+                if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
+                    btn.click();
+                    
+                    if (isMobile) {
+                        setTimeout(() => {
+                            const newState = getSidebarState();
+                            if (newState && newState.isClosed === state.isClosed) {
+                                btn.click();
+                            }
+                        }, 200);
+                    }
+                    return;
+                }
+            }
+            
+            // YÖNTEM 2: Keyboard event
+            const keyEvent = new KeyboardEvent('keydown', {
+                key: '[',
+                code: 'BracketLeft',
+                keyCode: 219,
+                bubbles: true
+            });
+            window.parent.document.dispatchEvent(keyEvent);
+            
+            // YÖNTEM 3: Direct DOM manipulation
+            setTimeout(() => {
+                const finalState = getSidebarState();
+                if (finalState && finalState.isClosed === state.isClosed) {
+                    const sidebar = finalState.element;
+                    
+                    if (state.isClosed) {
+                        // Aç
+                        sidebar.style.width = isMobile ? '85vw' : '336px';
+                        sidebar.style.minWidth = isMobile ? '85vw' : '336px';
+                        sidebar.style.transform = 'translateX(0)';
+                        sidebar.style.display = 'flex';
+                        sidebar.setAttribute('aria-expanded', 'true');
+                        
+                        // MOBİL: Scroll'u enable et
+                        if (isMobile) {
+                            sidebar.style.overflowY = 'auto';
+                            sidebar.style.overflowX = 'hidden';
+                            sidebar.style.webkitOverflowScrolling = 'touch';
+                            
+                            // İç container'ı da scroll edilebilir yap
+                            const innerContainers = sidebar.querySelectorAll('div');
+                            innerContainers.forEach(container => {
+                                if (container.getAttribute('data-testid') === 'stSidebarContent') {
+                                    container.style.overflowY = 'visible';
+                                    container.style.height = 'auto';
+                                    container.style.minHeight = '100vh';
+                                }
+                            });
+                        }
+                    } else {
+                        // Kapat
+                        sidebar.style.width = '0';
+                        sidebar.style.minWidth = '0';
+                        sidebar.style.transform = 'translateX(-100%)';
+                        sidebar.setAttribute('aria-expanded', 'false');
+                        
+                        if (isMobile) {
+                            sidebar.style.display = 'none';
+                        }
+                    }
+                }
+            }, 300);
+        }
+        
+        // BACKDROP OLUŞTUR (MOBİLDE SIDEBAR DIŞINA TIKLANINCA KAPANSIN)
+        function createBackdrop() {
+            const isMobile = window.parent.innerWidth <= 768;
+            if (!isMobile) return;
+            
+            // Backdrop zaten varsa sil
+            if (backdropElement) {
+                backdropElement.remove();
+                backdropElement = null;
+            }
+            
+            const state = getSidebarState();
+            if (!state || state.isClosed) return;
+            
+            backdropElement = window.parent.document.createElement('div');
+            backdropElement.id = 'sidebar-backdrop';
+            backdropElement.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999998;
+                cursor: pointer;
+            `;
+            
+            // Backdrop'a tıklayınca sidebar'ı kapat
+            backdropElement.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar();
+            });
+            
+            window.parent.document.body.appendChild(backdropElement);
+        }
+        
+        // BACKDROP'U KALDIR
+        function removeBackdrop() {
+            if (backdropElement) {
+                backdropElement.remove();
+                backdropElement = null;
+            }
+        }
+        
+        // Global bir referans tanımlayalım ki updateVisibility erişebilsin
+        let hoopLifeTrigger = null;
+
+        function createHoopLifeDock() {
+            // Eğer zaten varsa tekrar oluşturma
+            hoopLifeTrigger = window.parent.document.getElementById('hooplife-master-trigger');
+            if (hoopLifeTrigger) return;
+            
+            const triggerElement = window.parent.document.createElement('div');
+            triggerElement.id = 'hooplife-master-trigger';
+            hoopLifeTrigger = triggerElement; // Global referansa ata
+            
+            triggerElement.style.cssText = `
+                position: fixed;
+                top: 20%;
+                left: 0;
+                height: 60px;
+                width: 45px;
+                background: #1a1c24;
+                border: 2px solid #ff4b4b;
+                border-left: none;
+                border-radius: 0 15px 15px 0;
+                z-index: 999999999;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 5px 0 15px rgba(0,0,0,0.4);
+                transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            `;
+            
+            triggerElement.innerHTML = `
+                <div id="hl-icon" style="
+                    font-size: 26px; 
+                    transition: transform 0.5s ease;
+                    filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));
+                ">🏀</div>
+            `;
+            
+            triggerElement.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar(); 
+                // Sidebar açılacağı için görünürlüğü hemen güncelle
+                updateVisibility();
+            });
+            
+            // Hover Efektleri
+            triggerElement.addEventListener('mouseenter', function() {
+                triggerElement.style.width = '60px';
+                triggerElement.style.background = '#ff4b4b';
+                const icon = triggerElement.querySelector('#hl-icon');
+                if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+            });
+            
+            triggerElement.addEventListener('mouseleave', function() {
+                triggerElement.style.width = '45px';
+                triggerElement.style.background = '#1a1c24';
+                const icon = triggerElement.querySelector('#hl-icon');
+                if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+            });
+            
+            window.parent.document.body.appendChild(triggerElement);
+        }
+
+        function updateVisibility() {
+            const trigger = window.parent.document.getElementById('hooplife-master-trigger');
+            if (!trigger) return;
+            
+            const state = getSidebarState(); 
+            const isMobile = window.parent.innerWidth <= 768;
+            const sidebarWidth = 350; // Sidebar genişliğinize göre burayı güncelleyin
+
+            if (state) {
+                if (!state.isClosed) {
+                    // SIDEBAR AÇIKKEN (Premium Görünüm)
+                    Object.assign(trigger.style, {
+                        position: 'fixed',             // Ekranın üstüne sabitlemek için
+                        top: '15px',
+                        left: isMobile ? 'calc(100% - 60px)' : `${sidebarWidth - 20}px`,
+                        background: 'rgba(255, 75, 75, 0.9)', // Hafif şeffaf canlı kırmızı
+                        backdropFilter: 'blur(8px)',          // Cam efekti
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '12px',                 // Daha modern yumuşak köşeler
+                        boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)', // Derinlik için gölge
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    });
+
+                    // Daha zarif, ince hatlı X ikonu
+                    trigger.innerHTML = `
+                        <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
+                        </div>
+                    `;
+                } else {
+                    // SIDEBAR KAPALIYKEN (Şık Basketbol Çentiği)
+                    trigger.style.left = '0';
+                    trigger.style.width = '45px';
+                    trigger.style.background = '#1a1c24';
+                    trigger.style.borderRadius = '0 15px 15px 0';
+                    trigger.innerHTML = `
+                        <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
+                    `;
+                }
+            }
+        }
+        
+        // BAŞLAT
+        function init() {
+            createHoopLifeDock();
+            setTimeout(updateVisibility, 500);
+            setInterval(updateVisibility, 100);
+            window.parent.addEventListener('resize', updateVisibility);
+        }
+        
+        // DOM hazır olunca başlat
+        if (window.parent.document.readyState === 'loading') {
+            window.parent.document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+    })();
+</script>
+""", height=0, width=0)
 # -----------------------------------------------------------------------------
 # SABİTLER VE AYARLAR
 # -----------------------------------------------------------------------------
