@@ -8,15 +8,448 @@ import time
 from services.espn_api import (calculate_game_score, get_score_color)
 
 
-# --------------------
-# 1. CONFIG (EN BAŞA EKLENMELİ)
-# --------------------
 st.set_page_config(
     page_title="HoopLife NBA", 
     layout="wide",
     page_icon="🏀",
     initial_sidebar_state="expanded"
 )
+
+
+def is_embedded():
+    return st.query_params.get("embed") == "true"
+
+embed_mode = is_embedded()
+
+# Embed modunda ekstra stil ekle
+extra_styles = ""
+if embed_mode:
+    extra_styles = """
+        /* EMBED MODE - Her şeyi gizle */
+        [data-testid="stHeader"] {display: none !important;}
+        [data-testid="stToolbar"] {display: none !important;}
+        header {display: none !important;}
+        #MainMenu {display: none !important;}
+        footer {display: none !important;}
+        .stDeployButton {display: none !important;}
+        
+        /* Üst padding'i kaldır */
+        .main .block-container {
+            padding-top: 0.5rem !important;
+        }
+        
+        /* Streamlit watermark */
+        [data-testid="stStatusWidget"] {display: none !important;}
+        
+        /* ALTTAKI FOOTER KISMI */
+        [data-testid="stBottom"] {display: none !important;}
+        .reportview-container .main footer {display: none !important;}
+    """
+
+st.markdown(f"""
+    <style>
+        /* ============================================
+           MOBİL SIDEBAR SCROLL DÜZELTMESİ
+           ============================================ */
+        
+        @media (max-width: 768px) {{
+            /* Sidebar'ı scroll edilebilir yap */
+            [data-testid="stSidebar"] {{
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                height: 100vh !important;
+                width: 85vw !important;
+                max-width: 320px !important;
+                z-index: 999999 !important;
+                overflow-y: auto !important;  /* ← ÖNEMLİ */
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch !important;  /* ← iOS için smooth scroll */
+            }}
+            
+            /* Sidebar içeriği için scroll container */
+            [data-testid="stSidebar"] > div {{
+                height: 100% !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+            }}
+            
+            /* Sidebar inner content */
+            [data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+                height: auto !important;
+                min-height: 100vh !important;
+                overflow-y: visible !important;
+                padding-bottom: 60px !important;  /* Alt kısım için ekstra padding */
+            }}
+            
+            /* Kapalı durumda gizle */
+            [data-testid="stSidebar"][aria-expanded="false"] {{
+                display: none !important;
+                transform: translateX(-100%) !important;
+            }}
+            
+            /* Açık durumda göster */
+            [data-testid="stSidebar"][aria-expanded="true"] {{
+                display: flex !important;
+                transform: translateX(0) !important;
+            }}
+            
+            /* Main content mobilde full width */
+            [data-testid="stMain"] {{
+                margin-left: 0 !important;
+                width: 100% !important;
+            }}
+            
+            /* Sidebar backdrop (tıklanınca kapat) */
+            [data-testid="stSidebar"][aria-expanded="true"]::before {{
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 85vw;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: -1;
+            }}
+        }}
+        
+        /* ============================================
+           SIDEBAR GENEL (MOBİL + DESKTOP)
+           ============================================ */
+        
+        /* Streamlit'in default toggle butonunu gizle */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] {{
+            display: none !important;
+        }}
+        
+        /* Sidebar temel geçişler */
+        [data-testid="stSidebar"] {{
+            transition: transform 0.3s ease, width 0.3s ease !important;
+        }}
+        
+        /* ============================================
+           HOOPLIFE DOCK
+           ============================================ */
+        
+        #hooplife-master-trigger {{
+            z-index: 999999999 !important;
+            transform: translateZ(0);
+            will-change: transform, width;
+        }}
+        
+        @media (max-width: 768px) {{
+            #hooplife-master-trigger {{
+                width: 40px !important;
+            }}
+            
+            #hooplife-master-trigger #hl-text {{
+                display: none !important;
+            }}
+        }}
+        
+        /* ============================================
+           DİĞER SAYFA ELEMENTLERİ
+           ============================================ */
+        
+        .main .block-container {{
+            padding-top: 1.5rem !important;
+        }}
+        
+        @media (max-width: 768px) {{
+            .main .block-container {{
+                padding-top: 0.75rem !important;
+                padding-left: 0.6rem !important;
+                padding-right: 0.6rem !important;
+            }}
+        }}
+        
+        /* Streamlit header/toolbar/footer gizle */
+        [data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        footer,
+        [data-testid="stBottom"] {{
+            display: none !important;
+        }}
+        
+        {extra_styles}
+    </style>
+""", unsafe_allow_html=True)
+
+# MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
+# Bu JavaScript bloğunu kullanın
+
+components.html("""
+<script>
+    (function() {
+        'use strict';
+        
+        var triggerElement = null;
+        var backdropElement = null;
+        
+        // SIDEBAR DURUMUNU KONTROL ET
+        function getSidebarState() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return null;
+            
+            const rect = sidebar.getBoundingClientRect();
+            const computed = window.parent.getComputedStyle(sidebar);
+            
+            return {
+                element: sidebar,
+                width: rect.width,
+                display: computed.display,
+                isClosed: rect.width < 50 || computed.display === 'none'
+            };
+        }
+        
+        // SIDEBAR'I AÇ/KAPA
+        function toggleSidebar() {
+            const state = getSidebarState();
+            if (!state) return;
+            
+            const isMobile = window.parent.innerWidth <= 768;
+            
+            // YÖNTEM 1: Toggle butonunu bul ve tıkla
+            const selectors = [
+                '[data-testid="stSidebarCollapsedControl"] button',
+                '[data-testid="collapsedControl"] button',
+                'button[kind="header"]',
+                '[data-testid="baseButton-header"]'
+            ];
+            
+            for (let selector of selectors) {
+                const btn = window.parent.document.querySelector(selector);
+                if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
+                    btn.click();
+                    
+                    if (isMobile) {
+                        setTimeout(() => {
+                            const newState = getSidebarState();
+                            if (newState && newState.isClosed === state.isClosed) {
+                                btn.click();
+                            }
+                        }, 200);
+                    }
+                    return;
+                }
+            }
+            
+            // YÖNTEM 2: Keyboard event
+            const keyEvent = new KeyboardEvent('keydown', {
+                key: '[',
+                code: 'BracketLeft',
+                keyCode: 219,
+                bubbles: true
+            });
+            window.parent.document.dispatchEvent(keyEvent);
+            
+            // YÖNTEM 3: Direct DOM manipulation
+            setTimeout(() => {
+                const finalState = getSidebarState();
+                if (finalState && finalState.isClosed === state.isClosed) {
+                    const sidebar = finalState.element;
+                    
+                    if (state.isClosed) {
+                        // Aç
+                        sidebar.style.width = isMobile ? '85vw' : '336px';
+                        sidebar.style.minWidth = isMobile ? '85vw' : '336px';
+                        sidebar.style.transform = 'translateX(0)';
+                        sidebar.style.display = 'flex';
+                        sidebar.setAttribute('aria-expanded', 'true');
+                        
+                        // MOBİL: Scroll'u enable et
+                        if (isMobile) {
+                            sidebar.style.overflowY = 'auto';
+                            sidebar.style.overflowX = 'hidden';
+                            sidebar.style.webkitOverflowScrolling = 'touch';
+                            
+                            // İç container'ı da scroll edilebilir yap
+                            const innerContainers = sidebar.querySelectorAll('div');
+                            innerContainers.forEach(container => {
+                                if (container.getAttribute('data-testid') === 'stSidebarContent') {
+                                    container.style.overflowY = 'visible';
+                                    container.style.height = 'auto';
+                                    container.style.minHeight = '100vh';
+                                }
+                            });
+                        }
+                    } else {
+                        // Kapat
+                        sidebar.style.width = '0';
+                        sidebar.style.minWidth = '0';
+                        sidebar.style.transform = 'translateX(-100%)';
+                        sidebar.setAttribute('aria-expanded', 'false');
+                        
+                        if (isMobile) {
+                            sidebar.style.display = 'none';
+                        }
+                    }
+                }
+            }, 300);
+        }
+        
+        // BACKDROP OLUŞTUR (MOBİLDE SIDEBAR DIŞINA TIKLANINCA KAPANSIN)
+        function createBackdrop() {
+            const isMobile = window.parent.innerWidth <= 768;
+            if (!isMobile) return;
+            
+            // Backdrop zaten varsa sil
+            if (backdropElement) {
+                backdropElement.remove();
+                backdropElement = null;
+            }
+            
+            const state = getSidebarState();
+            if (!state || state.isClosed) return;
+            
+            backdropElement = window.parent.document.createElement('div');
+            backdropElement.id = 'sidebar-backdrop';
+            backdropElement.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999998;
+                cursor: pointer;
+            `;
+            
+            // Backdrop'a tıklayınca sidebar'ı kapat
+            backdropElement.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar();
+            });
+            
+            window.parent.document.body.appendChild(backdropElement);
+        }
+        
+        // BACKDROP'U KALDIR
+        function removeBackdrop() {
+            if (backdropElement) {
+                backdropElement.remove();
+                backdropElement = null;
+            }
+        }
+        
+        // Global bir referans tanımlayalım ki updateVisibility erişebilsin
+        let hoopLifeTrigger = null;
+
+        function createHoopLifeDock() {
+            // Eğer zaten varsa tekrar oluşturma
+            hoopLifeTrigger = window.parent.document.getElementById('hooplife-master-trigger');
+            if (hoopLifeTrigger) return;
+            
+            const triggerElement = window.parent.document.createElement('div');
+            triggerElement.id = 'hooplife-master-trigger';
+            hoopLifeTrigger = triggerElement; // Global referansa ata
+            
+            triggerElement.style.cssText = `
+                position: fixed;
+                top: 20%;
+                left: 0;
+                height: 60px;
+                width: 45px;
+                background: #1a1c24;
+                border: 2px solid #ff4b4b;
+                border-left: none;
+                border-radius: 0 15px 15px 0;
+                z-index: 999999999;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 5px 0 15px rgba(0,0,0,0.4);
+                transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            `;
+            
+            triggerElement.innerHTML = `
+                <div id="hl-icon" style="
+                    font-size: 26px; 
+                    transition: transform 0.5s ease;
+                    filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));
+                ">🏀</div>
+            `;
+            
+            triggerElement.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar(); 
+                // Sidebar açılacağı için görünürlüğü hemen güncelle
+                updateVisibility();
+            });
+            
+            // Hover Efektleri
+            triggerElement.addEventListener('mouseenter', function() {
+                triggerElement.style.width = '60px';
+                triggerElement.style.background = '#ff4b4b';
+                const icon = triggerElement.querySelector('#hl-icon');
+                if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+            });
+            
+            triggerElement.addEventListener('mouseleave', function() {
+                triggerElement.style.width = '45px';
+                triggerElement.style.background = '#1a1c24';
+                const icon = triggerElement.querySelector('#hl-icon');
+                if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+            });
+            
+            window.parent.document.body.appendChild(triggerElement);
+        }
+
+        function updateVisibility() {
+            // Eğer triggerElement henüz oluşmadıysa DOM'dan çekmeyi dene
+            const trigger = window.parent.document.getElementById('hooplife-master-trigger');
+            if (!trigger) return;
+            
+            const state = getSidebarState(); // Sidebar durumunu al (isClosed true/false)
+            const isMobile = window.parent.innerWidth <= 768;
+
+            // ANA MANTIK: Sidebar kapalıyken (isClosed: true) göster, açıkken gizle
+            if (state) {
+                if (state.isClosed) {
+                    trigger.style.display = 'flex';
+                    // Kısa bir gecikmeyle opacity verilirse animasyon daha şık durur
+                    setTimeout(() => { trigger.style.opacity = '1'; }, 10);
+                } else {
+                    trigger.style.display = 'none';
+                }
+
+                // Mobil Backdrop Yönetimi
+                if (isMobile) {
+                    if (!state.isClosed) {
+                        createBackdrop();
+                    } else {
+                        removeBackdrop();
+                    }
+                }
+            }
+        }
+        
+        // BAŞLAT
+        function init() {
+            createHoopLifeDock();
+            setTimeout(updateVisibility, 500);
+            setInterval(updateVisibility, 100);
+            window.parent.addEventListener('resize', updateVisibility);
+        }
+        
+        // DOM hazır olunca başlat
+        if (window.parent.document.readyState === 'loading') {
+            window.parent.document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+    })();
+</script>
+""", height=0, width=0)
+
 
 st.markdown("""
     <div style="display: none;">
@@ -75,23 +508,36 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     
     # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_success_state', False):
+        st.balloons()
         st.success("✅ Correct Answer!")
         st.info(f"ℹ️ {question.get('explanation', '')}")
+        
+        # Streak göster
+        if user_id:
+            new_streak = db.get_user_streak(user_id)
+            st.markdown(f"### 🔥 Current Streak: {new_streak} days!")
+        
         st.caption("See you tomorrow! 👋")
         
-        if st.button("Close", type="primary"):
+        if st.button("Close", type="primary", key="close_success"):
             del st.session_state['trivia_success_state']
             if 'trivia_force_open' in st.session_state:
                 del st.session_state['trivia_force_open']
-            st.session_state.active_dialog = None  # Clear active dialog
+            st.session_state.active_dialog = None
             st.rerun()
         return
+        
     # --- 2. HATA EKRANI (YANLIŞ CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_error_state', False):
         error_info = st.session_state.get('trivia_error_info', {})
         st.error(f"❌ Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
         if error_info.get('explanation'):
             st.info(f"ℹ️ {error_info.get('explanation')}")
+        
+        # Streak reset bilgisi (sadece giriş yapmış kullanıcılar için)
+        if user_id:
+            st.warning("💔 Your streak has been reset.")
+        
         st.caption("Better luck tomorrow! 👋")
         
         if st.button("Close", type="primary", key="close_error"):
@@ -99,6 +545,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             del st.session_state['trivia_error_info']
             if 'trivia_force_open' in st.session_state:
                 del st.session_state['trivia_force_open']
+            st.session_state.active_dialog = None
             st.rerun()
         return
 
@@ -106,7 +553,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     if user_id:
         badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
         icon = "🔥"
-        text = f"{current_streak} Day"
+        text = f"{current_streak} Day Streak"
     else:
         badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
         icon = "🔒"
@@ -135,47 +582,45 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     if submitted:
         if not choice:
             st.warning("Please select an option.")
-        else:
-            is_correct = (choice == question['correct_option'])
-            today_str = str(datetime.now().date())
-            
-            if not user_id:
-                cookie_manager = get_cookie_manager()
-            
-            if is_correct:
-                st.balloons()
-                if user_id:
-                    db.mark_user_trivia_played(user_id)
-                    st.toast(f"Daily streak updated!", icon="🔥")
-                else:
-                    # Key her seferinde benzersiz olsun ki zorla update etsin
-                    unique_key = f"set_correct_{int(datetime.now().timestamp())}"
-                    cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
-                    # Session state'i de hemen güncelle (yedek)
-                    st.session_state[f'trivia_played_{today_str}'] = True
-
-                st.session_state['trivia_success_state'] = True
-                st.session_state['trivia_force_open'] = True
-                st.rerun()
-                
+            st.stop()
+        
+        is_correct = (choice == question['correct_option'])
+        today_str = str(datetime.now().date())
+        
+        if not user_id:
+            cookie_manager = get_cookie_manager()
+        
+        if is_correct:
+            # Doğru cevap
+            if user_id:
+                db.mark_user_trivia_played(user_id)
             else:
-                if user_id:
-                    db.mark_user_trivia_played(user_id)
-                else:
-                    unique_key = f"set_wrong_{int(datetime.now().timestamp())}"
-                    cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
-                    # Session state'i de hemen güncelle (yedek)
-                    st.session_state[f'trivia_played_{today_str}'] = True
-                
-                correct_text = options[question['correct_option']]
-                st.session_state['trivia_error_state'] = True
-                st.session_state['trivia_error_info'] = {
-                    'correct_option': question['correct_option'],
-                    'correct_text': correct_text,
-                    'explanation': question.get('explanation', '')
-                }
-                st.session_state['trivia_force_open'] = True
-                st.rerun()
+                unique_key = f"set_correct_{int(datetime.now().timestamp())}"
+                cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
+                st.session_state[f'trivia_played_{today_str}'] = True
+
+            st.session_state['trivia_success_state'] = True
+            st.session_state['trivia_force_open'] = True
+            st.rerun()
+            
+        else:
+            # Yanlış cevap
+            if user_id:
+                db.mark_user_trivia_played(user_id)
+            else:
+                unique_key = f"set_wrong_{int(datetime.now().timestamp())}"
+                cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
+                st.session_state[f'trivia_played_{today_str}'] = True
+            
+            correct_text = options[question['correct_option']]
+            st.session_state['trivia_error_state'] = True
+            st.session_state['trivia_error_info'] = {
+                'correct_option': question['correct_option'],
+                'correct_text': correct_text,
+                'explanation': question.get('explanation', '')
+            }
+            st.session_state['trivia_force_open'] = True
+            st.rerun()
 
 def handle_daily_trivia():
 
@@ -997,7 +1442,7 @@ def home_page():
         st.session_state.active_dialog = None
     
     # Only show trivia if no other dialog is active
-    if st.session_state.active_dialog is None:
+    if st.session_state.active_dialog is None or st.session_state.active_dialog == 'trivia':
         handle_daily_trivia()
     render_header()
     
@@ -1147,10 +1592,8 @@ def home_page():
                         st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
                         
                         if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
-                            if st.session_state.active_dialog is None:
-                                show_boxscore_dialog(g)
-                            else:
-                                st.warning("Please close the current dialog first")
+                            st.session_state.active_dialog = None
+                            show_boxscore_dialog(g)
     
     # Show All / Show Less — tam genişlik buton
     if total_games > games_to_show:
@@ -1230,221 +1673,3 @@ def home_page():
 home_page()
 
 
-# ============================================================
-# SIDEBAR TOGGLE BUTTON + SCRIPT
-# ============================================================
-
-st.markdown("""
-<style>
-    #st-sidebar-toggle-btn {
-        position: fixed !important;
-        top: 14px !important;
-        left: 10px !important;
-        z-index: 9999999 !important;
-        width: 38px !important;
-        height: 38px !important;
-        background: rgba(14, 17, 23, 0.93) !important;
-        border: 1px solid rgba(255,255,255,0.35) !important;
-        border-radius: 8px !important;
-        color: #fff !important;
-        font-size: 1.2rem !important;
-        line-height: 38px !important;
-        text-align: center !important;
-        cursor: pointer !important;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
-        transition: background 0.2s, border-color 0.2s !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-    }
-    #st-sidebar-toggle-btn:hover {
-        background: #ff4b4b !important;
-        border-color: #ff4b4b !important;
-    }
-    /* Streamlit'in default toggle'ı gizle */
-    [data-testid="stSidebarCollapsedControl"] {
-        display: none !important;
-        pointer-events: none !important;
-    }
-
-    /* --- MOBİL: Sidebar overlay modunda tam ekran kapan buton --- */
-    @media (max-width: 768px) {
-        /* Sidebar açık olunca overlay backdrop */
-        [data-testid="stSidebar"] {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            height: 100vh !important;
-            width: 85vw !important;
-            max-width: 320px !important;
-            z-index: 999998 !important;
-            overflow-y: auto !important;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.4) !important;
-        }
-        /* Kapan butonu: sidebar açıkken sağ üste */
-        #st-sidebar-close-btn {
-            position: fixed !important;
-            top: 14px !important;
-            right: 14px !important;
-            z-index: 999999 !important;
-            width: 36px !important;
-            height: 36px !important;
-            background: rgba(14, 17, 23, 0.93) !important;
-            border: 1px solid rgba(255,255,255,0.35) !important;
-            border-radius: 8px !important;
-            color: #fff !important;
-            font-size: 1.3rem !important;
-            line-height: 36px !important;
-            text-align: center !important;
-            cursor: pointer !important;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
-            display: none;
-        }
-        #st-sidebar-close-btn:hover {
-            background: #ff4b4b !important;
-            border-color: #ff4b4b !important;
-        }
-        /* Dark overlay arkada */
-        #st-sidebar-overlay {
-            display: none;
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            background: rgba(0,0,0,0.5) !important;
-            z-index: 999997 !important;
-        }
-    }
-</style>
-<script>
-(function(){
-    // ============================================================
-    // Sidebar kapalı mı?
-    // ============================================================
-    function isSidebarClosed() {
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        if (!sb) return true;
-        return sb.offsetWidth < 50;
-    }
-
-    // ============================================================
-    // Sidebar açma
-    // ============================================================
-    function openSidebar() {
-        var collapseBtn = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
-        if (collapseBtn) {
-            collapseBtn.style.display = 'block';
-            collapseBtn.style.pointerEvents = 'auto';
-            collapseBtn.click();
-            setTimeout(function() {
-                collapseBtn.style.display = 'none';
-                collapseBtn.style.pointerEvents = 'none';
-            }, 100);
-        }
-    }
-
-    // ============================================================
-    // Sidebar kapatma (Streamlit collapse butonuna tıkla)
-    // ============================================================
-    function closeSidebar() {
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        if (!sb) return;
-        // Streamlit'in collapse toggle'ı sidebar içinde
-        var collapseInsideBtn = sb.querySelector('[data-testid="collapseSidebar"]');
-        if (collapseInsideBtn) {
-            collapseInsideBtn.click();
-        }
-    }
-
-    // ============================================================
-    // Overlay + Close button oluştur (mobil için)
-    // ============================================================
-    function ensureMobileElements() {
-        if (!document.getElementById('st-sidebar-overlay')) {
-            var overlay = document.createElement('div');
-            overlay.id = 'st-sidebar-overlay';
-            overlay.addEventListener('click', function() { closeSidebar(); });
-            document.body.appendChild(overlay);
-        }
-        if (!document.getElementById('st-sidebar-close-btn')) {
-            var closeBtn = document.createElement('div');
-            closeBtn.id = 'st-sidebar-close-btn';
-            closeBtn.innerHTML = '&#10005;';
-            closeBtn.setAttribute('title', 'Close');
-            closeBtn.addEventListener('click', function() { closeSidebar(); });
-            document.body.appendChild(closeBtn);
-        }
-    }
-
-    // ============================================================
-    // Toggle button oluştur (hamburger)
-    // ============================================================
-    function createToggleBtn() {
-        var btn = document.createElement('div');
-        btn.id = 'st-sidebar-toggle-btn';
-        btn.innerHTML = '&#9776;';
-        btn.setAttribute('title', 'Open Sidebar');
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            openSidebar();
-        });
-        document.body.insertBefore(btn, document.body.firstChild);
-    }
-
-    // ============================================================
-    // Polling — her 300ms
-    // ============================================================
-    function poll() {
-        var closed = isSidebarClosed();
-        var btn = document.getElementById('st-sidebar-toggle-btn');
-        var isMobile = window.innerWidth <= 768;
-
-        // Hamburger buton
-        if (closed) {
-            if (!btn) { createToggleBtn(); }
-            else { btn.style.display = 'flex'; }
-        } else {
-            if (btn) { btn.style.display = 'none'; }
-        }
-
-        // Mobil overlay + close buton
-        if (isMobile) {
-            ensureMobileElements();
-            var overlay = document.getElementById('st-sidebar-overlay');
-            var closeBtn = document.getElementById('st-sidebar-close-btn');
-            if (!closed) {
-                overlay.style.display = 'block';
-                closeBtn.style.display = 'flex';
-                closeBtn.style.alignItems = 'center';
-                closeBtn.style.justifyContent = 'center';
-            } else {
-                overlay.style.display = 'none';
-                closeBtn.style.display = 'none';
-            }
-        }
-    }
-
-    // ============================================================
-    // Diğer elementleri gizle
-    // ============================================================
-    function hideExtra() {
-        ['footer','[data-testid="stBottom"]','[data-testid="stHeader"]','.viewerBadge_container__1QSob'].forEach(function(sel){
-            var el = document.querySelector(sel);
-            if (el) { el.style.display='none'; el.style.visibility='hidden'; }
-        });
-    }
-
-    // ============================================================
-    // START
-    // ============================================================
-    poll();
-    hideExtra();
-    setInterval(function() {
-        poll();
-        hideExtra();
-    }, 300);
-
-})();
-</script>
-""", unsafe_allow_html=True)

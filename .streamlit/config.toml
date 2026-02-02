@@ -6,7 +6,7 @@ enableCORS = false
 gatherUsageStats = false
 
 [ui]
-hideTopBar = true
+hideTopBar = false
 hideSidebarNav = false
 
 [theme]
