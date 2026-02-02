@@ -138,6 +138,7 @@ st.markdown(f"""
             transform: translateZ(0);
             will-change: transform, width;
         }}
+            
         
         @media (max-width: 768px) {{
             #hooplife-master-trigger {{
