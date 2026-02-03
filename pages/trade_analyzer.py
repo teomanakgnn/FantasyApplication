@@ -177,8 +177,23 @@ components.html("""
         
         var triggerElement = null;
         var backdropElement = null;
-        var sidebarShouldBeClosed = false;
-        var preventAutoOpen = false;
+        
+        // LocalStorage kullanarak sidebar durumunu sakla
+        function saveSidebarState(isClosed) {
+            try {
+                window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
+            } catch(e) {
+                console.log('LocalStorage kullanılamıyor');
+            }
+        }
+        
+        function getSavedSidebarState() {
+            try {
+                return window.parent.localStorage.getItem('hooplife_sidebar_closed') === 'true';
+            } catch(e) {
+                return false;
+            }
+        }
         
         // SIDEBAR DURUMUNU KONTROL ET
         function getSidebarState() {
@@ -221,15 +236,8 @@ components.html("""
             
             const isMobile = window.parent.innerWidth <= 768;
             
-            if (state.isClosed) {
-                // Açıyoruz - preventAutoOpen'ı kapat
-                sidebarShouldBeClosed = false;
-                preventAutoOpen = false;
-            } else {
-                // Kapatıyoruz - durumu kaydet
-                sidebarShouldBeClosed = true;
-                preventAutoOpen = true;
-            }
+            // ÖNEMLİ: Toggle etmeden ÖNCE gerçek durumu kontrol et
+            const willBeClosed = !state.isClosed; // Tıkladıktan sonra ne olacak?
             
             // YÖNTEM 1: Toggle butonunu bul ve tıkla
             const selectors = [
@@ -252,6 +260,14 @@ components.html("""
                             }
                         }, 200);
                     }
+                    
+                    // Toggle gerçekleştikten SONRA durumu kaydet
+                    setTimeout(() => {
+                        const finalState = getSidebarState();
+                        if (finalState) {
+                            saveSidebarState(finalState.isClosed);
+                        }
+                    }, 400);
                     return;
                 }
             }
@@ -278,6 +294,7 @@ components.html("""
                         sidebar.style.transform = 'translateX(0)';
                         sidebar.style.display = 'flex';
                         sidebar.setAttribute('aria-expanded', 'true');
+                        saveSidebarState(false); // Açık olarak kaydet
                         
                         // MOBİL: Scroll'u enable et
                         if (isMobile) {
@@ -298,54 +315,10 @@ components.html("""
                     } else {
                         // Kapat
                         forceSidebarClose();
+                        saveSidebarState(true); // Kapalı olarak kaydet
                     }
                 }
             }, 300);
-        }
-        
-        // BACKDROP OLUŞTUR (MOBİLDE SIDEBAR DIŞINA TIKLANINCA KAPANSIN)
-        function createBackdrop() {
-            const isMobile = window.parent.innerWidth <= 768;
-            if (!isMobile) return;
-            
-            // Backdrop zaten varsa sil
-            if (backdropElement) {
-                backdropElement.remove();
-                backdropElement = null;
-            }
-            
-            const state = getSidebarState();
-            if (!state || state.isClosed) return;
-            
-            backdropElement = window.parent.document.createElement('div');
-            backdropElement.id = 'sidebar-backdrop';
-            backdropElement.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 999998;
-                cursor: pointer;
-            `;
-            
-            // Backdrop'a tıklayınca sidebar'ı kapat
-            backdropElement.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleSidebar();
-            });
-            
-            window.parent.document.body.appendChild(backdropElement);
-        }
-        
-        // BACKDROP'U KALDIR
-        function removeBackdrop() {
-            if (backdropElement) {
-                backdropElement.remove();
-                backdropElement = null;
-            }
         }
         
         // Global bir referans tanımlayalım ki updateVisibility erişebilsin
@@ -360,7 +333,7 @@ components.html("""
             
             const triggerElement = window.parent.document.createElement('div');
             triggerElement.id = 'hooplife-master-trigger';
-            hoopLifeTrigger = triggerElement; // Global referansa ata
+            hoopLifeTrigger = triggerElement;
             
             triggerElement.style.cssText = `
                 position: fixed;
@@ -394,7 +367,6 @@ components.html("""
             triggerElement.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Basketbol topuna tıklandı!');
                 toggleSidebar(); 
                 setTimeout(updateVisibility, 100);
             });
@@ -420,7 +392,6 @@ components.html("""
         function updateVisibility() {
             const trigger = window.parent.document.getElementById('hooplife-master-trigger');
             if (!trigger) {
-                // Buton yoksa yeniden oluştur
                 createHoopLifeDock();
                 return;
             }
@@ -428,143 +399,121 @@ components.html("""
             const state = getSidebarState(); 
             if (!state) return;
             
-            // Eğer sidebar kapalı olmalıysa ve açıksa, zorla kapat
-            if (preventAutoOpen && !state.isClosed) {
-                console.log('Sidebar otomatik açılmış, kapatılıyor...');
-                forceSidebarClose();
-                return;
-            }
-            
             const isMobile = window.parent.innerWidth <= 768;
-            const sidebarWidth = 350;
 
-            if (state) {
-                if (!state.isClosed) {
-                    // SIDEBAR AÇIKKEN
-                    if (isMobile) {
-                        // MOBİLDE: Premium Görünüm (çarpı butonu)
-                        Object.assign(trigger.style, {
-                            position: 'fixed',
-                            top: '15px',
-                            left: 'calc(100% - 60px)',
-                            background: 'rgba(255, 75, 75, 0.9)',
-                            backdropFilter: 'blur(8px)',
-                            width: '40px',
-                            height: '40px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: '12px',
-                            boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            cursor: 'pointer',
-                            pointerEvents: 'auto',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                        });
-
-                        trigger.innerHTML = `
-                            <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
-                                <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
-                                <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
-                            </div>
-                        `;
-                        
-                        // Event listener'ı yeniden ekle
-                        trigger.onclick = function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleSidebar();
-                            setTimeout(updateVisibility, 100);
-                        };
-                    } else {
-                        // DESKTOP'TA: Butonu gizle
-                        trigger.style.display = 'none';
-                    }
-                } else {
-                    // SIDEBAR KAPALIYKEN (Basketbol Çentiği)
+            if (!state.isClosed) {
+                // SIDEBAR AÇIKKEN
+                if (isMobile) {
+                    // MOBİLDE: Premium Görünüm (çarpı butonu)
                     Object.assign(trigger.style, {
+                        position: 'fixed',
+                        top: '15px',
+                        left: 'calc(100% - 60px)',
+                        background: 'rgba(255, 75, 75, 0.9)',
+                        backdropFilter: 'blur(8px)',
+                        width: '40px',
+                        height: '40px',
                         display: 'flex',
-                        left: '0',
-                        top: '20%',
-                        width: '45px',
-                        height: '60px',
-                        background: '#1a1c24',
-                        border: '2px solid #ff4b4b',
-                        borderLeft: 'none',
-                        borderRadius: '0 15px 15px 0',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        cursor: 'pointer',
                         pointerEvents: 'auto',
-                        cursor: 'pointer'
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     });
-                    
+
                     trigger.innerHTML = `
-                        <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
+                        <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
+                        </div>
                     `;
                     
-                    // Event listener'ı yeniden ekle
                     trigger.onclick = function(e) {
                         e.preventDefault();
                         e.stopPropagation();
                         toggleSidebar();
                         setTimeout(updateVisibility, 100);
                     };
-                    
-                    // Hover efektlerini yeniden ekle
-                    trigger.onmouseenter = function() {
-                        trigger.style.width = '60px';
-                        trigger.style.background = '#ff4b4b';
-                        const icon = trigger.querySelector('#hl-icon');
-                        if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
-                    };
-                    
-                    trigger.onmouseleave = function() {
-                        trigger.style.width = '45px';
-                        trigger.style.background = '#1a1c24';
-                        const icon = trigger.querySelector('#hl-icon');
-                        if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
-                    };
+                } else {
+                    // DESKTOP'TA: Butonu gizle
+                    trigger.style.display = 'none';
                 }
+            } else {
+                // SIDEBAR KAPALIYKEN (Basketbol Çentiği)
+                Object.assign(trigger.style, {
+                    display: 'flex',
+                    left: '0',
+                    top: '20%',
+                    width: '45px',
+                    height: '60px',
+                    background: '#1a1c24',
+                    border: '2px solid #ff4b4b',
+                    borderLeft: 'none',
+                    borderRadius: '0 15px 15px 0',
+                    pointerEvents: 'auto',
+                    cursor: 'pointer'
+                });
+                
+                trigger.innerHTML = `
+                    <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
+                `;
+                
+                trigger.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSidebar();
+                    setTimeout(updateVisibility, 100);
+                };
+                
+                trigger.onmouseenter = function() {
+                    trigger.style.width = '60px';
+                    trigger.style.background = '#ff4b4b';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                };
+                
+                trigger.onmouseleave = function() {
+                    trigger.style.width = '45px';
+                    trigger.style.background = '#1a1c24';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                };
             }
         }
         
-        // Sayfa değişimlerini izle
-        function observePageChanges() {
-            const observer = new MutationObserver(function(mutations) {
-                // Butonu kontrol et, yoksa yeniden oluştur
-                const trigger = window.parent.document.getElementById('hooplife-master-trigger');
-                if (!trigger) {
-                    console.log('Buton kaybolmuş, yeniden oluşturuluyor...');
-                    createHoopLifeDock();
-                }
-                
-                updateVisibility();
-            });
+        // Sidebar durumunu kontrol et ve gerekirse düzelt
+        function checkAndFixSidebar() {
+            const shouldBeClosed = getSavedSidebarState();
+            const state = getSidebarState();
             
-            observer.observe(window.parent.document.body, {
-                childList: true,
-                subtree: true
-            });
-        }
-        
-        // Sürekli sidebar durumunu kontrol et
-        function monitorSidebar() {
-            setInterval(() => {
-                if (preventAutoOpen) {
-                    const state = getSidebarState();
-                    if (state && !state.isClosed) {
-                        console.log('Sidebar istenmeyen şekilde açık, kapatılıyor...');
-                        forceSidebarClose();
-                    }
-                }
-            }, 100);
+            if (shouldBeClosed && state && !state.isClosed) {
+                // Kullanıcı daha önce kapattı ama şimdi açık - kapat
+                setTimeout(() => {
+                    forceSidebarClose();
+                    updateVisibility();
+                }, 500);
+            } else if (state) {
+                // Gerçek durumu localStorage'a kaydet (senkronize et)
+                saveSidebarState(state.isClosed);
+            }
         }
         
         // BAŞLAT
         function init() {
             createHoopLifeDock();
-            observePageChanges();
-            monitorSidebar();
+            
+            // Sidebar durumunu kontrol et
+            checkAndFixSidebar();
             
             setTimeout(updateVisibility, 500);
+            setInterval(() => {
+                checkAndFixSidebar();
+                updateVisibility();
+            }, 1000);
+            
             window.parent.addEventListener('resize', updateVisibility);
         }
         
