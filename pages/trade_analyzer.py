@@ -177,8 +177,8 @@ components.html("""
         
         var triggerElement = null;
         var backdropElement = null;
-        var lastSidebarState = null;
-        var userClosedSidebar = false;
+        var sidebarShouldBeClosed = false;
+        var preventAutoOpen = false;
         
         // SIDEBAR DURUMUNU KONTROL ET
         function getSidebarState() {
@@ -196,6 +196,24 @@ components.html("""
             };
         }
         
+        // SIDEBAR'I ZORLA KAPAT
+        function forceSidebarClose() {
+            const state = getSidebarState();
+            if (!state || state.isClosed) return;
+            
+            const sidebar = state.element;
+            const isMobile = window.parent.innerWidth <= 768;
+            
+            sidebar.style.width = '0';
+            sidebar.style.minWidth = '0';
+            sidebar.style.transform = 'translateX(-100%)';
+            sidebar.setAttribute('aria-expanded', 'false');
+            
+            if (isMobile) {
+                sidebar.style.display = 'none';
+            }
+        }
+        
         // SIDEBAR'I AÇ/KAPA
         function toggleSidebar() {
             const state = getSidebarState();
@@ -203,8 +221,15 @@ components.html("""
             
             const isMobile = window.parent.innerWidth <= 768;
             
-            // Kullanıcı manuel olarak kapattı/açtı
-            userClosedSidebar = !state.isClosed;
+            if (state.isClosed) {
+                // Açıyoruz - preventAutoOpen'ı kapat
+                sidebarShouldBeClosed = false;
+                preventAutoOpen = false;
+            } else {
+                // Kapatıyoruz - durumu kaydet
+                sidebarShouldBeClosed = true;
+                preventAutoOpen = true;
+            }
             
             // YÖNTEM 1: Toggle butonunu bul ve tıkla
             const selectors = [
@@ -272,14 +297,7 @@ components.html("""
                         }
                     } else {
                         // Kapat
-                        sidebar.style.width = '0';
-                        sidebar.style.minWidth = '0';
-                        sidebar.style.transform = 'translateX(-100%)';
-                        sidebar.setAttribute('aria-expanded', 'false');
-                        
-                        if (isMobile) {
-                            sidebar.style.display = 'none';
-                        }
+                        forceSidebarClose();
                     }
                 }
             }, 300);
@@ -410,15 +428,12 @@ components.html("""
             const state = getSidebarState(); 
             if (!state) return;
             
-            // Sidebar durumu değişti mi kontrol et
-            const currentClosed = state.isClosed;
-            if (lastSidebarState !== null && lastSidebarState !== currentClosed) {
-                // Durum değişti - kullanıcı sidebar'ı kapattıysa bunu kaydet
-                if (currentClosed) {
-                    userClosedSidebar = true;
-                }
+            // Eğer sidebar kapalı olmalıysa ve açıksa, zorla kapat
+            if (preventAutoOpen && !state.isClosed) {
+                console.log('Sidebar otomatik açılmış, kapatılıyor...');
+                forceSidebarClose();
+                return;
             }
-            lastSidebarState = currentClosed;
             
             const isMobile = window.parent.innerWidth <= 768;
             const sidebarWidth = 350;
@@ -513,12 +528,7 @@ components.html("""
         
         // Sayfa değişimlerini izle
         function observePageChanges() {
-            let isObserving = false;
-            
             const observer = new MutationObserver(function(mutations) {
-                if (isObserving) return;
-                isObserving = true;
-                
                 // Butonu kontrol et, yoksa yeniden oluştur
                 const trigger = window.parent.document.getElementById('hooplife-master-trigger');
                 if (!trigger) {
@@ -527,31 +537,34 @@ components.html("""
                 }
                 
                 updateVisibility();
-                
-                setTimeout(() => {
-                    isObserving = false;
-                }, 100);
             });
             
             observer.observe(window.parent.document.body, {
                 childList: true,
-                subtree: false
+                subtree: true
             });
+        }
+        
+        // Sürekli sidebar durumunu kontrol et
+        function monitorSidebar() {
+            setInterval(() => {
+                if (preventAutoOpen) {
+                    const state = getSidebarState();
+                    if (state && !state.isClosed) {
+                        console.log('Sidebar istenmeyen şekilde açık, kapatılıyor...');
+                        forceSidebarClose();
+                    }
+                }
+            }, 100);
         }
         
         // BAŞLAT
         function init() {
             createHoopLifeDock();
             observePageChanges();
-            
-            // İlk durumu kaydet
-            const state = getSidebarState();
-            if (state) {
-                lastSidebarState = state.isClosed;
-            }
+            monitorSidebar();
             
             setTimeout(updateVisibility, 500);
-            setInterval(updateVisibility, 1000);
             window.parent.addEventListener('resize', updateVisibility);
         }
         
