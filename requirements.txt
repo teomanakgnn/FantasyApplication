@@ -12,3 +12,4 @@ psycopg2-binary
 bcrypt
 requests-oauthlib
 extra-streamlit-components
+feedparser
