@@ -9,6 +9,47 @@ from services.espn_api import (calculate_game_score, get_score_color)
 from auth import check_authentication
 
 
+# app.py - import'lardan hemen sonra, sayfa config'den önce
+
+# Token yönetimi için helper fonksiyon
+def load_token_from_storage():
+    """localStorage'dan token'ı yükle"""
+    if 'token_loaded' not in st.session_state:
+        result = components.html("""
+            <div id="token-container" style="display:none;"></div>
+            <script>
+                (function() {
+                    const data = localStorage.getItem('hooplife_auth_data');
+                    const container = document.getElementById('token-container');
+                    
+                    if (data && container) {
+                        try {
+                            const authData = JSON.parse(data);
+                            const expiry = new Date(authData.expiry);
+                            const now = new Date();
+                            
+                            if (now > expiry) {
+                                localStorage.removeItem('hooplife_auth_data');
+                                container.setAttribute('data-token', 'EXPIRED');
+                            } else {
+                                container.setAttribute('data-token', authData.token);
+                                console.log('✅ Token yüklendi:', authData.token.substring(0, 15) + '...');
+                            }
+                        } catch(e) {
+                            console.error('Token okuma hatası:', e);
+                            container.setAttribute('data-token', 'ERROR');
+                        }
+                    } else {
+                        if (container) container.setAttribute('data-token', 'NONE');
+                    }
+                })();
+            </script>
+        """, height=0)
+        st.session_state.token_loaded = True
+
+# Sayfa yüklenirken token'ı oku
+load_token_from_storage()
+
 st.set_page_config(
     page_title="HoopLife NBA", 
     layout="wide",
