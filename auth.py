@@ -248,13 +248,17 @@ def render_auth_page():
                             
                             # --- BENİ HATIRLA MANTIĞI ---
                             # render_auth_page içindeki login submit bloğu
+
                             if remember_me:
-                                # Key yine "nba_cookies" olmalı
                                 cookie_manager = CookieManager(key="nba_cookies")
                                 cookie_manager.set(
                                     'hooplife_auth_token', 
                                     token, 
-                                    expires_at=datetime.now() + timedelta(days=30)
+                                    expires_at=datetime.now() + timedelta(days=30),
+                                    key=f"set_auth_{int(datetime.now().timestamp())}",  # Unique key
+                                    # ⬇️ ÖNEMLİ EKLEMELER
+                                    same_site='None',  # iframe için zorunlu
+                                    secure=True        # HTTPS gerektir (localhost'ta çalışmaz)
                                 )
                             
                             st.session_state.page = "home"
