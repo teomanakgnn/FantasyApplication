@@ -4,9 +4,8 @@ import re
 import base64
 import os
 from datetime import datetime, timedelta
-from extra_streamlit_components import CookieManager
 import streamlit.components.v1 as components
-
+import hashlib
 
 # --- YARDIMCI FONKSİYONLAR ---
 
@@ -17,82 +16,214 @@ def get_img_as_base64(file_path):
             data = f.read()
         return base64.b64encode(data).decode()
     except FileNotFoundError:
-        # Eğer logo dosyası bulunamazsa boş döner veya varsayılan bir ikon konabilir.
         print(f"Uyarı: {file_path} bulunamadı.")
         return None
-
-def set_local_storage(token):
-    """localStorage'a token kaydet (iframe-safe)"""
-    components.html(f"""
-        <script>
-            window.parent.localStorage.setItem('hooplife_auth_token', '{token}');
-            window.parent.localStorage.setItem('hooplife_token_date', '{datetime.now().isoformat()}');
-        </script>
-    """, height=0)
-
-def get_local_storage():
-    """localStorage'dan token oku"""
-    result = components.html("""
-        <script>
-            const token = window.parent.localStorage.getItem('hooplife_auth_token');
-            const tokenDate = window.parent.localStorage.getItem('hooplife_token_date');
-            
-            // Token 30 günden eskiyse sil
-            if (tokenDate) {
-                const date = new Date(tokenDate);
-                const now = new Date();
-                const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
-                
-                if (daysDiff > 30) {
-                    window.parent.localStorage.removeItem('hooplife_auth_token');
-                    window.parent.localStorage.removeItem('hooplife_token_date');
-                } else if (token) {
-                    // Token'ı parent'a gönder
-                    window.parent.postMessage({type: 'AUTH_TOKEN', token: token}, '*');
-                }
-            }
-        </script>
-    """, height=0)
-    return result
 
 def is_valid_email(email):
     """Email formatı doğrulama"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+def save_auth_token_to_parent(token):
+    """Parent window'a token gönder (iframe-safe)"""
+    components.html(f"""
+        <script>
+            (function() {{
+                const token = '{token}';
+                const expiry = new Date();
+                expiry.setDate(expiry.getDate() + 30); // 30 gün
+                
+                const authData = {{
+                    token: token,
+                    expiry: expiry.toISOString(),
+                    savedAt: new Date().toISOString()
+                }};
+                
+                // Parent window'un localStorage'ına kaydet
+                try {{
+                    window.parent.localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                    console.log('✅ Token saved to parent localStorage');
+                }} catch(e) {{
+                    console.error('❌ Failed to save token:', e);
+                }}
+                
+                // Iframe'e de kaydet (yedek)
+                try {{
+                    window.localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                }} catch(e) {{
+                    console.error('⚠️ Failed to save token to iframe:', e);
+                }}
+            }})();
+        </script>
+    """, height=0)
+
+def get_auth_token_from_parent():
+    """Parent window'dan token oku"""
+    components.html("""
+        <script>
+            (function() {
+                let authData = null;
+                
+                // Parent'tan oku
+                try {
+                    const data = window.parent.localStorage.getItem('hooplife_auth_data');
+                    if (data) {
+                        authData = JSON.parse(data);
+                        
+                        // Expiry kontrolü
+                        const expiry = new Date(authData.expiry);
+                        const now = new Date();
+                        
+                        if (now > expiry) {
+                            // Token expired
+                            window.parent.localStorage.removeItem('hooplife_auth_data');
+                            window.localStorage.removeItem('hooplife_auth_data');
+                            authData = null;
+                            console.log('⏰ Token expired, removed');
+                        } else {
+                            console.log('✅ Valid token found in parent:', authData.token.substring(0, 10) + '...');
+                            
+                            // Token'ı Streamlit session'a kaydet
+                            window.parent.streamlit_auth_token = authData.token;
+                        }
+                    }
+                } catch(e) {
+                    console.error('❌ Failed to read parent token:', e);
+                }
+                
+                // Parent'ta yoksa iframe'den oku (yedek)
+                if (!authData) {
+                    try {
+                        const data = window.localStorage.getItem('hooplife_auth_data');
+                        if (data) {
+                            authData = JSON.parse(data);
+                            console.log('✅ Token found in iframe storage');
+                            window.parent.streamlit_auth_token = authData.token;
+                        }
+                    } catch(e) {
+                        console.error('❌ Failed to read iframe token:', e);
+                    }
+                }
+            })();
+        </script>
+    """, height=0)
+
+def clear_auth_token():
+    """Token'ı temizle (logout)"""
+    components.html("""
+        <script>
+            (function() {
+                try {
+                    window.parent.localStorage.removeItem('hooplife_auth_data');
+                    window.localStorage.removeItem('hooplife_auth_data');
+                    delete window.parent.streamlit_auth_token;
+                    console.log('✅ Token cleared from storage');
+                } catch(e) {
+                    console.error('❌ Failed to clear token:', e);
+                }
+            })();
+        </script>
+    """, height=0)
+
+def check_stored_token():
+    """localStorage'dan token'ı kontrol et ve session'a kaydet"""
+    result = components.html("""
+        <script>
+            (function() {
+                // Parent'tan token al
+                const token = window.parent.streamlit_auth_token;
+                
+                if (token) {
+                    // Streamlit'e bildir (hidden input ile)
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.id = 'stored_token_value';
+                    input.value = token;
+                    document.body.appendChild(input);
+                    
+                    // Token hash'ini döndür (güvenlik için)
+                    const hash = btoa(token.substring(0, 20));
+                    window.parent.postMessage({
+                        type: 'STREAMLIT_TOKEN_READY',
+                        hash: hash
+                    }, '*');
+                    
+                    console.log('✅ Token ready for Streamlit');
+                } else {
+                    console.log('ℹ️ No stored token found');
+                }
+            })();
+        </script>
+    """, height=0)
+    
+    return result
+
 def check_authentication(all_cookies):
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
     # 1. Session'da zaten varsa
     if st.session_state.get('authenticated'):
         return True
     
-    # 2. localStorage'dan oku (iframe-safe)
-    if 'auth_token_from_storage' not in st.session_state:
-        get_local_storage()  # Token'ı okumaya çalış
-        st.session_state.auth_token_from_storage = None
+    # 2. İlk yüklemede token okuma işlemini başlat
+    if 'token_read_initiated' not in st.session_state:
+        get_auth_token_from_parent()
+        st.session_state.token_read_initiated = True
+        return False
     
-    # postMessage ile gelen token'ı dinle
-    token = st.session_state.get('auth_token_from_storage')
+    # 3. Token kontrolü yap
+    if 'token_validated' not in st.session_state:
+        check_stored_token()
+        st.session_state.token_validated = True
+        
+        # JavaScript'in çalışması için kısa bir süre bekle
+        import time
+        time.sleep(0.3)
     
-    if not token and all_cookies:
+    # 4. Session state'ten token kontrol et
+    # JavaScript'ten gelen token'ı almak için alternatif yöntem
+    if 'auth_check_count' not in st.session_state:
+        st.session_state.auth_check_count = 0
+    
+    st.session_state.auth_check_count += 1
+    
+    # İlk birkaç denemede token gelene kadar bekle
+    if st.session_state.auth_check_count < 3:
+        return False
+    
+    # 5. Cookie'den token kontrol et (fallback)
+    if all_cookies:
         token = all_cookies.get('hooplife_auth_token')
+        if token:
+            user = db.validate_session(token)
+            if user:
+                st.session_state.user = user
+                st.session_state.session_token = token
+                st.session_state.authenticated = True
+                return True
     
-    if token:
-        user = db.validate_session(token)
-        if user:
-            st.session_state.user = user
-            st.session_state.session_token = token
-            st.session_state.authenticated = True
-            return True
-            
     return False
+
 def logout():
     """Kullanıcı çıkış işlemi"""
     if 'session_token' in st.session_state:
         db.logout_session(st.session_state.session_token)
     
+    # localStorage'dan temizle
+    clear_auth_token()
+    
+    # Session state temizle
     st.session_state.authenticated = False
     st.session_state.user = None
     st.session_state.session_token = None
+    
+    # Token kontrol değişkenlerini resetle
+    if 'token_read_initiated' in st.session_state:
+        del st.session_state.token_read_initiated
+    if 'token_validated' in st.session_state:
+        del st.session_state.token_validated
+    if 'auth_check_count' in st.session_state:
+        del st.session_state.auth_check_count
+    
     st.rerun()
 
 # --- ARAYÜZ FONKSİYONU ---
@@ -107,18 +238,16 @@ def render_auth_page():
             st.session_state.page = "home"
             st.rerun()
 
-    # --- CSS: TAMAMEN KOYU TEMA ---
+    # CSS (aynı kalacak - değişiklik yok)
     st.markdown("""
         <style>
-        /* Genel Arkaplan */
         .block-container {
             padding-top: 0.5rem;
             padding-bottom: 2rem;
         }
         
-        /* Kart Tasarımı - KOYU RENK */
         .auth-card {
-            background-color: #1a1c24 !important; /* Koyu Arka Plan */
+            background-color: #1a1c24 !important;
             border: 1px solid #2d2d2d;
             border-radius: 20px;
             padding: 3rem;
@@ -127,11 +256,9 @@ def render_auth_page():
             margin: 0 auto;
         }
         
-        /* Metin Renkleri - Koyu kart üzerinde açık renk yazı */
         .auth-card h1, .auth-card h2 { color: #ececf1 !important; }
         .auth-card p, .auth-card div, .brand-header p { color: #9ca3af !important; }
 
-        /* Başlıklar */
         .brand-header {
             text-align: center;
             margin-bottom: 1.5rem;
@@ -139,7 +266,6 @@ def render_auth_page():
             padding-top: 0;
         }
 
-        /* Logo Alanı Stili */
         .logo-container {
             display: flex;
             justify-content: center;
@@ -149,29 +275,27 @@ def render_auth_page():
             padding-top: 0;
         }
         .logo-img {
-            max-width: 300px !important; /* Logo boyutu daha da küçültüldü */
+            max-width: 300px !important;
             width: 300px !important;
             height: auto;
             display: block;
         }
 
-        /* Tab Etiketleri (Giriş Yap / Kayıt Ol) */
         div[data-testid="stTabs"] button {
-            color: #9ca3af !important; /* Pasif tab rengi */
+            color: #9ca3af !important;
         }
         div[data-testid="stTabs"] button[aria-selected="true"] {
-            color: #ececf1 !important; /* Aktif tab rengi */
+            color: #ececf1 !important;
             border-bottom-color: #1D428A !important;
         }
 
-        /* Plan Kartları - Koyu Tema */
         .plan-container {
             border: 1px solid #2d2d2d;
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 1.5rem;
             text-align: center;
-            background-color: #262730; /* Daha koyu gri */
+            background-color: #262730;
             transition: all 0.3s ease;
         }
         .plan-container:hover {
@@ -192,8 +316,8 @@ def render_auth_page():
             line-height: 1.5;
         }
         .coming-soon-badge {
-            background-color: #374151; /* Koyu gri */
-            color: #FBBF24 !important; /* Sarı metin */
+            background-color: #374151;
+            color: #FBBF24 !important;
             padding: 2px 6px;
             border-radius: 10px;
             font-size: 0.6rem;
@@ -202,47 +326,39 @@ def render_auth_page():
             margin-left: 5px;
         }
         
-        /* Input Alanlarını Zorla Koyu Yap */
         input[type="text"], input[type="password"] {
-            background-color: #262730 !important; /* Koyu input zemini */
-            color: #ececf1 !important; /* Açık renk yazı */
+            background-color: #262730 !important;
+            color: #ececf1 !important;
             border: 1px solid #4b5563 !important;
         }
-        /* Checkbox metni */
         .stCheckbox label {
             color: #9ca3af !important;
         }
         
-        /* Buton İyileştirmeleri */
         div[data-testid="stFormSubmitButton"] button {
             border-radius: 8px;
             font-weight: 600;
             padding: 0.5rem 1rem;
             transition: all 0.2s;
-            background-color: #1D428A !important; /* NBA Mavisi Buton */
+            background-color: #1D428A !important;
             color: white !important;
             border: none !important;
         }
         div[data-testid="stFormSubmitButton"] button:hover {
-            background-color: #163a7a !important; /* Hover rengi */
+            background-color: #163a7a !important;
             transform: scale(1.01);
         }
         </style>
     """, unsafe_allow_html=True)
 
-
-
-    # 1. LOGO VE HEADER ALANI
-    logo_path = "HoopLifeNBA_logo.png" # Dosya adı
+    # Logo
+    logo_path = "HoopLifeNBA_logo.png"
     logo_b64 = get_img_as_base64(logo_path)
 
-    # Eğer logo dosyası varsa göster, yoksa varsayılan bir ikon göster
     if logo_b64:
         img_tag = f'<img src="data:image/png;base64,{logo_b64}" class="logo-img" alt="HoopLife NBA Logo">'
     else:
-        # Dosya bulunamazsa yedek ikon (isteğe bağlı kaldırılabilir)
         img_tag = '<img src="https://cdn-icons-png.flaticon.com/512/33/33736.png" class="logo-img" style="opacity:0.5" alt="Default Logo">'
-        st.warning(f"Logo dosyası ({logo_path}) bulunamadı. Lütfen auth.py ile aynı dizine ekleyin.")
 
     st.markdown(f"""
         <div class="logo-container">
@@ -270,7 +386,6 @@ def render_auth_page():
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
             
-# ... (Login submit bloğu içinde)
             if submit:
                 if not username or not password:
                     st.error("Please enter your credentials.")
@@ -279,17 +394,34 @@ def render_auth_page():
                     if user:
                         token = db.create_session(user['id'])
                         if token:
-                            # Session State
+                            # Session State'i doldur
                             st.session_state.user = user
                             st.session_state.session_token = token
                             st.session_state.authenticated = True
                             
-                            # Remember Me - localStorage kullan
-                            if remember_me:
-                                set_local_storage(token)  # Cookie yerine localStorage
+                            # Token kontrol değişkenlerini resetle
+                            if 'token_read_initiated' in st.session_state:
+                                del st.session_state.token_read_initiated
+                            if 'token_validated' in st.session_state:
+                                del st.session_state.token_validated
+                            if 'auth_check_count' in st.session_state:
+                                del st.session_state.auth_check_count
                             
+                            # 🔥 BENİ HATIRLA - Parent localStorage'a kaydet
+                            if remember_me:
+                                save_auth_token_to_parent(token)
+                                st.success("✅ Login successful! You'll stay logged in for 30 days.")
+                            else:
+                                st.success("✅ Login successful!")
+                            
+                            import time
+                            time.sleep(1)
                             st.session_state.page = "home"
                             st.rerun()
+                        else:
+                            st.error("Connection error. Please try again.")
+                    else:
+                        st.error("Incorrect username or password.")
 
     # ==================== REGISTER TAB ====================
     with tab2:
@@ -297,7 +429,6 @@ def render_auth_page():
         
         c1, c2 = st.columns(2)
         with c1:
-            # Starter Plan Kartı - Koyu mod
             st.markdown("""
                 <div class="plan-container">
                     <span class="plan-title">Starter</span>
@@ -308,7 +439,6 @@ def render_auth_page():
             """, unsafe_allow_html=True)
             
         with c2:
-            # Pro Plan Kartı - Koyu mod (hafif degrade)
             st.markdown("""
                 <div class="plan-container" style="background: linear-gradient(145deg, #262730 0%, #2d2d2d 100%);">
                     <span class="plan-title">Pro <span class="coming-soon-badge">SOON</span></span>
@@ -359,8 +489,6 @@ def render_auth_page():
                     else:
                         st.error(f"Error: {message}")
 
-    st.markdown('</div>', unsafe_allow_html=True)
-    
     st.markdown("""
         <div style="text-align: center; margin-top: 1rem; color: #6b7280; font-size: 0.8rem;">
             © 2024 HoopLife NBA. All rights reserved.

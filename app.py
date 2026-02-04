@@ -16,6 +16,29 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+components.html("""
+    <script>
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'HOOPLIFE_AUTH_TOKEN' && event.data.token) {
+                // Streamlit'in session state'ine token'ı gönder
+                const stateEvent = new CustomEvent('streamlit:setComponentValue', {
+                    detail: {
+                        value: {
+                            token: event.data.token,
+                            savedAt: event.data.savedAt
+                        }
+                    }
+                });
+                window.dispatchEvent(stateEvent);
+            }
+        });
+    </script>
+""", height=0)
+
+# Token'ı session state'e kaydet
+if 'stored_auth_token' not in st.session_state:
+    st.session_state.stored_auth_token = None
+
 # Sadece şu fonksiyonu kullanın:
 def get_cookie_manager():
     # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
