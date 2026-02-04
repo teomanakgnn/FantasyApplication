@@ -755,7 +755,7 @@ def render_trade_analyzer_page():
         st.header("⚙️ Scoring System")
         
         # SCORING METHOD
-        st.subheader("📊 Calculation Method")
+        st.subheader("Calculation Method")
         scoring_method = st.selectbox(
             "Choose method",
             [
