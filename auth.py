@@ -24,14 +24,15 @@ def is_valid_email(email):
     return re.match(pattern, email) is not None
 
 def check_authentication():
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Cookie destekli)"""
-    # 1. Zaten session'da varsa direkt True dön
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Senkronizasyon Düzeltildi)"""
     if st.session_state.get('authenticated'):
         return True
     
-    # 2. Session'da yoksa Cookie'den oku
+    # app.py ile AYNI key olmalı: "nba_cookies"
     from extra_streamlit_components import CookieManager
-    cookie_manager = CookieManager(key="auth_cookies")
+    cookie_manager = CookieManager(key="nba_cookies")
+    
+    # Iframe içinde çerezlerin gelmesi bazen zaman alır
     token = cookie_manager.get('hooplife_auth_token')
 
     if token:
@@ -244,11 +245,15 @@ def render_auth_page():
                             st.session_state.authenticated = True
                             
                             # --- BENİ HATIRLA MANTIĞI ---
-                            if remember_me:
-                                from extra_streamlit_components import CookieManager
-                                cookie_manager = CookieManager(key="auth_set_cookies")
-                                # Token'ı 30 günlüğüne çerezlere kaydet
-                                cookie_manager.set('hooplife_auth_token', token, expires_at=datetime.now() + timedelta(days=30))
+                        if remember_me:
+                            # app.py ile AYNI key
+                            from extra_streamlit_components import CookieManager
+                            cookie_manager = CookieManager(key="nba_cookies")
+                            cookie_manager.set(
+                                'hooplife_auth_token', 
+                                token, 
+                                expires_at=datetime.now() + timedelta(days=30)
+                            )
                             
                             st.session_state.page = "home"
                             st.rerun()
