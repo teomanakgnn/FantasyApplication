@@ -50,9 +50,9 @@ st.markdown(f"""
                 width: 85vw !important;
                 max-width: 320px !important;
                 z-index: 999999 !important;
-                overflow-y: auto !important;  /* ← ÖNEMLİ */
+                overflow-y: auto !important;
                 overflow-x: hidden !important;
-                -webkit-overflow-scrolling: touch !important;  /* ← iOS için smooth scroll */
+                -webkit-overflow-scrolling: touch !important;
             }}
             
             /* Sidebar içeriği için scroll container */
@@ -68,7 +68,7 @@ st.markdown(f"""
                 height: auto !important;
                 min-height: 100vh !important;
                 overflow-y: visible !important;
-                padding-bottom: 60px !important;  /* Alt kısım için ekstra padding */
+                padding-bottom: 60px !important;
             }}
             
             /* Kapalı durumda gizle */
@@ -168,8 +168,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
-# Bu JavaScript bloğunu kullanın
-
 components.html("""
 <script>
     (function() {
@@ -178,7 +176,6 @@ components.html("""
         var triggerElement = null;
         var backdropElement = null;
         
-        // LocalStorage kullanarak sidebar durumunu sakla
         function saveSidebarState(isClosed) {
             try {
                 window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
@@ -195,7 +192,6 @@ components.html("""
             }
         }
         
-        // SIDEBAR DURUMUNU KONTROL ET
         function getSidebarState() {
             const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
             if (!sidebar) return null;
@@ -211,7 +207,6 @@ components.html("""
             };
         }
         
-        // SIDEBAR'I ZORLA KAPAT
         function forceSidebarClose() {
             const state = getSidebarState();
             if (!state || state.isClosed) return;
@@ -229,17 +224,13 @@ components.html("""
             }
         }
         
-        // SIDEBAR'I AÇ/KAPA
         function toggleSidebar() {
             const state = getSidebarState();
             if (!state) return;
             
             const isMobile = window.parent.innerWidth <= 768;
+            const willBeClosed = !state.isClosed;
             
-            // ÖNEMLİ: Toggle etmeden ÖNCE gerçek durumu kontrol et
-            const willBeClosed = !state.isClosed; // Tıkladıktan sonra ne olacak?
-            
-            // YÖNTEM 1: Toggle butonunu bul ve tıkla
             const selectors = [
                 '[data-testid="stSidebarCollapsedControl"] button',
                 '[data-testid="collapsedControl"] button',
@@ -261,7 +252,6 @@ components.html("""
                         }, 200);
                     }
                     
-                    // Toggle gerçekleştikten SONRA durumu kaydet
                     setTimeout(() => {
                         const finalState = getSidebarState();
                         if (finalState) {
@@ -272,7 +262,6 @@ components.html("""
                 }
             }
             
-            // YÖNTEM 2: Keyboard event
             const keyEvent = new KeyboardEvent('keydown', {
                 key: '[',
                 code: 'BracketLeft',
@@ -281,28 +270,24 @@ components.html("""
             });
             window.parent.document.dispatchEvent(keyEvent);
             
-            // YÖNTEM 3: Direct DOM manipulation
             setTimeout(() => {
                 const finalState = getSidebarState();
                 if (finalState && finalState.isClosed === state.isClosed) {
                     const sidebar = finalState.element;
                     
                     if (state.isClosed) {
-                        // Aç
                         sidebar.style.width = isMobile ? '85vw' : '336px';
                         sidebar.style.minWidth = isMobile ? '85vw' : '336px';
                         sidebar.style.transform = 'translateX(0)';
                         sidebar.style.display = 'flex';
                         sidebar.setAttribute('aria-expanded', 'true');
-                        saveSidebarState(false); // Açık olarak kaydet
+                        saveSidebarState(false);
                         
-                        // MOBİL: Scroll'u enable et
                         if (isMobile) {
                             sidebar.style.overflowY = 'auto';
                             sidebar.style.overflowX = 'hidden';
                             sidebar.style.webkitOverflowScrolling = 'touch';
                             
-                            // İç container'ı da scroll edilebilir yap
                             const innerContainers = sidebar.querySelectorAll('div');
                             innerContainers.forEach(container => {
                                 if (container.getAttribute('data-testid') === 'stSidebarContent') {
@@ -313,19 +298,16 @@ components.html("""
                             });
                         }
                     } else {
-                        // Kapat
                         forceSidebarClose();
-                        saveSidebarState(true); // Kapalı olarak kaydet
+                        saveSidebarState(true);
                     }
                 }
             }, 300);
         }
         
-        // Global bir referans tanımlayalım ki updateVisibility erişebilsin
         let hoopLifeTrigger = null;
 
         function createHoopLifeDock() {
-            // Eski butonu sil (varsa)
             const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
             if (oldTrigger) {
                 oldTrigger.remove();
@@ -363,7 +345,6 @@ components.html("""
                 ">🏀</div>
             `;
             
-            // Click event'i ekle
             triggerElement.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -371,7 +352,6 @@ components.html("""
                 setTimeout(updateVisibility, 100);
             });
             
-            // Hover Efektleri
             triggerElement.addEventListener('mouseenter', function() {
                 triggerElement.style.width = '60px';
                 triggerElement.style.background = '#ff4b4b';
@@ -402,9 +382,7 @@ components.html("""
             const isMobile = window.parent.innerWidth <= 768;
 
             if (!state.isClosed) {
-                // SIDEBAR AÇIKKEN
                 if (isMobile) {
-                    // MOBİLDE: Premium Görünüm (çarpı butonu)
                     Object.assign(trigger.style, {
                         position: 'fixed',
                         top: '15px',
@@ -438,11 +416,9 @@ components.html("""
                         setTimeout(updateVisibility, 100);
                     };
                 } else {
-                    // DESKTOP'TA: Butonu gizle
                     trigger.style.display = 'none';
                 }
             } else {
-                // SIDEBAR KAPALIYKEN (Basketbol Çentiği)
                 Object.assign(trigger.style, {
                     display: 'flex',
                     left: '0',
@@ -484,30 +460,23 @@ components.html("""
             }
         }
         
-        // Sidebar durumunu kontrol et ve gerekirse düzelt
         function checkAndFixSidebar() {
             const shouldBeClosed = getSavedSidebarState();
             const state = getSidebarState();
             
             if (shouldBeClosed && state && !state.isClosed) {
-                // Kullanıcı daha önce kapattı ama şimdi açık - kapat
                 setTimeout(() => {
                     forceSidebarClose();
                     updateVisibility();
                 }, 500);
             } else if (state) {
-                // Gerçek durumu localStorage'a kaydet (senkronize et)
                 saveSidebarState(state.isClosed);
             }
         }
         
-        // BAŞLAT
         function init() {
             createHoopLifeDock();
-            
-            // Sidebar durumunu kontrol et
             checkAndFixSidebar();
-            
             setTimeout(updateVisibility, 500);
             setInterval(() => {
                 checkAndFixSidebar();
@@ -517,7 +486,6 @@ components.html("""
             window.parent.addEventListener('resize', updateVisibility);
         }
         
-        // DOM hazır olunca başlat
         if (window.parent.document.readyState === 'loading') {
             window.parent.document.addEventListener('DOMContentLoaded', init);
         } else {
@@ -527,11 +495,12 @@ components.html("""
     })();
 </script>
 """, height=0, width=0)
+
 # --- GÜNCEL PUANLAMA SİSTEMİ ---
 BASE_WEIGHTS = {
     "PTS": 0.75, "REB": 0.5, "AST": 0.8, "STL": 1.7, "BLK": 1.6, "TO": -1.5,
     "FGA": -0.9, "FGM": 1.2, "FTA": -0.55, "FTM": 1.1, "3PM": 0.6, 
-    "FG%": 0.0, "FT%": 0.0  # Punt için ekstra
+    "FG%": 0.0, "FT%": 0.0
 }
 
 # --- TEAM MAP ---
@@ -552,8 +521,11 @@ TEAM_MAP = {
     'TOR': 'Toronto Raptors', 'UTA': 'Utah Jazz', 'UTAH': 'Utah Jazz', 'WSH': 'Washington Wizards'
 }
 
-def calculate_avg_fp(df, punt_cats):
-    """Calculate average fantasy points with punt categories"""
+# ============================================
+# THRESHOLD-BASED SMART VALUATION SYSTEM
+# ============================================
+
+def calculate_threshold_value(df, punt_cats, min_threshold=12.0, penalty_curve=0.3):
     weights = BASE_WEIGHTS.copy()
     
     # Punt kategorilerini 0 yap
@@ -568,13 +540,163 @@ def calculate_avg_fp(df, punt_cats):
             weights["TO"] = 0.0
     
     available_cols = [col for col in weights.keys() if col in df.columns]
-    if not available_cols: return 0.0
+    if not available_cols: 
+        return 0.0, []
     
-    avg_stats = df[available_cols].mean()
-    score = 0.0
-    for category in available_cols:
-        score += avg_stats[category] * weights[category]
-    return score
+    # Her oyuncu için FP hesapla
+    player_fps = []
+    for idx, row in df.iterrows():
+        raw_fp = sum(row.get(col, 0) * weights[col] for col in available_cols)
+        player_fps.append({
+            'player': row.get('PLAYER', 'Unknown'),
+            'raw_fp': raw_fp,
+            'adjusted_fp': 0.0,
+            'tier': '',
+            'multiplier': 1.0
+        })
+    
+    if not player_fps:
+        return 0.0, []
+    
+    # FP'ye göre sırala
+    player_fps.sort(key=lambda x: x['raw_fp'], reverse=True)
+    
+    # Her oyuncu için adjusted value hesapla
+    total_adjusted = 0.0
+    
+    for p in player_fps:
+        raw = p['raw_fp']
+        
+        if raw >= min_threshold:
+            # EŞİK ÜSTÜ: TAM DEĞER
+            p['adjusted_fp'] = raw
+            p['multiplier'] = 1.0
+            
+            # Tier classification
+            if raw >= 30:
+                p['tier'] = '⭐ Elite'
+            elif raw >= 22:
+                p['tier'] = '🔹 Solid Starter'
+            elif raw >= 15:
+                p['tier'] = '🔸 Starter'
+            else:
+                p['tier'] = '🟢 Flex'
+                
+        else:
+            # EŞİK ALTI: EKSPONANSIYEL CEZA
+            # Formül: adjusted = raw * (raw / threshold) ^ penalty_curve
+            ratio = raw / min_threshold
+            multiplier = pow(ratio, 1 + penalty_curve)
+            
+            p['adjusted_fp'] = raw * multiplier
+            p['multiplier'] = multiplier
+            
+            if raw >= 8:
+                p['tier'] = '🟡 Bench'
+            elif raw >= 4:
+                p['tier'] = '🟠 Deep Bench'
+            else:
+                p['tier'] = '⚪ Streamer'
+        
+        total_adjusted += p['adjusted_fp']
+    
+    # Ortalama adjusted value
+    avg_adjusted = total_adjusted / len(player_fps) if player_fps else 0.0
+    
+    return avg_adjusted, player_fps
+
+
+def calculate_quality_over_quantity(df, punt_cats, top_player_bonus=1.5):
+    """
+    KALİTE > MİKTAR SİSTEMİ
+    
+    En iyi oyuncu ekstra bonus alır.
+    2-for-1 trade'lerde quality'yi ödüllendirir.
+    
+    Mantık:
+    - En iyi oyuncu: %50 bonus
+    - Diğer oyuncular: Normal değer
+    """
+    weights = BASE_WEIGHTS.copy()
+    
+    for cat in punt_cats:
+        if cat == "FG Punt":
+            weights["FGM"] = 0.0
+            weights["FGA"] = 0.0
+        elif cat == "FT Punt":
+            weights["FTM"] = 0.0
+            weights["FTA"] = 0.0
+        elif cat == "TO Punt":
+            weights["TO"] = 0.0
+    
+    available_cols = [col for col in weights.keys() if col in df.columns]
+    if not available_cols: 
+        return 0.0
+    
+    fps = []
+    for idx, row in df.iterrows():
+        fp = sum(row.get(col, 0) * weights[col] for col in available_cols)
+        fps.append(fp)
+    
+    if not fps:
+        return 0.0
+    
+    fps.sort(reverse=True)
+    
+    # En iyi oyuncuya bonus
+    best_player = fps[0] * top_player_bonus
+    others = sum(fps[1:]) if len(fps) > 1 else 0
+    
+    total = best_player + others
+    return total / len(fps)
+
+
+def calculate_diminishing_returns(df, punt_cats):
+    """
+    AZALAN VERIM SİSTEMİ
+    
+    Her ek oyuncu daha az değer katar.
+    1 süperstar > 2 iyi oyuncu > 3 orta oyuncu
+    
+    Katsayılar: 1.0, 0.85, 0.70, 0.55, 0.45...
+    """
+    weights = BASE_WEIGHTS.copy()
+    
+    for cat in punt_cats:
+        if cat == "FG Punt":
+            weights["FGM"] = 0.0
+            weights["FGA"] = 0.0
+        elif cat == "FT Punt":
+            weights["FTM"] = 0.0
+            weights["FTA"] = 0.0
+        elif cat == "TO Punt":
+            weights["TO"] = 0.0
+    
+    available_cols = [col for col in weights.keys() if col in df.columns]
+    if not available_cols: 
+        return 0.0
+    
+    fps = []
+    for idx, row in df.iterrows():
+        fp = sum(row.get(col, 0) * weights[col] for col in available_cols)
+        fps.append(fp)
+    
+    fps.sort(reverse=True)
+    
+    # Azalan verim katsayıları
+    diminishing_factors = [1.0, 0.85, 0.70, 0.55, 0.45, 0.35, 0.25]
+    
+    total = 0
+    for i, fp in enumerate(fps):
+        factor = diminishing_factors[i] if i < len(diminishing_factors) else 0.2
+        total += fp * factor
+    
+    # Normalize et (toplam faktöre böl)
+    used_factors = [diminishing_factors[i] if i < len(diminishing_factors) else 0.2 for i in range(len(fps))]
+    sum_factors = sum(used_factors)
+    
+    return total / sum_factors if sum_factors > 0 else 0.0
+
 
 def render_trade_analyzer_page():
     st.set_page_config(layout="wide", page_title="NBA Trade Machine", initial_sidebar_state="expanded")
@@ -608,19 +730,81 @@ def render_trade_analyzer_page():
         }
         .team-1-bar { background: linear-gradient(90deg, #3b82f6, #60a5fa); justify-content: flex-end; padding-right: 8px; }
         .team-2-bar { background: linear-gradient(90deg, #f97316, #fb923c); justify-content: flex-start; padding-left: 8px; }
+        .player-tier {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            margin-left: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+        .multiplier-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7em;
+            margin-left: 4px;
+            background: rgba(255, 200, 0, 0.2);
+            color: #ffd700;
+        }
         </style>
     """, unsafe_allow_html=True)
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.header("Scoring System")
+        st.header("⚙️ Scoring System")
+        
+        # SCORING METHOD
+        st.subheader("📊 Calculation Method")
+        scoring_method = st.selectbox(
+            "Choose method",
+            [
+                "Threshold Smart",
+                "Quality > Quantity",
+                "Diminishing Returns",
+                "Simple Average"
+            ],
+            help="""
+            **Threshold Smart**: Oyuncular belli bir eşiğin altındaysa değerleri düşer (ÖNERİLEN)
+            **Quality > Quantity**: En iyi oyuncu %50 bonus alır
+            **Diminishing Returns**: Her ek oyuncu daha az katkı sağlar
+            **Simple Average**: Geleneksel ortalama hesaplama
+            """
+        )
+        
+        # THRESHOLD AYARLARI (sadece Threshold Smart için)
+        if scoring_method == "Threshold Smart":
+            st.markdown("---")
+            st.subheader("🎯 Threshold Settings")
+            
+            min_threshold = st.slider(
+                "Minimum FP Threshold",
+                min_value=8.0,
+                max_value=20.0,
+                value=12.0,
+                step=1.0,
+                help="Players below this threshold will be penalized."
+            )
+            
+            penalty_curve = st.slider(
+                "Penalty Strength",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.3,
+                step=0.1,
+                help="Higher value = harsher penalty (lower value players = less value)"
+            )
+            
+            st.info(f"💡 Threshold: {min_threshold} FP\nPenalty: {penalty_curve:.1f}")
+        
+        st.markdown("---")
         
         # PUNT STRATEGY
         st.subheader("🎯 Punt Strategy")
         punt_cats = st.multiselect(
-            "Select categories to punt (ignore)",
+            "Punt categories",
             ["FG Punt", "FT Punt", "TO Punt"],
-            help="Punted categories will have 0 weight in calculations"
+            help="The categories that were punched have a weight of 0."
         )
         
         if punt_cats:
@@ -629,7 +813,6 @@ def render_trade_analyzer_page():
         st.markdown("---")
         st.markdown("**Active Weights:**")
         
-        # Aktif ağırlıkları göster
         display_weights = BASE_WEIGHTS.copy()
         for cat in punt_cats:
             if cat == "FG Punt":
@@ -642,26 +825,24 @@ def render_trade_analyzer_page():
                 display_weights["TO"] = 0.0
         
         weights_df = pd.DataFrame(list(display_weights.items()), columns=['Stat', 'Weight'])
-        weights_df = weights_df[weights_df['Weight'] != 0]  # 0 olanları gösterme
+        weights_df = weights_df[weights_df['Weight'] != 0]
         weights_df = weights_df.sort_values(by='Weight', ascending=False)
         st.dataframe(weights_df, hide_index=True, use_container_width=True)
 
-    st.title("NBA Trade Analyzer")
-    st.markdown("Compare fantasy value of potential trades.")
+    st.title("🏀 NBA Trade Analyzer")
+    st.markdown(f"Using **{scoring_method}** method")
     
-    # Session State Başlatma
+    # Session State
     for k in ["team_1_players", "team_2_players", "current_period"]:
         if k not in st.session_state:
             st.session_state[k] = [] if "players" in k else None
 
     # --- SETTINGS ---
-    with st.expander("⚙️ Settings - Choose Your Stats Period", expanded=True):
-        st.write("Select time period for analysis:")
+    with st.expander("⚙️ Stats Period", expanded=True):
         period = st.selectbox(
-            "Stats Period",
+            "Time period",
             ["Season Average", "Last 15 Days", "Last 30 Days"],
             index=0,
-            help="Select 'Season Average' for long-term value, or 'Last X Days' for current form.",
             key="period_selector"
         )
 
@@ -674,15 +855,13 @@ def render_trade_analyzer_page():
     
     selected_days, use_season = days_map[period]
     
-    # Period değişti mi kontrol et (oyuncuları koruyarak)
     if st.session_state.current_period != period:
         st.session_state.current_period = period
         if 'df_players' in st.session_state:
             del st.session_state['df_players']
     
-    # Veriyi çek
     if 'df_players' not in st.session_state:
-        with st.spinner(f"Loading statistics for {period}..."):
+        with st.spinner(f"Loading {period}..."):
             st.session_state.df_players = get_active_players_stats(
                 days=selected_days, 
                 season_stats=use_season
@@ -691,10 +870,9 @@ def render_trade_analyzer_page():
     df_players = st.session_state.df_players
     
     if df_players.empty:
-        st.error(f"No data found for {period}. Try selecting 'Season Average' or check your connection.")
+        st.error(f"No data for {period}")
         return
 
-    # Gerekli sütunları ekle
     for col in ['FGM', 'FGA', 'FTM', 'FTA', '3PM', 'FG%', 'FT%']:
         if col not in df_players.columns:
             if col == '3PM' and '3Pts' in df_players.columns:
@@ -702,21 +880,13 @@ def render_trade_analyzer_page():
             else:
                 df_players[col] = 0.0
 
-    # --- DÜZELTME BURADA: Team Verisi Temizleme ---
-    # Yardımcı fonksiyon: Eğer veri dict ise içinden 'team' bilgisini al
     def extract_team_abbr(val):
         if isinstance(val, dict):
             return val.get('team', val.get('abbreviation', 'UNK'))
         return str(val)
 
-    # TEAM sütununu temizle (Dict -> String)
     df_players['TEAM'] = df_players['TEAM'].apply(extract_team_abbr)
-
-    # Takım isimlerini eşleştir
     df_players['TEAM_FULL'] = df_players['TEAM'].map(TEAM_MAP).fillna(df_players['TEAM'])
-    
-    # --- EKSİK OLAN KISIM BURASIYDI ---
-    # all_teams değişkenini tanımlıyoruz
     all_teams = ["All Teams"] + sorted(df_players['TEAM_FULL'].unique().tolist())
 
     # --- RENDER FUNCTION ---
@@ -728,62 +898,105 @@ def render_trade_analyzer_page():
             col_filter, col_select = st.columns([1, 2])
             
             with col_filter:
-                team_filter = st.selectbox("Filter Team", all_teams, key=f"filter_{side_id}_{period}")
+                team_filter = st.selectbox("Team", all_teams, key=f"filter_{side_id}_{period}")
             
-            # Filtreleme
             filtered = df_players if team_filter == "All Teams" else df_players[df_players['TEAM_FULL'] == team_filter]
-            
-            # Karşı takımın oyuncularını hariç tut
             other_side_players = st.session_state[other_state_key]
             filtered_players = [p for p in filtered['PLAYER'].tolist() if p not in other_side_players]
-            
-            # Mevcut seçimleri al
             current_selections = st.session_state[state_key]
-            
-            # Seçenekleri birleştir: filtered + current (tekrarsız)
             all_options = sorted(list(set(filtered_players + current_selections)))
 
             with col_select:
                 selected = st.multiselect(
-                    "Select Players", 
+                    "Players", 
                     options=all_options, 
                     default=current_selections, 
-                    key=f"select_{side_id}_{period}"  # Period'u key'e ekle
+                    key=f"select_{side_id}_{period}"
                 )
 
-            # State'i güncelle
             st.session_state[state_key] = selected
             
-            # Preview Stats
             if selected:
-                # Sadece DataFrame'de olan oyuncuları göster
                 valid_selected = [p for p in selected if p in df_players['PLAYER'].values]
                 
                 if valid_selected:
-                    fp_preview = calculate_avg_fp(
-                        df_players[df_players['PLAYER'].isin(valid_selected)],
-                        punt_cats
-                    )
-                    st.markdown(f"**Avg FP: {fp_preview:.1f}** ({period})")
+                    df_subset = df_players[df_players['PLAYER'].isin(valid_selected)]
+                    
+                    # Metoda göre hesapla
+                    if scoring_method == "Threshold Smart":
+                        fp_preview, player_details = calculate_threshold_value(
+                            df_subset, punt_cats, min_threshold, penalty_curve
+                        )
+                    elif scoring_method == "Quality > Quantity":
+                        fp_preview = calculate_quality_over_quantity(df_subset, punt_cats)
+                        player_details = []
+                    elif scoring_method == "Diminishing Returns":
+                        fp_preview = calculate_diminishing_returns(df_subset, punt_cats)
+                        player_details = []
+                    else:  # Simple Average
+                        weights = BASE_WEIGHTS.copy()
+                        for cat in punt_cats:
+                            if cat == "FG Punt":
+                                weights["FGM"] = 0.0
+                                weights["FGA"] = 0.0
+                            elif cat == "FT Punt":
+                                weights["FTM"] = 0.0
+                                weights["FTA"] = 0.0
+                            elif cat == "TO Punt":
+                                weights["TO"] = 0.0
+                        
+                        available_cols = [col for col in weights.keys() if col in df_players.columns]
+                        avg_stats = df_subset[available_cols].mean()
+                        fp_preview = sum(avg_stats[col] * weights[col] for col in available_cols)
+                        player_details = []
+                    
+                    st.markdown(f"**Total Value: {fp_preview:.1f} FP**")
                     st.markdown("---")
                     
-                    for p in valid_selected:
-                        player_data = df_players[df_players['PLAYER'] == p]
-                        if not player_data.empty:
-                            d = player_data.iloc[0]
-                            team = d.get("TEAM", "")
-                            pts = d.get("PTS", 0)
-                            st.markdown(
-                                f"<div class='roster-card' style='border-left:4px solid {color}'>"
-                                f"<div><b>{p}</b> <span style='color:#aaa'>({team})</span></div>"
-                                f"<div style='color:#aaa; font-size:0.9em;'>{pts:.1f} PTS</div>"
-                                f"</div>", unsafe_allow_html=True
-                            )
+                    # Oyuncuları göster
+                    if scoring_method == "Threshold Smart" and player_details:
+                        for p_info in player_details:
+                            p = p_info['player']
+                            player_data = df_players[df_players['PLAYER'] == p]
+                            if not player_data.empty:
+                                d = player_data.iloc[0]
+                                team = d.get("TEAM", "")
+                                pts = d.get("PTS", 0)
+                                tier = p_info.get('tier', '')
+                                raw = p_info['raw_fp']
+                                adj = p_info['adjusted_fp']
+                                mult = p_info['multiplier']
+                                
+                                multiplier_html = ""
+                                if mult < 1.0:
+                                    multiplier_html = f"<span class='multiplier-badge'>×{mult:.2f}</span>"
+                                
+                                st.markdown(
+                                    f"<div class='roster-card' style='border-left:4px solid {color}'>"
+                                    f"<div><b>{p}</b> <span style='color:#aaa'>({team})</span>"
+                                    f"<span class='player-tier'>{tier}</span>{multiplier_html}</div>"
+                                    f"<div style='color:#aaa; font-size:0.9em;'>"
+                                    f"{pts:.1f} PTS | Raw: {raw:.1f} → Adj: {adj:.1f} FP"
+                                    f"</div>"
+                                    f"</div>", unsafe_allow_html=True
+                                )
+                    else:
+                        for p in valid_selected:
+                            player_data = df_players[df_players['PLAYER'] == p]
+                            if not player_data.empty:
+                                d = player_data.iloc[0]
+                                team = d.get("TEAM", "")
+                                pts = d.get("PTS", 0)
+                                st.markdown(
+                                    f"<div class='roster-card' style='border-left:4px solid {color}'>"
+                                    f"<div><b>{p}</b> <span style='color:#aaa'>({team})</span></div>"
+                                    f"<div style='color:#aaa; font-size:0.9em;'>{pts:.1f} PTS</div>"
+                                    f"</div>", unsafe_allow_html=True
+                                )
                 
-                # Eğer seçili oyuncular bu period'ta yoksa uyar
                 missing = [p for p in selected if p not in df_players['PLAYER'].values]
                 if missing:
-                    st.warning(f"⚠️ {len(missing)} player(s) not available in {period}: {', '.join(missing[:3])}{'...' if len(missing) > 3 else ''}")
+                    st.warning(f"⚠️ {len(missing)} player(s) unavailable")
             else:
                 st.info("Select players...")
 
@@ -798,31 +1011,53 @@ def render_trade_analyzer_page():
         side_2 = render_trade_side("side_2", "Team 2 Receives", "team_2_players", "team_1_players", "#f97316")
 
     if not side_1 or not side_2:
-        st.info("Add players to both sides to compare.")
+        st.info("Add players to both sides")
         return
 
-    # --- ANALYSIS ENGINE ---
+    # --- ANALYSIS ---
     def analyze(players):
-        # Sadece mevcut period'ta olan oyuncuları kullan
         valid_players = [p for p in players if p in df_players['PLAYER'].values]
         
         if not valid_players:
-            return pd.DataFrame(), 0.0, pd.Series()
+            return pd.DataFrame(), 0.0, pd.Series(), []
         
         df = df_players[df_players['PLAYER'].isin(valid_players)].copy()
-        avg_fp = calculate_avg_fp(df, punt_cats)
+        
+        if scoring_method == "Threshold Smart":
+            fp, player_details = calculate_threshold_value(df, punt_cats, min_threshold, penalty_curve)
+        elif scoring_method == "Quality > Quantity":
+            fp = calculate_quality_over_quantity(df, punt_cats)
+            player_details = []
+        elif scoring_method == "Diminishing Returns":
+            fp = calculate_diminishing_returns(df, punt_cats)
+            player_details = []
+        else:
+            weights = BASE_WEIGHTS.copy()
+            for cat in punt_cats:
+                if cat == "FG Punt":
+                    weights["FGM"] = 0.0
+                    weights["FGA"] = 0.0
+                elif cat == "FT Punt":
+                    weights["FTM"] = 0.0
+                    weights["FTA"] = 0.0
+                elif cat == "TO Punt":
+                    weights["TO"] = 0.0
+            
+            available_cols = [col for col in weights.keys() if col in df.columns]
+            avg_stats = df[available_cols].mean()
+            fp = sum(avg_stats[col] * weights[col] for col in available_cols)
+            player_details = []
+        
         numeric_cols = df.select_dtypes(include='number').columns
         avg_stats = df[numeric_cols].mean()
-        return df, avg_fp, avg_stats
+        return df, fp, avg_stats, player_details
 
-    df_1, fp_1, avg_1 = analyze(side_1)
-    df_2, fp_2, avg_2 = analyze(side_2)
+    df_1, fp_1, avg_1, details_1 = analyze(side_1)
+    df_2, fp_2, avg_2, details_2 = analyze(side_2)
     
-    # Eğer her iki taraf da boşsa uyarı ver
     if df_1.empty or df_2.empty:
-        st.warning(f"⚠️ Some selected players are not available in {period}. Analysis may be incomplete.")
+        st.warning("⚠️ Some players unavailable")
         if df_1.empty and df_2.empty:
-            st.info("No valid players in current period for both teams.")
             return
 
     diff = fp_1 - fp_2
@@ -830,16 +1065,16 @@ def render_trade_analyzer_page():
 
     st.markdown("---")
     with st.container(border=True):
-        st.markdown("## ⚖️ Trade Analysis")
+        st.markdown("## ⚖️ Trade Result")
         r1, r2, r3 = st.columns([1, 2, 1])
         
         with r1:
-            st.metric("Team 1 Avg FP", f"{fp_1:.1f}", delta=f"{diff:.1f}" if diff != 0 else None)
+            st.metric("Team 1", f"{fp_1:.1f}", delta=f"{diff:.1f}" if diff != 0 else None)
         
         with r3:
             st.markdown(f"""
                 <div style="text-align: right;">
-                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.875rem;">Team 2 Avg FP</div>
+                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.875rem;">Team 2</div>
                     <div style="font-size: 2.25rem; font-weight: 600;">{fp_2:.1f}</div>
                     <div style="color: {'#4ade80' if diff > 0 else '#f87171'}; font-size: 0.875rem;">
                         {'↓' if diff > 0 else '↑'} {abs(diff):.1f}
@@ -849,16 +1084,16 @@ def render_trade_analyzer_page():
 
         with r2:
             if abs(diff) < 2:
-                st.success("FAIR TRADE")
+                st.success("✅ FAIR TRADE")
             elif diff > 0:
-                st.success(f"TEAM 1 WINS")
+                st.success(f"🏆 TEAM 1 WINS")
                 st.caption(f"+{diff:.1f} advantage")
             else:
-                st.error(f"TEAM 2 WINS")
+                st.error(f"🏆 TEAM 2 WINS")
                 st.caption(f"+{abs(diff):.1f} advantage")
             st.progress(confidence / 100)
 
-    # --- VISUAL COMPARISON ---
+    # --- STAT BREAKDOWN ---
     st.markdown("### Stat Breakdown")
     stats_config = [
         ('PTS', 'Points', False), ('REB', 'Rebs', False), ('AST', 'Asts', False),
@@ -884,23 +1119,21 @@ def render_trade_analyzer_page():
             </div>
             """, unsafe_allow_html=True)
 
-    # --- DETAILED TABLE (COMBINED SHOOTING STATS) ---
-    st.markdown("### Detailed Player Stats")
+    # --- DETAILED STATS ---
+    st.markdown("### Detailed Stats")
     
     c_t1, c_t2 = st.columns(2)
     
     for idx, (df_side, col_container, title) in enumerate([
-        (df_1, c_t1, "Team 1 Receives"),
-        (df_2, c_t2, "Team 2 Receives")
+        (df_1, c_t1, "Team 1"),
+        (df_2, c_t2, "Team 2")
     ]):
         with col_container:
             st.markdown(f"**{title}:**")
             
-            # Display kolonları
             display_cols = ['PLAYER', 'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'TO']
             display_df = df_side[display_cols].copy()
             
-            # FG ve FT sütunlarını ekle - DataFrame'den değerleri al
             fg_vals = []
             ft_vals = []
             
@@ -919,11 +1152,9 @@ def render_trade_analyzer_page():
             display_df['FG'] = fg_vals
             display_df['FT'] = ft_vals
             
-            # Sütun sıralaması
             final_cols = ['PLAYER', 'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG', 'FT', 'TO']
             display_df = display_df[final_cols]
             
-            # Sadece sayısal sütunları formatla (FG ve FT hariç)
             numeric_only = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'TO']
             
             st.dataframe(
