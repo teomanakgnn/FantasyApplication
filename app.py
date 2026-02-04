@@ -15,6 +15,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+if "authenticated" not in st.session_state:
+    check_authentication()
+
+# 3. Sayfa yönlendirmesi
+if st.session_state.get('page') == "login":
+    from auth import render_auth_page
+    render_auth_page()
+    st.stop()
+
 
 def is_embedded():
     return st.query_params.get("embed") == "true"
