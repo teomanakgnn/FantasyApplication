@@ -4,6 +4,7 @@ import re
 import base64
 import os
 from datetime import datetime, timedelta
+from extra_streamlit_components import CookieManager
 
 # --- YARDIMCI FONKSİYONLAR ---
 
@@ -23,17 +24,18 @@ def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-def check_authentication():
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Senkronizasyon Düzeltildi)"""
+def check_authentication(all_cookies):
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Çerez verisi parametre gelir)"""
+    # 1. Session'da zaten varsa kontrol et
     if st.session_state.get('authenticated'):
         return True
     
-    # app.py ile AYNI key olmalı: "nba_cookies"
-    from extra_streamlit_components import CookieManager
-    cookie_manager = CookieManager(key="nba_cookies")
-    
-    # Iframe içinde çerezlerin gelmesi bazen zaman alır
-    token = cookie_manager.get('hooplife_auth_token')
+    # 2. Eğer çerezler henüz yüklenmediyse bekle
+    if not all_cookies:
+        return False
+
+    # 3. Çerez verisi içinden token'ı oku
+    token = all_cookies.get('hooplife_auth_token')
 
     if token:
         user = db.validate_session(token)
@@ -245,15 +247,15 @@ def render_auth_page():
                             st.session_state.authenticated = True
                             
                             # --- BENİ HATIRLA MANTIĞI ---
-                        if remember_me:
-                            # app.py ile AYNI key
-                            from extra_streamlit_components import CookieManager
-                            cookie_manager = CookieManager(key="nba_cookies")
-                            cookie_manager.set(
-                                'hooplife_auth_token', 
-                                token, 
-                                expires_at=datetime.now() + timedelta(days=30)
-                            )
+                            # render_auth_page içindeki login submit bloğu
+                            if remember_me:
+                                # Key yine "nba_cookies" olmalı
+                                cookie_manager = CookieManager(key="nba_cookies")
+                                cookie_manager.set(
+                                    'hooplife_auth_token', 
+                                    token, 
+                                    expires_at=datetime.now() + timedelta(days=30)
+                                )
                             
                             st.session_state.page = "home"
                             st.rerun()

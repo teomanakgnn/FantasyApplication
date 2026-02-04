@@ -6,6 +6,7 @@ import textwrap
 import extra_streamlit_components as stx
 import time 
 from services.espn_api import (calculate_game_score, get_score_color)
+from auth import check_authentication
 
 
 st.set_page_config(
@@ -15,14 +16,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-if "authenticated" not in st.session_state:
-    check_authentication()
+# Sadece şu fonksiyonu kullanın:
+def get_cookie_manager():
+    # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
+    if 'cookie_manager' in st.session_state:
+        return st.session_state.cookie_manager
+    
+    # Yoksa yeni oluştur ve session state'e kaydet
+    # key="nba_cookies" ekleyerek benzersiz olmasını sağlıyoruz
+    manager = stx.CookieManager(key="nba_cookies")
+    st.session_state.cookie_manager = manager
+    return manager
 
-# 3. Sayfa yönlendirmesi
-if st.session_state.get('page') == "login":
-    from auth import render_auth_page
-    render_auth_page()
+cookie_manager = get_cookie_manager()
+
+# 2. Çerezleri uygulama genelinde SADECE BURADA çekiyoruz
+all_cookies = cookie_manager.get_all()
+
+# 3. Yükleme kontrolü (Iframe hızı için kritik)
+if all_cookies is None:
+    st.info("🏀 HoopLife is loading...")
     st.stop()
+
+# 4. Kimlik kontrolü (Manager'ı değil, çektiğimiz all_cookies'i gönderiyoruz)
+is_authenticated = check_authentication(all_cookies)
+
+# Iframe'de çerezlerin yüklenmesi 1 saniye sürebilir, 
+# veri gelene kadar uygulamayı bekletmek hata almanı önler.
+if all_cookies is None:
+    st.info("🏀 HoopLife is loading...")
+    st.stop()
+
+# 2. Bu manager'ı auth.py'deki fonksiyona gönder
+if not st.session_state.get('authenticated'):
+    check_authentication(cookie_manager) # Manager'ı parametre olarak geçiyoruz
 
 
 def is_embedded():
@@ -598,17 +625,7 @@ st.markdown("""
 </script>
 """, unsafe_allow_html=True)
 
-# Sadece şu fonksiyonu kullanın:
-def get_cookie_manager():
-    # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
-    if 'cookie_manager' in st.session_state:
-        return st.session_state.cookie_manager
-    
-    # Yoksa yeni oluştur ve session state'e kaydet
-    # key="nba_cookies" ekleyerek benzersiz olmasını sağlıyoruz
-    manager = stx.CookieManager(key="nba_cookies")
-    st.session_state.cookie_manager = manager
-    return manager
+
 
 # --------------------
 # TRIVIA LOGIC (GÜNCELLENMİŞ - COOKIE DESTEKLİ)
@@ -753,92 +770,64 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             st.session_state['trivia_force_open'] = True
             st.rerun()
 
-def handle_daily_trivia():
-
+# app.py içindeki fonksiyon tanımı
+def handle_daily_trivia(all_cookies): # all_cookies dışarıdan geliyor
     active = st.session_state.get('active_dialog')
     if active is not None and active != 'trivia':
         return
-    # 1. Soru verisi yoksa hiç uğraşma
+    
+    # 1. Soru verisi kontrolü
     trivia = db.get_daily_trivia()
     if not trivia:
         return
 
-    # 2. Temel Değişkenler
+    # 2. Temel Değişkenleri Başlat (Hatanın çözümü burası)
     today_str = str(datetime.now().date())
     current_user = st.session_state.get('user')
     force_open = st.session_state.get('trivia_force_open', False)
-    
-    # Session state yedeği (Çerez silinse bile oturum boyunca hatırlasın)
-    session_played_key = f'trivia_played_{today_str}'
-    session_played = st.session_state.get(session_played_key, False)
-    
-    # Cookie yüklenme durumu için flag
-    cookie_ready_key = f'cookie_ready_{today_str}'
-    cookie_is_ready = st.session_state.get(cookie_ready_key, False)
-
     should_show = False
     streak = 0
-    u_id = None
+    u_id = None # u_id burada tanımlandı, artık hata vermez
+    
+    session_played_key = f'trivia_played_{today_str}'
+    session_played = st.session_state.get(session_played_key, False)
 
     # -------------------------------------------------------
-    # SENARYO A: GİRİŞ YAPMIŞ KULLANICI (Çerez derdi yok)
+    # SENARYO A: GİRİŞ YAPMIŞ KULLANICI
     # -------------------------------------------------------
     if current_user:
         u_id = current_user['id']
         has_played = db.check_user_played_trivia_today(u_id)
         
-        if force_open: # Sonuç ekranı
+        if force_open: 
             should_show = True
             streak = db.get_user_streak(u_id)
-        elif not has_played: # Oynamamış
+        elif not has_played: 
             should_show = True
             streak = db.get_user_streak(u_id)
-        else: # Oynamış
+        else: 
             should_show = False
 
     # -------------------------------------------------------
-    # SENARYO B: MİSAFİR KULLANICI (Çerez Kontrolü)
+    # SENARYO B: MİSAFİR KULLANICI (Çerez Kullanımı)
     # -------------------------------------------------------
     else:
-        # ÖNCELİK 1: Session state'den kontrol
         if session_played:
-            # Bugün zaten oynamış
-            if force_open:
-                should_show = True
-                streak = 0
-            else:
-                should_show = False
+            should_show = force_open
         else:
-            # ÖNCELİK 2: Cookie kontrol et
-            cookie_manager = get_cookie_manager()
-            cookies = cookie_manager.get_all()
-
-            # KRİTİK: Cookie yüklenene kadar BEKLE
-            if cookies is None:
-                # Cookie henüz yüklenmedi - HİÇBİR ŞEY GÖSTERME
-                return
-
-            # Cookie yüklendi, ama ilk kez mi yüklendi kontrol et
-            if not cookie_is_ready:
-                # İlk kez yüklendi, flag'i set et ve BİR DAHA BEKLE
-                st.session_state[cookie_ready_key] = True
-                return
-
-            # Artık güvenli bir şekilde cookie'yi okuyabiliriz
-            last_played_cookie = cookies.get('guest_trivia_date')
+            # ÖNEMLİ: cookie_manager.get_all() yerine parametre gelen all_cookies kullanılıyor
+            last_played_cookie = all_cookies.get('guest_trivia_date') if all_cookies else None
 
             if force_open:
                 should_show = True
             elif last_played_cookie == today_str:
-                # Bugün oynamış - session state'e de kaydet
                 st.session_state[session_played_key] = True
                 should_show = False
             else:
-                # Bugün oynamamış
                 should_show = True
                 streak = 0
 
-    # Karar verildiyse Modalı Aç
+    # 3. Karar verildiyse Modalı Aç
     if should_show:
         show_trivia_modal(trivia, u_id, streak)
 
@@ -1202,7 +1191,7 @@ if "slider_index" not in st.session_state:
     st.session_state.slider_index = 0
 
 # Check if user is authenticated (opsiyonel)
-is_authenticated = check_authentication()
+is_authenticated = check_authentication(cookie_manager)
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
 
@@ -1574,7 +1563,7 @@ def home_page():
     
     # Only show trivia if no other dialog is active
     if st.session_state.active_dialog is None or st.session_state.active_dialog == 'trivia':
-        handle_daily_trivia()
+        handle_daily_trivia(all_cookies)
     render_header()
     
     # Load user preferences if logged in
