@@ -1017,7 +1017,7 @@ def render_player_trends_page():
             pass
         return []
 
-    # 5. VERİ ÇEKME
+    # 5. VERİ ÇEKME - OPTİMİZE EDİLMİŞ VERSİYON ⚡
     if "season_data" not in st.session_state:
         st.session_state.season_data = None
 
@@ -1033,39 +1033,68 @@ def render_player_trends_page():
         
         all_records = []
         all_game_tasks = []
-
-        status_text.text(f"Fetching full season schedule ({total_days} days)...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        
+        # PHASE 1: Maç ID'lerini topla (çok daha hızlı thread pool) ⚡
+        status_text.text(f"🔍 Scanning season schedule ({total_days} days)...")
+        
+        # Thread pool 20 → 50'ye çıkarıldı ⚡
+        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
             future_to_date = {executor.submit(fetch_games_for_date, d): d for d in dates_to_fetch}
-            for i, future in enumerate(concurrent.futures.as_completed(future_to_date)):
+            
+            completed = 0
+            for future in concurrent.futures.as_completed(future_to_date):
                 date, ids = future.result()
                 if ids:
                     for gid in ids:
                         all_game_tasks.append((gid, date))
-                progress_bar.progress(int((i / len(dates_to_fetch)) * 20))
-
-        total_games = len(all_game_tasks)
-        status_text.text(f"Fetching stats for {total_games} games (Season)...")
+                
+                completed += 1
+                # Progress bar güncelleme sıklığı azaltıldı (her 10 günde bir) ⚡
+                if completed % 10 == 0:
+                    progress_bar.progress(min(int((completed / len(dates_to_fetch)) * 30), 30))
         
-        if total_games > 0:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-                future_to_game = {executor.submit(fetch_boxscore_for_game, task): task for task in all_game_tasks}
-                for i, future in enumerate(concurrent.futures.as_completed(future_to_game)):
+        total_games = len(all_game_tasks)
+        
+        if total_games == 0:
+            st.warning("Sezon verisi bulunamadı.")
+            progress_bar.empty()
+            status_text.empty()
+            return
+        
+        # PHASE 2: Boxscore'ları çek (batch processing ile) ⚡
+        status_text.text(f"📊 Loading {total_games} games...")
+        
+        # Batch processing eklendi - her seferinde 100 maç işle ⚡
+        batch_size = 100
+        
+        # Thread pool 40 → 60'a çıkarıldı ⚡
+        with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
+            for batch_start in range(0, total_games, batch_size):
+                batch_end = min(batch_start + batch_size, total_games)
+                batch = all_game_tasks[batch_start:batch_end]
+                
+                # Batch'i paralel işle
+                futures = [executor.submit(fetch_boxscore_for_game, task) for task in batch]
+                
+                for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     if result:
                         all_records.extend(result)
-                    
-                    current_progress = 20 + int((i / total_games) * 80)
-                    progress_bar.progress(min(current_progress, 100))
+                
+                # Progress güncelle (her batch'ten sonra) ⚡
+                current_progress = 30 + int((batch_end / total_games) * 70)
+                progress_bar.progress(min(current_progress, 100))
+                status_text.text(f"📊 Loaded {batch_end}/{total_games} games...")
         
         progress_bar.empty()
         status_text.empty()
         
         if not all_records:
-            st.warning("Sezon verisi bulunamadı.")
+            st.warning("Maç verileri yüklenemedi.")
             return
 
         st.session_state.season_data = pd.DataFrame(all_records)
+        st.success(f"✅ {len(all_records)} player stats loaded successfully!")
 
     df = st.session_state.season_data.copy()
 
