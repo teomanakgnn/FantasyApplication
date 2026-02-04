@@ -160,37 +160,70 @@ def check_stored_token():
 
 def check_authentication(all_cookies):
     """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
+    
     # 1. Session'da zaten varsa
     if st.session_state.get('authenticated'):
         return True
     
-    # 2. İlk yüklemede token okuma işlemini başlat
-    if 'token_read_initiated' not in st.session_state:
-        get_auth_token_from_parent()
-        st.session_state.token_read_initiated = True
-        return False
-    
-    # 3. Token kontrolü yap
-    if 'token_validated' not in st.session_state:
-        check_stored_token()
-        st.session_state.token_validated = True
+    # 2. localStorage'dan token okuma (ilk yükleme)
+    if 'token_load_attempted' not in st.session_state:
+        st.session_state.token_load_attempted = True
         
-        # JavaScript'in çalışması için kısa bir süre bekle
+        # JavaScript ile token'ı oku
+        token_reader = """
+            <script>
+                (function() {
+                    console.log('🔍 Token aranıyor...');
+                    
+                    const data = localStorage.getItem('hooplife_auth_data');
+                    
+                    if (data) {
+                        try {
+                            const authData = JSON.parse(data);
+                            const expiry = new Date(authData.expiry);
+                            const now = new Date();
+                            
+                            if (now > expiry) {
+                                // Token süresi dolmuş
+                                localStorage.removeItem('hooplife_auth_data');
+                                console.log('⏰ Token süresi dolmuş, silindi');
+                            } else {
+                                // Token geçerli
+                                console.log('✅ Geçerli token bulundu');
+                                console.log('Username:', authData.username);
+                                console.log('Token preview:', authData.token.substring(0, 15) + '...');
+                                
+                                // Token'ı global değişkene kaydet
+                                window.hooplife_stored_token = authData.token;
+                            }
+                        } catch(e) {
+                            console.error('❌ Token parse hatası:', e);
+                            localStorage.removeItem('hooplife_auth_data');
+                        }
+                    } else {
+                        console.log('ℹ️ localStorage\'da token bulunamadı');
+                    }
+                })();
+            </script>
+        """
+        components.html(token_reader, height=0)
+        
+        # JavaScript'in çalışması için kısa bekle
         import time
-        time.sleep(0.3)
+        time.sleep(0.5)
     
-    # 4. Session state'ten token kontrol et
-    # JavaScript'ten gelen token'ı almak için alternatif yöntem
-    if 'auth_check_count' not in st.session_state:
-        st.session_state.auth_check_count = 0
+    # 3. Session state'te saklanan token'ı kontrol et
+    stored_token = st.session_state.get('remember_token')
     
-    st.session_state.auth_check_count += 1
+    if stored_token:
+        user = db.validate_session(stored_token)
+        if user:
+            st.session_state.user = user
+            st.session_state.session_token = stored_token
+            st.session_state.authenticated = True
+            return True
     
-    # İlk birkaç denemede token gelene kadar bekle
-    if st.session_state.auth_check_count < 3:
-        return False
-    
-    # 5. Cookie'den token kontrol et (fallback)
+    # 4. Cookie fallback (eski sistem)
     if all_cookies:
         token = all_cookies.get('hooplife_auth_token')
         if token:
@@ -209,20 +242,22 @@ def logout():
         db.logout_session(st.session_state.session_token)
     
     # localStorage'dan temizle
-    clear_auth_token()
+    components.html("""
+        <script>
+            localStorage.removeItem('hooplife_auth_data');
+            console.log('🗑️ Token localStorage\'dan silindi');
+        </script>
+    """, height=0)
     
     # Session state temizle
     st.session_state.authenticated = False
     st.session_state.user = None
     st.session_state.session_token = None
     
-    # Token kontrol değişkenlerini resetle
-    if 'token_read_initiated' in st.session_state:
-        del st.session_state.token_read_initiated
-    if 'token_validated' in st.session_state:
-        del st.session_state.token_validated
-    if 'auth_check_count' in st.session_state:
-        del st.session_state.auth_check_count
+    if 'remember_token' in st.session_state:
+        del st.session_state.remember_token
+    if 'token_load_attempted' in st.session_state:
+        del st.session_state.token_load_attempted
     
     st.rerun()
 
@@ -386,6 +421,8 @@ def render_auth_page():
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
             
+# auth.py - render_auth_page içinde LOGIN TAB - submit bloğu
+
             if submit:
                 if not username or not password:
                     st.error("Please enter your credentials.")
@@ -399,29 +436,65 @@ def render_auth_page():
                             st.session_state.session_token = token
                             st.session_state.authenticated = True
                             
-                            # Token kontrol değişkenlerini resetle
-                            if 'token_read_initiated' in st.session_state:
-                                del st.session_state.token_read_initiated
-                            if 'token_validated' in st.session_state:
-                                del st.session_state.token_validated
-                            if 'auth_check_count' in st.session_state:
-                                del st.session_state.auth_check_count
-                            
-                            # 🔥 BENİ HATIRLA - Parent localStorage'a kaydet
+                            # 🔥 BENİ HATIRLA - Basit localStorage kaydı
                             if remember_me:
-                                save_auth_token_to_parent(token)
-                                st.success("✅ Login successful! You'll stay logged in for 30 days.")
+                                # Token'ı session state'e de kaydet
+                                st.session_state['remember_token'] = token
+                                
+                                # JavaScript ile localStorage'a kaydet
+                                save_token_script = f"""
+                                    <script>
+                                        (function() {{
+                                            console.log('🔄 Token kaydetme başlıyor...');
+                                            
+                                            const token = '{token}';
+                                            const expiry = new Date();
+                                            expiry.setDate(expiry.getDate() + 30); // 30 gün sonra
+                                            
+                                            const authData = {{
+                                                token: token,
+                                                expiry: expiry.toISOString(),
+                                                savedAt: new Date().toISOString(),
+                                                username: '{user["username"]}'
+                                            }};
+                                            
+                                            try {{
+                                                localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                                                console.log('✅ Token başarıyla kaydedildi!');
+                                                console.log('Token preview:', token.substring(0, 15) + '...');
+                                                console.log('Expiry:', authData.expiry);
+                                                
+                                                // Doğrulama
+                                                const verify = localStorage.getItem('hooplife_auth_data');
+                                                if (verify) {{
+                                                    console.log('✅ Doğrulama başarılı - token localStorage\'da mevcut');
+                                                }} else {{
+                                                    console.error('❌ Doğrulama başarısız - token kaydedilemedi');
+                                                }}
+                                            }} catch(e) {{
+                                                console.error('❌ Token kaydetme hatası:', e);
+                                            }}
+                                        }})();
+                                    </script>
+                                """
+                                components.html(save_token_script, height=0)
+                                
+                                st.success("✅ Giriş başarılı! 30 gün boyunca oturum açık kalacak.")
+                                
+                                # JavaScript'in çalışması için bekle
+                                import time
+                                time.sleep(2)
                             else:
-                                st.success("✅ Login successful!")
+                                st.success("✅ Giriş başarılı!")
+                                import time
+                                time.sleep(1)
                             
-                            import time
-                            time.sleep(1)
                             st.session_state.page = "home"
                             st.rerun()
                         else:
-                            st.error("Connection error. Please try again.")
+                            st.error("Bağlantı hatası. Lütfen tekrar deneyin.")
                     else:
-                        st.error("Incorrect username or password.")
+                        st.error("Kullanıcı adı veya şifre hatalı.")
 
     # ==================== REGISTER TAB ====================
     with tab2:
