@@ -5,6 +5,8 @@ import base64
 import os
 from datetime import datetime, timedelta
 from extra_streamlit_components import CookieManager
+import streamlit.components.v1 as components
+
 
 # --- YARDIMCI FONKSİYONLAR ---
 
@@ -19,24 +21,61 @@ def get_img_as_base64(file_path):
         print(f"Uyarı: {file_path} bulunamadı.")
         return None
 
+def set_local_storage(token):
+    """localStorage'a token kaydet (iframe-safe)"""
+    components.html(f"""
+        <script>
+            window.parent.localStorage.setItem('hooplife_auth_token', '{token}');
+            window.parent.localStorage.setItem('hooplife_token_date', '{datetime.now().isoformat()}');
+        </script>
+    """, height=0)
+
+def get_local_storage():
+    """localStorage'dan token oku"""
+    result = components.html("""
+        <script>
+            const token = window.parent.localStorage.getItem('hooplife_auth_token');
+            const tokenDate = window.parent.localStorage.getItem('hooplife_token_date');
+            
+            // Token 30 günden eskiyse sil
+            if (tokenDate) {
+                const date = new Date(tokenDate);
+                const now = new Date();
+                const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
+                
+                if (daysDiff > 30) {
+                    window.parent.localStorage.removeItem('hooplife_auth_token');
+                    window.parent.localStorage.removeItem('hooplife_token_date');
+                } else if (token) {
+                    // Token'ı parent'a gönder
+                    window.parent.postMessage({type: 'AUTH_TOKEN', token: token}, '*');
+                }
+            }
+        </script>
+    """, height=0)
+    return result
+
 def is_valid_email(email):
     """Email formatı doğrulama"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
 def check_authentication(all_cookies):
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Çerez verisi parametre gelir)"""
-    # 1. Session'da zaten varsa kontrol et
+    # 1. Session'da zaten varsa
     if st.session_state.get('authenticated'):
         return True
     
-    # 2. Eğer çerezler henüz yüklenmediyse bekle
-    if not all_cookies:
-        return False
-
-    # 3. Çerez verisi içinden token'ı oku
-    token = all_cookies.get('hooplife_auth_token')
-
+    # 2. localStorage'dan oku (iframe-safe)
+    if 'auth_token_from_storage' not in st.session_state:
+        get_local_storage()  # Token'ı okumaya çalış
+        st.session_state.auth_token_from_storage = None
+    
+    # postMessage ile gelen token'ı dinle
+    token = st.session_state.get('auth_token_from_storage')
+    
+    if not token and all_cookies:
+        token = all_cookies.get('hooplife_auth_token')
+    
     if token:
         user = db.validate_session(token)
         if user:
@@ -46,7 +85,6 @@ def check_authentication(all_cookies):
             return True
             
     return False
-
 def logout():
     """Kullanıcı çıkış işlemi"""
     if 'session_token' in st.session_state:
@@ -241,32 +279,17 @@ def render_auth_page():
                     if user:
                         token = db.create_session(user['id'])
                         if token:
-                            # Session State'i doldur
+                            # Session State
                             st.session_state.user = user
                             st.session_state.session_token = token
                             st.session_state.authenticated = True
                             
-                            # --- BENİ HATIRLA MANTIĞI ---
-                            # render_auth_page içindeki login submit bloğu
-
+                            # Remember Me - localStorage kullan
                             if remember_me:
-                                cookie_manager = CookieManager(key="nba_cookies")
-                                cookie_manager.set(
-                                    'hooplife_auth_token', 
-                                    token, 
-                                    expires_at=datetime.now() + timedelta(days=30),
-                                    key=f"set_auth_{int(datetime.now().timestamp())}",  # Unique key
-                                    # ⬇️ ÖNEMLİ EKLEMELER
-                                    same_site='None',  # iframe için zorunlu
-                                    secure=True        # HTTPS gerektir (localhost'ta çalışmaz)
-                                )
+                                set_local_storage(token)  # Cookie yerine localStorage
                             
                             st.session_state.page = "home"
                             st.rerun()
-                        else:
-                            st.error("Connection error. Please try again.")
-                    else:
-                        st.error("Incorrect username or password.")
 
     # ==================== REGISTER TAB ====================
     with tab2:
