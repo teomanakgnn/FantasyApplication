@@ -182,7 +182,6 @@ st.markdown(f"""
 
 # MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
 # Bu JavaScript bloğunu kullanın
-
 components.html("""
 <script>
     (function() {
@@ -190,11 +189,14 @@ components.html("""
         
         var triggerElement = null;
         var backdropElement = null;
+        var isInitialLoad = true;  // ← YENİ: İlk yükleme kontrolü
         
         // LocalStorage kullanarak sidebar durumunu sakla
         function saveSidebarState(isClosed) {
             try {
                 window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
+                // Sayfa değişikliklerinde kullanmak için ayrı bir flag
+                window.parent.localStorage.setItem('hooplife_sidebar_user_closed', isClosed ? 'true' : 'false');
             } catch(e) {
                 console.log('LocalStorage kullanılamıyor');
             }
@@ -203,6 +205,15 @@ components.html("""
         function getSavedSidebarState() {
             try {
                 return window.parent.localStorage.getItem('hooplife_sidebar_closed') === 'true';
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Kullanıcının manuel olarak kapatıp kapatmadığını kontrol et
+        function wasUserClosed() {
+            try {
+                return window.parent.localStorage.getItem('hooplife_sidebar_user_closed') === 'true';
             } catch(e) {
                 return false;
             }
@@ -248,9 +259,6 @@ components.html("""
             if (!state) return;
             
             const isMobile = window.parent.innerWidth <= 768;
-            
-            // ÖNEMLİ: Toggle etmeden ÖNCE gerçek durumu kontrol et
-            const willBeClosed = !state.isClosed; // Tıkladıktan sonra ne olacak?
             
             // YÖNTEM 1: Toggle butonunu bul ve tıkla
             const selectors = [
@@ -307,7 +315,7 @@ components.html("""
                         sidebar.style.transform = 'translateX(0)';
                         sidebar.style.display = 'flex';
                         sidebar.setAttribute('aria-expanded', 'true');
-                        saveSidebarState(false); // Açık olarak kaydet
+                        saveSidebarState(false);
                         
                         // MOBİL: Scroll'u enable et
                         if (isMobile) {
@@ -315,7 +323,6 @@ components.html("""
                             sidebar.style.overflowX = 'hidden';
                             sidebar.style.webkitOverflowScrolling = 'touch';
                             
-                            // İç container'ı da scroll edilebilir yap
                             const innerContainers = sidebar.querySelectorAll('div');
                             innerContainers.forEach(container => {
                                 if (container.getAttribute('data-testid') === 'stSidebarContent') {
@@ -328,17 +335,15 @@ components.html("""
                     } else {
                         // Kapat
                         forceSidebarClose();
-                        saveSidebarState(true); // Kapalı olarak kaydet
+                        saveSidebarState(true);
                     }
                 }
             }, 300);
         }
         
-        // Global bir referans tanımlayalım ki updateVisibility erişebilsin
         let hoopLifeTrigger = null;
 
         function createHoopLifeDock() {
-            // Eski butonu sil (varsa)
             const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
             if (oldTrigger) {
                 oldTrigger.remove();
@@ -376,7 +381,6 @@ components.html("""
                 ">🏀</div>
             `;
             
-            // Click event'i ekle
             triggerElement.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -384,7 +388,6 @@ components.html("""
                 setTimeout(updateVisibility, 100);
             });
             
-            // Hover Efektleri
             triggerElement.addEventListener('mouseenter', function() {
                 triggerElement.style.width = '60px';
                 triggerElement.style.background = '#ff4b4b';
@@ -415,9 +418,7 @@ components.html("""
             const isMobile = window.parent.innerWidth <= 768;
 
             if (!state.isClosed) {
-                // SIDEBAR AÇIKKEN
                 if (isMobile) {
-                    // MOBİLDE: Premium Görünüm (çarpı butonu)
                     Object.assign(trigger.style, {
                         position: 'fixed',
                         top: '15px',
@@ -451,11 +452,9 @@ components.html("""
                         setTimeout(updateVisibility, 100);
                     };
                 } else {
-                    // DESKTOP'TA: Butonu gizle
                     trigger.style.display = 'none';
                 }
             } else {
-                // SIDEBAR KAPALIYKEN (Basketbol Çentiği)
                 Object.assign(trigger.style, {
                     display: 'flex',
                     left: '0',
@@ -497,31 +496,46 @@ components.html("""
             }
         }
         
-        // Sidebar durumunu kontrol et ve gerekirse düzelt
+        // ← YENİ: Sayfa değişikliğinde sidebar durumunu koru
         function checkAndFixSidebar() {
-            const shouldBeClosed = getSavedSidebarState();
             const state = getSidebarState();
             
+            // İLK YÜKLEME: Kullanıcı daha önce kapattıysa kapalı tut
+            if (isInitialLoad) {
+                isInitialLoad = false;
+                
+                if (wasUserClosed() && state && !state.isClosed) {
+                    setTimeout(() => {
+                        forceSidebarClose();
+                        updateVisibility();
+                    }, 300); // ← Biraz daha gecikme ekle
+                    return;
+                }
+            }
+            
+            // SONRAKI KONTROLLER: Normal senkronizasyon
+            const shouldBeClosed = getSavedSidebarState();
+            
             if (shouldBeClosed && state && !state.isClosed) {
-                // Kullanıcı daha önce kapattı ama şimdi açık - kapat
                 setTimeout(() => {
                     forceSidebarClose();
                     updateVisibility();
                 }, 500);
             } else if (state) {
-                // Gerçek durumu localStorage'a kaydet (senkronize et)
                 saveSidebarState(state.isClosed);
             }
         }
         
-        // BAŞLAT
         function init() {
             createHoopLifeDock();
             
-            // Sidebar durumunu kontrol et
-            checkAndFixSidebar();
+            // İlk kontrolü biraz geciktir - Streamlit'in sidebar'ı render etmesini bekle
+            setTimeout(() => {
+                checkAndFixSidebar();
+                updateVisibility();
+            }, 800); // ← 500ms'den 800ms'ye çıkar
             
-            setTimeout(updateVisibility, 500);
+            // Periyodik kontrol
             setInterval(() => {
                 checkAndFixSidebar();
                 updateVisibility();
@@ -530,7 +544,6 @@ components.html("""
             window.parent.addEventListener('resize', updateVisibility);
         }
         
-        // DOM hazır olunca başlat
         if (window.parent.document.readyState === 'loading') {
             window.parent.document.addEventListener('DOMContentLoaded', init);
         } else {
