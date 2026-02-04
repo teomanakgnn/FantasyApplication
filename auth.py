@@ -370,6 +370,8 @@ def render_auth_page():
     tab1, tab2 = st.tabs(["Sign In", "Create Account"])
 
     # ==================== LOGIN TAB ====================
+  # auth.py - render_auth_page içinde LOGIN TAB
+
     with tab1:
         st.write("")
         with st.form("login_form", clear_on_submit=False):
@@ -382,74 +384,78 @@ def render_auth_page():
             
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
-            
-# auth.py - render_auth_page içinde LOGIN TAB - submit bloğu
-# auth.py - render_auth_page içinde LOGIN submit bloğu
-
-            if submit:
-                if not username or not password:
-                    st.error("Please enter your credentials.")
-                else:
-                    user = db.verify_user(username, password)
-                    if user:
-                        token = db.create_session(user['id'])
-                        if token:
-                            # Session State'i doldur
-                            st.session_state.user = user
-                            st.session_state.session_token = token
-                            st.session_state.authenticated = True
+        
+        # ⬇️ FORM DIŞINDA - submit sonrası işlemler
+        if submit:
+            if not username or not password:
+                st.error("Please enter your credentials.")
+            else:
+                user = db.verify_user(username, password)
+                if user:
+                    token = db.create_session(user['id'])
+                    if token:
+                        # Session State'i doldur
+                        st.session_state.user = user
+                        st.session_state.session_token = token
+                        st.session_state.authenticated = True
+                        
+                        # 🔥 BENİ HATIRLA - Token'ı session state'e kaydet
+                        if remember_me:
+                            st.session_state['stored_auth_token'] = token
+                            st.session_state['token_expiry'] = (datetime.now() + timedelta(days=30)).isoformat()
+                            st.session_state['token_username'] = user['username']
                             
-                            # 🔥 BENİ HATIRLA - Token'ı session state'e kaydet
-                            if remember_me:
-                                st.session_state['stored_auth_token'] = token
-                                st.session_state['token_expiry'] = (datetime.now() + timedelta(days=30)).isoformat()
-                                st.session_state['token_username'] = user['username']
-                                
-                                # JavaScript ile localStorage'a ZORUNLU kayıt
-                                st.markdown(f"""
-                                    <script>
-                                    (function() {{
-                                        const token = '{token}';
-                                        const expiry = new Date();
-                                        expiry.setDate(expiry.getDate() + 30);
-                                        
-                                        const authData = {{
-                                            token: token,
-                                            expiry: expiry.toISOString(),
-                                            savedAt: new Date().toISOString(),
-                                            username: '{user["username"]}'
-                                        }};
-                                        
-                                        localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
-                                        console.log('✅ Token kaydedildi (manuel):', token.substring(0, 15));
-                                        
-                                        // Doğrulama
-                                        setTimeout(function() {{
-                                            const check = localStorage.getItem('hooplife_auth_data');
-                                            console.log('Doğrulama:', check ? '✅ BAŞARILI' : '❌ BAŞARISIZ');
-                                        }}, 500);
-                                    }})();
-                                    </script>
-                                """, unsafe_allow_html=True)
-                                
-                                st.success("✅ Giriş başarılı! 30 gün boyunca oturum açık kalacak.")
-                            else:
-                                st.success("✅ Giriş başarılı!")
+                            # JavaScript ile localStorage'a kayıt
+                            st.markdown(f"""
+                                <script>
+                                (function() {{
+                                    const token = '{token}';
+                                    const expiry = new Date();
+                                    expiry.setDate(expiry.getDate() + 30);
+                                    
+                                    const authData = {{
+                                        token: token,
+                                        expiry: expiry.toISOString(),
+                                        savedAt: new Date().toISOString(),
+                                        username: '{user["username"]}'
+                                    }};
+                                    
+                                    localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                                    console.log('✅ Token kaydedildi:', token.substring(0, 15));
+                                    
+                                    // Doğrulama
+                                    setTimeout(function() {{
+                                        const check = localStorage.getItem('hooplife_auth_data');
+                                        console.log('Doğrulama:', check ? '✅ BAŞARILI' : '❌ BAŞARISIZ');
+                                    }}, 500);
+                                }})();
+                                </script>
+                            """, unsafe_allow_html=True)
                             
-                            # ÖNEMLI: Sayfayı hemen yenileme, kullanıcı butona bassın
-                            st.info("👉 Ana sayfaya dönmek için aşağıdaki butona tıklayın.")
-                            
-                            if st.button("🏠 Ana Sayfaya Git", type="primary", use_container_width=True):
-                                st.session_state.page = "home"
-                                st.rerun()
-                            
-                            st.stop()  # Burada dur, otomatik yönlendirme yapma
-                            
+                            st.success("✅ Giriş başarılı! 30 gün boyunca oturum açık kalacak.")
                         else:
-                            st.error("Bağlantı hatası. Lütfen tekrar deneyin.")
+                            st.success("✅ Giriş başarılı!")
+                        
+                        # Login başarılı flag'i
+                        st.session_state['login_success'] = True
+                        st.session_state['login_with_remember'] = remember_me
+                        
                     else:
-                        st.error("Kullanıcı adı veya şifre hatalı.")
-
+                        st.error("Bağlantı hatası. Lütfen tekrar deneyin.")
+                else:
+                    st.error("Kullanıcı adı veya şifre hatalı.")
+        
+        # ⬇️ Login başarılıysa ana sayfaya yönlendir butonu (FORM DIŞINDA)
+        if st.session_state.get('login_success'):
+            st.info("👉 Ana sayfaya dönmek için aşağıdaki butona tıklayın.")
+            
+            if st.button("🏠 Ana Sayfaya Git", type="primary", use_container_width=True, key="goto_home"):
+                # Flag'i temizle
+                if 'login_success' in st.session_state:
+                    del st.session_state['login_success']
+                
+                st.session_state.page = "home"
+                st.rerun()
     # ==================== REGISTER TAB ====================
     with tab2:
         st.write("")
