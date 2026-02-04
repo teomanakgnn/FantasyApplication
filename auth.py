@@ -3,7 +3,7 @@ from services.database import db
 import re
 import base64
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # --- YARDIMCI FONKSİYONLAR ---
 
