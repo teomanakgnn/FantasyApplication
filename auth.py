@@ -3,6 +3,7 @@ from services.database import db
 import re
 import base64
 import os
+from datetime import timedelta
 
 # --- YARDIMCI FONKSİYONLAR ---
 
@@ -23,19 +24,25 @@ def is_valid_email(email):
     return re.match(pattern, email) is not None
 
 def check_authentication():
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder (Cookie destekli)"""
+    # 1. Zaten session'da varsa direkt True dön
+    if st.session_state.get('authenticated'):
+        return True
     
-    if 'session_token' in st.session_state and not st.session_state.authenticated:
-        user = db.validate_session(st.session_state.session_token)
+    # 2. Session'da yoksa Cookie'den oku
+    from extra_streamlit_components import CookieManager
+    cookie_manager = CookieManager(key="auth_cookies")
+    token = cookie_manager.get('hooplife_auth_token')
+
+    if token:
+        user = db.validate_session(token)
         if user:
             st.session_state.user = user
+            st.session_state.session_token = token
             st.session_state.authenticated = True
-        else:
-            st.session_state.authenticated = False
+            return True
             
-    return st.session_state.authenticated
+    return False
 
 def logout():
     """Kullanıcı çıkış işlemi"""
@@ -222,6 +229,7 @@ def render_auth_page():
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
             
+# ... (Login submit bloğu içinde)
             if submit:
                 if not username or not password:
                     st.error("Please enter your credentials.")
@@ -230,11 +238,19 @@ def render_auth_page():
                     if user:
                         token = db.create_session(user['id'])
                         if token:
+                            # Session State'i doldur
                             st.session_state.user = user
                             st.session_state.session_token = token
                             st.session_state.authenticated = True
+                            
+                            # --- BENİ HATIRLA MANTIĞI ---
+                            if remember_me:
+                                from extra_streamlit_components import CookieManager
+                                cookie_manager = CookieManager(key="auth_set_cookies")
+                                # Token'ı 30 günlüğüne çerezlere kaydet
+                                cookie_manager.set('hooplife_auth_token', token, expires_at=datetime.now() + timedelta(days=30))
+                            
                             st.session_state.page = "home"
-                            st.toast(f"Welcome back, {user['username']}!", icon="👋")
                             st.rerun()
                         else:
                             st.error("Connection error. Please try again.")
