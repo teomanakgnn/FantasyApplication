@@ -608,7 +608,6 @@ def get_cookie_manager():
 @st.dialog("🏀 Daily NBA Trivia Question", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
     st.session_state.active_dialog = 'trivia'
-   
     
     # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
     if st.session_state.get('trivia_success_state', False):
@@ -638,7 +637,6 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         if error_info.get('explanation'):
             st.info(f"ℹ️ {error_info.get('explanation')}")
         
-        # Streak reset bilgisi (sadece giriş yapmış kullanıcılar için)
         if user_id:
             st.warning("💔 Your streak has been reset.")
         
@@ -653,7 +651,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
             st.rerun()
         return
 
-    # --- 3. HTML BAŞLIK KISMI ---
+    # --- 3. HTML BAŞLIK VE KAMPANYA BANNER ---
     if user_id:
         badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
         icon = "🔥"
@@ -663,8 +661,9 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         icon = "🔒"
         text = "Login to save your daily streak."
 
-    html_content = f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+    # Üst Bilgi Satırı
+    header_html = f"""
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
         <div style="font-weight: 600; font-size: 1rem;">
             📅 {datetime.now().strftime('%d %B')}
         </div>
@@ -673,7 +672,24 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         </div>
     </div>
     """
-    st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
+    st.markdown(header_html, unsafe_allow_html=True)
+
+    # PS5 Kampanya Banner (Buraya eklendi)
+    campaign_html = """
+    <div style="background: linear-gradient(135deg, #FF4B4B 0%, #8B0000 100%); 
+                padding: 12px; border-radius: 10px; margin-bottom: 20px; 
+                border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(255,75,75,0.2);">
+        <div style="color: white; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+            🎮 PS5 GIVEAWAY!
+        </div>
+        <div style="color: rgba(255,255,255,0.9); font-size: 0.82rem; margin-top: 5px; line-height: 1.4;">
+            Reach a <b>50-day streak</b> to enter the draw for a chance to win a <b>PlayStation 5</b>! 
+            Register now to start your streak. <br>
+            📅 <b>Draw Date: April 13th</b>
+        </div>
+    </div>
+    """
+    st.markdown(campaign_html, unsafe_allow_html=True)
     
     # --- 4. SORU VE FORM ---
     st.markdown(f"#### {question['question']}")
@@ -682,6 +698,8 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
         choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
         submitted = st.form_submit_button("Answer", use_container_width=True, type="primary")
+        
+    # ... (form submission logic - geri kalan kod aynı kalabilir)
         
     if submitted:
         if not choice:
