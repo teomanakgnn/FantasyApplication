@@ -9,9 +9,7 @@ from services.espn_api import (calculate_game_score, get_score_color)
 from auth import check_authentication
 
 
-# app.py - import'lardan hemen sonra, sayfa config'den önce
 
-# Token yönetimi için helper fonksiyon
 def load_token_from_storage():
     """localStorage'dan token'ı yükle"""
     if 'token_loaded' not in st.session_state:
@@ -47,7 +45,7 @@ def load_token_from_storage():
         """, height=0)
         st.session_state.token_loaded = True
 
-# Sayfa yüklenirken token'ı oku
+
 load_token_from_storage()
 
 st.set_page_config(
@@ -56,6 +54,7 @@ st.set_page_config(
     page_icon="🏀",
     initial_sidebar_state="expanded"
 )
+
 
 components.html("""
     <script>
@@ -115,6 +114,23 @@ if all_cookies is None:
 if not st.session_state.get('authenticated'):
     check_authentication(cookie_manager) # Manager'ı parametre olarak geçiyoruz
 
+st.markdown("""
+    <script>
+        function revealSpoiler(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.classList.add('revealed');
+            }
+        }
+        
+        // Tüm spoiler'ları reveal et
+        function revealAllSpoilers() {
+            document.querySelectorAll('.spoiler-score').forEach(el => {
+                el.classList.add('revealed');
+            });
+        }
+    </script>
+""", unsafe_allow_html=True)
 
 def is_embedded():
     return st.query_params.get("embed") == "true"
@@ -1021,6 +1037,79 @@ st.markdown(f"""
             display: none !important;
         }}
         
+ /* ============================================
+   SPOILER PROTECTION STYLES - İYİLEŞTİRİLMİŞ
+   ============================================ */
+
+        .spoiler-score {{
+            filter: blur(10px);
+            transition: filter 0.4s ease;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }}
+
+        .spoiler-score:hover {{
+            filter: blur(6px);
+        }}
+
+        .spoiler-score.revealed {{
+            filter: blur(0px) !important;
+            cursor: default;
+        }}
+
+        .spoiler-container {{
+            position: relative;
+            display: inline-block;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(255,75,75,0.1) 0%, rgba(139,0,0,0.1) 100%);
+            border: 2px solid rgba(255,75,75,0.3);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }}
+
+        .spoiler-container:hover {{
+            background: linear-gradient(135deg, rgba(255,75,75,0.15) 0%, rgba(139,0,0,0.15) 100%);
+            border-color: rgba(255,75,75,0.5);
+            transform: scale(1.02);
+        }}
+
+        .spoiler-icon {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.8em;
+            opacity: 1;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 2;
+        }}
+
+        .spoiler-icon.hidden {{
+            opacity: 0 !important;
+            display: none !important;
+        }}
+
+        /* Heyecan puanı badge - her zaman görünür */
+        .excitement-badge {{
+            filter: none !important;
+            cursor: default !important;
+        }}
+
+        @media (max-width: 768px) {{
+            .spoiler-score {{
+                filter: blur(8px);
+            }}
+            .spoiler-container {{
+                padding: 6px 12px;
+            }}
+            .spoiler-icon {{
+                font-size: 1.5em;
+            }}
+        }}
+            
         {extra_styles}
 
 
@@ -1631,9 +1720,11 @@ def home_page():
     render_header()
     
     # Load user preferences if logged in
+    score_display_mode = 'full'  # Default
     if user:
         user_id = user['id']
         prefs = db.get_user_preferences(user_id)
+        score_display_mode = db.get_score_display_preference(user_id)
     else:
         prefs = None
 
@@ -1667,8 +1758,39 @@ def home_page():
     games = get_scoreboard(resolved_date)
     st.caption(f"Games from {resolved_date.strftime('%B %d, %Y')}")
 
-    # 2. SCOREBOARD GRID
-    st.subheader("Games")
+    # 2. SCOREBOARD GRID HEADER
+    col_header1, col_header2 = st.columns([3, 1])
+    with col_header1:
+        st.subheader("Games")
+    with col_header2:
+        if user:
+            # Spoiler Protection JavaScript
+            st.markdown("""
+                <script>
+                    function revealSpoiler(elementId) {
+                        const element = document.getElementById(elementId);
+                        if (element) {
+                            element.classList.add('revealed');
+                        }
+                    }
+                </script>
+            """, unsafe_allow_html=True)
+            
+            # Kullanıcı giriş yapmışsa tercih seçeneği göster
+            new_mode = st.selectbox(
+                "",
+                options=['full', 'spoiler_protected'],
+                index=0 if score_display_mode == 'full' else 1,
+                format_func=lambda x: "Full View" if x == 'full' else "Spoiler Protected",
+                key="score_display_selector",
+                label_visibility="collapsed"
+            )
+            
+            # Tercih değiştiyse kaydet
+            if new_mode != score_display_mode:
+                if db.update_score_display_preference(user_id, new_mode):
+                    score_display_mode = new_mode
+                    st.rerun()
     
     games_to_show = 3
     total_games = len(games)
@@ -1688,11 +1810,9 @@ def home_page():
     if num_visible == 0:
          st.info("No games to display.")
     else:
-        # --- MOBİL: 1 sütun, Desktop: 3 sütun ---
-        # JS ile viewport kontrol et ve sütun sayısını belirle
+        # Mobile column fix script
         st.markdown("""
             <script>
-                // Mobile column override: Streamlit columns'u 1 sütuna yap
                 (function() {
                     function fixColumns() {
                         if (window.innerWidth <= 768) {
@@ -1708,7 +1828,6 @@ def home_page():
                     }
                     fixColumns();
                     window.addEventListener('resize', fixColumns);
-                    // Streamlit re-render sonrasında tekrar çalıştır
                     new MutationObserver(fixColumns).observe(document.body, {childList: true, subtree: true});
                 })();
             </script>
@@ -1721,19 +1840,21 @@ def home_page():
             for i, g in enumerate(row_games):
                 with cols[i]:
                     with st.container(border=True):
-                        # --- HEYECAN PUANI (score badge) ---
+                        game_id = g.get('game_id', f'game_{i}')
+                        
+                        # --- HEYECAN PUANI - HER ZAMAN GÖRÜNÜR ---
                         game_score = calculate_game_score(g.get('home_score'), g.get('away_score'), g.get('status'))
                         
                         if game_score:
                             score_color = get_score_color(game_score)
-                            # Mobilde float:right ile position:absolute yerine relative flow
+                            # excitement-badge class'ı ile blur'dan muaf
                             st.markdown(f"""
                                 <div style="
                                     display: flex; 
                                     justify-content: flex-end; 
                                     margin-bottom: 2px;
                                 ">
-                                    <span style="
+                                    <span class="excitement-badge" style="
                                         background-color: {score_color}; 
                                         color: white; 
                                         padding: 2px 8px; 
@@ -1751,7 +1872,7 @@ def home_page():
                         # Status
                         st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
                         
-                        # Away / Score / Home — 3 sütun (mobilde de yatay kalır, dar olsa bile)
+                        # --- SKORLAR ---
                         c_away, c_score, c_home = st.columns([1, 1.2, 1])
                         
                         with c_away:
@@ -1763,8 +1884,25 @@ def home_page():
                             """, unsafe_allow_html=True)
                         
                         with c_score:
-                            st.markdown(f"<div style='font-size:1.25em; font-weight:800; text-align:center; line-height: 3; white-space: nowrap;'>{g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
-
+                            if score_display_mode == 'spoiler_protected':
+                                spoiler_id = f"spoiler_{game_id}"
+                                icon_id = f"icon_{game_id}"
+                                
+                                st.markdown(f"""
+                                    <div style="text-align:center;">
+                                        <div class="spoiler-container" data-game-id="{game_id}">
+                                            <div class="spoiler-score" id="{spoiler_id}" style='font-size:1.25em; font-weight:800; line-height: 2; white-space: nowrap;'>
+                                                {g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}
+                                            </div>
+                                            <div class="spoiler-icon" id="{icon_id}">🔒</div>
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                # FULL VIEW - Normal skor
+                                st.markdown(f"<div style='font-size:1.25em; font-weight:800; text-align:center; line-height: 3; white-space: nowrap;'>{g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
+                        
+                        # ← BU KISIM EKSİKTİ!
                         with c_home:
                             st.markdown(f"""
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -1775,11 +1913,30 @@ def home_page():
                         
                         st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
                         
-                        if st.button("📊 Box Score", key=f"btn_{g['game_id']}", use_container_width=True):
+                        if st.button("📊 Box Score", key=f"btn_{game_id}", use_container_width=True):
                             st.session_state.active_dialog = None
-                            show_boxscore_dialog(g)
+                            show_boxscore_dialog(g)     
     
-    # Show All / Show Less — tam genişlik buton
+
+
+    st.markdown("""
+        <script>
+            function handleReveal(gameId) {
+                const scoreElement = document.getElementById('spoiler_' + gameId);
+                const iconElement = document.getElementById('icon_' + gameId);
+                
+                if (scoreElement) {
+                    scoreElement.classList.add('revealed');
+                }
+                if (iconElement) {
+                    iconElement.style.display = 'none';
+                }
+            }
+        </script>
+    """, unsafe_allow_html=True)
+
+
+    # Show All / Show Less
     if total_games > games_to_show:
         if st.session_state.show_all_games:
             if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
