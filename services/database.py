@@ -277,6 +277,9 @@ class Database:
         except Exception as e:
             st.error(f"Trivia error: {e}")
             return None
+        
+
+        
 
     def get_user_streak(self, user_id):
         """Kullanıcının mevcut serisini getir"""
@@ -357,6 +360,66 @@ class Database:
             return False
         except Exception as e:
             return False
+        
+    def get_score_display_preference(self, user_id):
+        """Kullanıcının skor gösterim tercihini getir"""
+        conn = self.get_connection()
+        if not conn:
+            return 'full'
+        
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                "SELECT score_display_mode FROM user_preferences WHERE user_id = %s",
+                (user_id,)
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            
+            if result and result.get('score_display_mode'):
+                return result['score_display_mode']
+            return 'full'  # Default
+        except Exception as e:
+            print(f"Error getting score display preference: {e}")
+            return 'full'
+
+    def update_score_display_preference(self, user_id, mode):
+        """Kullanıcının skor gösterim tercihini güncelle"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+        
+        try:
+            cursor = conn.cursor()
+            
+            # Önce user_preferences kaydı var mı kontrol et
+            cursor.execute(
+                "SELECT id FROM user_preferences WHERE user_id = %s",
+                (user_id,)
+            )
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Güncelle
+                cursor.execute(
+                    "UPDATE user_preferences SET score_display_mode = %s, updated_at = %s WHERE user_id = %s",
+                    (mode, datetime.now(), user_id)
+                )
+            else:
+                # Yeni kayıt oluştur
+                cursor.execute(
+                    """INSERT INTO user_preferences (user_id, score_display_mode) 
+                    VALUES (%s, %s)""",
+                    (user_id, mode)
+                )
+            
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print(f"Error updating score display preference: {e}")
+            return False
     
     def remove_from_watchlist(self, watchlist_id):
         """Watchlist'ten oyuncu sil"""
@@ -392,6 +455,8 @@ class Database:
         except Exception as e:
             conn.rollback()
             return False
+        
+        
 
 # Singleton instance
 db = Database()
