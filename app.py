@@ -31,7 +31,7 @@ def load_token_from_storage():
                                 container.setAttribute('data-token', 'EXPIRED');
                             } else {
                                 container.setAttribute('data-token', authData.token);
-                                console.log('✅ Token yüklendi:', authData.token.substring(0, 15) + '...');
+                                console.log(' Token yüklendi:', authData.token.substring(0, 15) + '...');
                             }
                         } catch(e) {
                             console.error('Token okuma hatası:', e);
@@ -1378,16 +1378,16 @@ with st.sidebar:
             
             # Watchlist quick access
             watchlist_count = len(db.get_watchlist(user['id']))
-            if st.button(f"📋 My Watchlist ({watchlist_count})", use_container_width=True):
+            if st.button(f" My Watchlist ({watchlist_count})", use_container_width=True):
                 st.session_state.page = "watchlist"
                 st.rerun()
         else:
-            st.info("🆓 Free Account")
+            st.info(" Free Account")
             if st.button("⭐ Upgrade to PRO", use_container_width=True):
                 st.info("Contact admin for PRO upgrade")
         
         # Logout button
-        if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+        if st.button(" Logout", use_container_width=True, type="secondary"):
             logout()
     else:
         # Not logged in - show login/register option
@@ -1913,7 +1913,7 @@ def home_page():
                         
                         st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
                         
-                        if st.button("📊 Box Score", key=f"btn_{game_id}", use_container_width=True):
+                        if st.button(" Box Score", key=f"btn_{game_id}", use_container_width=True):
                             st.session_state.active_dialog = None
                             show_boxscore_dialog(g)     
     
@@ -1944,7 +1944,7 @@ def home_page():
                 st.rerun()
         else:
             remaining = total_games - games_to_show
-            if st.button(f"⬇️ Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
+            if st.button(f" Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
                 st.session_state.show_all_games = True
                 st.rerun()
 

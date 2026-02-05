@@ -899,7 +899,7 @@ def render_fantasy_league_page():
     # Header
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.title("🏀 FANTASY BASKETBALL ANALYTICS")
+        st.title(" FANTASY BASKETBALL ANALYTICS")
         
         # Platform badge
         if 'selected_platform' in st.session_state:
@@ -967,7 +967,7 @@ def render_fantasy_league_page():
                 "Select Data Range:",
                 options=["week", "month", "season"],
                 format_func=lambda x: {
-                    "week": "📅 Current Week",
+                    "week": " Current Week",
                     "month": "🔒 Last Month (PRO)",
                     "season": "🔒 Full Season (PRO)"
                 }[x],
@@ -1081,7 +1081,7 @@ def render_fantasy_league_page():
 
                 st.markdown("---")
                 
-                if st.button("🚪 Logout Yahoo", use_container_width=True):
+                if st.button("Logout Yahoo", use_container_width=True):
                     st.session_state.yahoo_authenticated = False
                     st.session_state.pop('yahoo_service', None)
                     st.rerun()

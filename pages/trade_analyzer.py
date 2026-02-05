@@ -819,7 +819,7 @@ def render_trade_analyzer_page():
         # THRESHOLD AYARLARI (sadece Threshold Smart için)
         if scoring_method == "Threshold Smart":
             st.markdown("---")
-            st.subheader("🎯 Threshold Settings")
+            st.subheader(" Threshold Settings")
             
             min_threshold = st.slider(
                 "Minimum FP Threshold",
@@ -839,12 +839,12 @@ def render_trade_analyzer_page():
                 help="Higher value = harsher penalty (lower value players = less value)"
             )
             
-            st.info(f"💡 Threshold: {min_threshold} FP\nPenalty: {penalty_curve:.1f}")
+            st.info(f" Threshold: {min_threshold} FP\nPenalty: {penalty_curve:.1f}")
         
         st.markdown("---")
         
         # PUNT STRATEGY
-        st.subheader("🎯 Punt Strategy")
+        st.subheader(" Punt Strategy")
         punt_cats = st.multiselect(
             "Punt categories",
             ["FG Punt", "FT Punt", "TO Punt"],
@@ -873,7 +873,7 @@ def render_trade_analyzer_page():
         weights_df = weights_df.sort_values(by='Weight', ascending=False)
         st.dataframe(weights_df, hide_index=True, use_container_width=True)
 
-    st.title("🏀 NBA Trade Analyzer")
+    st.title(" NBA Trade Analyzer")
     st.markdown(f"Using **{scoring_method}** method")
     
     # Session State
@@ -1109,7 +1109,7 @@ def render_trade_analyzer_page():
 
     st.markdown("---")
     with st.container(border=True):
-        st.markdown("## ⚖️ Trade Result")
+        st.markdown("## Trade Result")
         r1, r2, r3 = st.columns([1, 2, 1])
         
         with r1:
@@ -1128,12 +1128,12 @@ def render_trade_analyzer_page():
 
         with r2:
             if abs(diff) < 2:
-                st.success("✅ FAIR TRADE")
+                st.success(" FAIR TRADE")
             elif diff > 0:
-                st.success(f"🏆 TEAM 1 WINS")
+                st.success(f" TEAM 1 WINS")
                 st.caption(f"+{diff:.1f} advantage")
             else:
-                st.error(f"🏆 TEAM 2 WINS")
+                st.error(f" TEAM 2 WINS")
                 st.caption(f"+{abs(diff):.1f} advantage")
             st.progress(confidence / 100)
 
