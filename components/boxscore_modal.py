@@ -15,7 +15,7 @@ def render_boxscore_modal():
         st.error("No game selected")
         return
     
-    st.title("📊 Box Score")
+    st.title(" Box Score")
     
     # Close button
     if st.button("⬅️ Back to Games", type="primary", use_container_width=True):

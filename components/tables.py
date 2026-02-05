@@ -814,7 +814,7 @@ def show_player_analysis(player_row, weights):
             st.success("✅ Team at full strength - role is established")
 
     with col_right:
-        st.markdown("### 📋 Box Score")
+        st.markdown("###  Box Score")
         
         # Clean stats display
         st.markdown(f"""
@@ -867,7 +867,7 @@ def render_tables(today_df, weights, default_period="Today"):
         st.session_state.stats_period = default_period
         
     # --- PERIOD SELECTION BUTTONS ---
-    st.markdown("### 📅 Time Period")
+    st.markdown("### Time Period")
     cols = st.columns(4)
     periods = ["Today", "This Week", "This Month", "Season"]
     
@@ -1157,7 +1157,7 @@ def render_tables(today_df, weights, default_period="Today"):
         show_player_analysis(selected_row, weights)
 
     # --- 3. FULL LIST (EXPANDER) ---
-    with st.expander(f"📋 Full Player List ({len(active_df)} players)"):
+    with st.expander(f" Full Player List ({len(active_df)} players)"):
         full_sorted_df = active_df.sort_values("USER_SCORE", ascending=False).reset_index(drop=True)
         full_sorted_df.insert(0, '#', full_sorted_df.index + 1)
         cols_with_rank = ['#'] + available_cols
