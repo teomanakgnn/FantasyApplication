@@ -16,19 +16,6 @@ def get_browser_id():
     if 'browser_id' in st.session_state and st.session_state.browser_id:
         return st.session_state.browser_id
     
-    # Cookie'den almaya çalış (app.py'deki JavaScript tarafından set edilmiş)
-    try:
-        # Streamlit context'inden cookie'leri al
-        if hasattr(st, 'context') and hasattr(st.context, 'cookies'):
-            cookies = st.context.cookies
-            if 'hooplife_browser_id' in cookies:
-                browser_id = cookies['hooplife_browser_id']
-                st.session_state.browser_id = browser_id
-                print(f"✅ Browser ID loaded from cookie: {browser_id[:16]}...")
-                return browser_id
-    except Exception as e:
-        print(f"⚠️ Could not read browser_id from cookie: {e}")
-    
     # Session'da yoksa yeni oluştur
     new_id = f'browser_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}'
     st.session_state.browser_id = new_id
@@ -53,31 +40,42 @@ def get_client_info():
         'browser_id': get_browser_id()
     }
 
-# --- TOKEN SAKLAMA FONKSİYONLARI ---
+# --- TOKEN SAKLAMA FONKSİYONLARI (PRODUCTION SAFE) ---
 
 def get_token_file_path(username, browser_id):
-    """Token dosyasının yolunu döndür - Her kullanıcı + browser için benzersiz"""
-    home_dir = os.path.expanduser("~")
-    token_dir = os.path.join(home_dir, ".hooplife")
-    
-    if not os.path.exists(token_dir):
-        try:
-            os.makedirs(token_dir)
-        except:
-            token_dir = os.path.join("/tmp", ".hooplife")
-            if not os.path.exists(token_dir):
+    """Token dosyasının yolunu döndür - Production'da çalışmayabilir"""
+    try:
+        # Önce /tmp deneyin (cloud platformlarda genelde yazılabilir)
+        token_dir = "/tmp/.hooplife"
+        
+        if not os.path.exists(token_dir):
+            try:
                 os.makedirs(token_dir)
-    
-    # Username + browser_id kombinasyonu ile benzersiz dosya
-    safe_username = hashlib.md5(username.encode()).hexdigest()[:16]
-    safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
-    filename = f"auth_token_{safe_username}_{safe_browser}.pkl"
-    
-    return os.path.join(token_dir, filename)
+            except:
+                # /tmp bile yazılamazsa home'u deneyin
+                home_dir = os.path.expanduser("~")
+                token_dir = os.path.join(home_dir, ".hooplife")
+                if not os.path.exists(token_dir):
+                    os.makedirs(token_dir)
+        
+        # Username + browser_id kombinasyonu ile benzersiz dosya
+        safe_username = hashlib.md5(username.encode()).hexdigest()[:16]
+        safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
+        filename = f"auth_token_{safe_username}_{safe_browser}.pkl"
+        
+        return os.path.join(token_dir, filename)
+    except Exception as e:
+        print(f"⚠️ Cannot create token file path: {e}")
+        return None
 
 def save_token_to_file(token, username, browser_id):
-    """Token'ı kullanıcı + browser'a özel dosyaya kaydet"""
+    """Token'ı dosyaya kaydet - Production'da çalışmayabilir"""
     try:
+        file_path = get_token_file_path(username, browser_id)
+        if not file_path:
+            print("⚠️ Token file path not available (read-only filesystem?)")
+            return False
+        
         token_data = {
             'token': token,
             'username': username,
@@ -86,118 +84,112 @@ def save_token_to_file(token, username, browser_id):
             'saved_at': datetime.now().isoformat()
         }
         
-        file_path = get_token_file_path(username, browser_id)
-        
         with open(file_path, 'wb') as f:
             pickle.dump(token_data, f)
         
         print(f"✅ Token saved: {username} (browser: {browser_id[:8]}...)")
         return True
     except Exception as e:
-        print(f"❌ Token save error: {e}")
+        print(f"⚠️ Token save failed (expected in production): {e}")
         return False
 
 def load_token_from_file(browser_id):
-    """Bu browser için kaydedilmiş token'ı yükle"""
+    """Dosyadan token yükle - Production'da çalışmayabilir"""
     try:
-        home_dir = os.path.expanduser("~")
-        token_dir = os.path.join(home_dir, ".hooplife")
+        # /tmp önce deneyin
+        token_dirs = ["/tmp/.hooplife", os.path.join(os.path.expanduser("~"), ".hooplife")]
         
-        if not os.path.exists(token_dir):
-            return None
-        
-        import glob
-        # Bu browser_id'ye ait dosyaları bul
-        safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
-        pattern = os.path.join(token_dir, f"auth_token_*_{safe_browser}.pkl")
-        token_files = glob.glob(pattern)
-        
-        for file_path in token_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    token_data = pickle.load(f)
-                
-                # Browser ID kontrolü
-                if token_data.get('browser_id') != browser_id:
-                    continue
-                
-                # Expiry kontrolü
-                expiry = datetime.fromisoformat(token_data['expiry'])
-                if datetime.now() > expiry:
-                    os.remove(file_path)
-                    print(f"🗑️ Expired token deleted: {token_data.get('username')}")
-                    continue
-                
-                # Token'ı database'de doğrula
-                user = db.validate_session(token_data['token'], browser_id)
-                
-                if user and user['username'] == token_data['username']:
-                    print(f"✅ File token loaded: {user['username']}")
-                    return token_data
-                else:
-                    # Geçersiz token, dosyayı sil
-                    os.remove(file_path)
-                    print(f"🗑️ Invalid token deleted: {token_data.get('username')}")
-                    
-            except Exception as e:
-                print(f"⚠️ Corrupt token file: {file_path} → {e}")
+        for token_dir in token_dirs:
+            if not os.path.exists(token_dir):
+                continue
+            
+            import glob
+            safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
+            pattern = os.path.join(token_dir, f"auth_token_*_{safe_browser}.pkl")
+            token_files = glob.glob(pattern)
+            
+            for file_path in token_files:
                 try:
-                    os.remove(file_path)
-                except:
-                    pass
+                    with open(file_path, 'rb') as f:
+                        token_data = pickle.load(f)
+                    
+                    if token_data.get('browser_id') != browser_id:
+                        continue
+                    
+                    expiry = datetime.fromisoformat(token_data['expiry'])
+                    if datetime.now() > expiry:
+                        os.remove(file_path)
+                        print(f"🗑️ Expired token deleted: {token_data.get('username')}")
+                        continue
+                    
+                    user = db.validate_session(token_data['token'], browser_id)
+                    
+                    if user and user['username'] == token_data['username']:
+                        print(f"✅ File token loaded: {user['username']}")
+                        return token_data
+                    else:
+                        os.remove(file_path)
+                        print(f"🗑️ Invalid token deleted: {token_data.get('username')}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Corrupt token file: {file_path}")
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
         
         return None
         
     except Exception as e:
-        print(f"❌ Token load error: {e}")
+        print(f"⚠️ Token load failed (expected in production): {e}")
         return None
 
 def delete_token_file(username, browser_id):
-    """Kullanıcı + browser'a özel token dosyasını sil"""
+    """Token dosyasını sil"""
     try:
         file_path = get_token_file_path(username, browser_id)
-        if os.path.exists(file_path):
+        if file_path and os.path.exists(file_path):
             os.remove(file_path)
             print(f"🗑️ Token deleted: {username}")
             return True
     except Exception as e:
-        print(f"❌ Token delete error: {e}")
+        print(f"⚠️ Token delete failed: {e}")
     return False
 
 def cleanup_expired_tokens():
-    """Süresi dolmuş tüm token dosyalarını temizle"""
+    """Süresi dolmuş token dosyalarını temizle"""
     try:
-        home_dir = os.path.expanduser("~")
-        token_dir = os.path.join(home_dir, ".hooplife")
-        
-        if not os.path.exists(token_dir):
-            return
-        
-        import glob
-        token_files = glob.glob(os.path.join(token_dir, "auth_token_*.pkl"))
+        token_dirs = ["/tmp/.hooplife", os.path.join(os.path.expanduser("~"), ".hooplife")]
         
         cleaned = 0
-        for file_path in token_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    token_data = pickle.load(f)
-                
-                expiry = datetime.fromisoformat(token_data['expiry'])
-                if datetime.now() > expiry:
-                    os.remove(file_path)
-                    cleaned += 1
-            except:
+        for token_dir in token_dirs:
+            if not os.path.exists(token_dir):
+                continue
+            
+            import glob
+            token_files = glob.glob(os.path.join(token_dir, "auth_token_*.pkl"))
+            
+            for file_path in token_files:
                 try:
-                    os.remove(file_path)
-                    cleaned += 1
+                    with open(file_path, 'rb') as f:
+                        token_data = pickle.load(f)
+                    
+                    expiry = datetime.fromisoformat(token_data['expiry'])
+                    if datetime.now() > expiry:
+                        os.remove(file_path)
+                        cleaned += 1
                 except:
-                    pass
+                    try:
+                        os.remove(file_path)
+                        cleaned += 1
+                    except:
+                        pass
         
         if cleaned > 0:
             print(f"🧹 Cleaned {cleaned} expired token(s)")
             
     except Exception as e:
-        print(f"⚠️ Cleanup error: {e}")
+        print(f"⚠️ Cleanup error (expected in production): {e}")
 
 # --- AUTHENTICATION FONKSİYONLARI ---
 
@@ -217,7 +209,7 @@ def is_valid_email(email):
     return re.match(pattern, email) is not None
 
 def check_authentication(all_cookies):
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder - PRODUCTION SAFE"""
     
     # Browser ID'yi cookie'den al (tüm sekmeler için aynı)
     browser_id = None
@@ -228,27 +220,26 @@ def check_authentication(all_cookies):
     else:
         # Cookie'de yoksa session'dan al veya oluştur
         browser_id = get_browser_id()
+        print(f"⚠️ Browser ID not in cookie, using session: {browser_id[:16]}...")
     
     # 1. Session'da zaten varsa - token'ı yeniden doğrula
     if st.session_state.get('authenticated') and st.session_state.get('user'):
         current_token = st.session_state.get('session_token')
         
         if current_token:
-            # Token'ı database'de doğrula (browser_id ile)
             user = db.validate_session(current_token, browser_id)
             
             if user:
-                # Token hala geçerli
                 st.session_state.user = user
+                print(f"✅ Session valid: {user['username']}")
                 return True
             else:
-                # Token geçersiz olmuş, temizle
                 print(f"⚠️ Session token expired or invalid")
                 st.session_state.authenticated = False
                 st.session_state.user = None
                 st.session_state.session_token = None
     
-    # 2. Cookie'den token yükle
+    # 2. Cookie'den auth token yükle (EN ÖNEMLİ - Production'da bu çalışır)
     if all_cookies:
         cookie_token = all_cookies.get('hooplife_auth_token')
         if cookie_token:
@@ -263,22 +254,23 @@ def check_authentication(all_cookies):
             else:
                 print(f"⚠️ Cookie token invalid")
     
-    # 3. Dosyadan token yükle (her sayfa yüklendiğinde kontrol et)
-    token_data = load_token_from_file(browser_id)
-    
-    if token_data:
-        # Token'ı database'de doğrula
-        user = db.validate_session(token_data['token'], browser_id)
+    # 3. Dosyadan token yükle (FALLBACK - Production'da çalışmayabilir)
+    try:
+        token_data = load_token_from_file(browser_id)
         
-        if user:
-            st.session_state.user = user
-            st.session_state.session_token = token_data['token']
-            st.session_state.authenticated = True
-            print(f"✅ File login: {user['username']}")
-            return True
-        else:
-            # Token geçersiz, dosyayı sil
-            delete_token_file(token_data['username'], browser_id)
+        if token_data:
+            user = db.validate_session(token_data['token'], browser_id)
+            
+            if user:
+                st.session_state.user = user
+                st.session_state.session_token = token_data['token']
+                st.session_state.authenticated = True
+                print(f"✅ File login: {user['username']}")
+                return True
+            else:
+                delete_token_file(token_data['username'], browser_id)
+    except Exception as e:
+        print(f"⚠️ File token check failed (expected in production): {e}")
     
     return False
 
@@ -291,9 +283,12 @@ def logout():
     if 'session_token' in st.session_state:
         db.logout_session(st.session_state.session_token, browser_id)
     
-    # Token dosyasını sil
+    # Token dosyasını sil (varsa)
     if current_user:
-        delete_token_file(current_user['username'], browser_id)
+        try:
+            delete_token_file(current_user['username'], browser_id)
+        except:
+            pass
     
     # Session state temizle
     st.session_state.authenticated = False
@@ -317,7 +312,7 @@ def render_auth_page():
             st.session_state.page = "home"
             st.rerun()
 
-    # CSS
+    # CSS (aynı)
     st.markdown("""
         <style>
         .block-container {
@@ -471,10 +466,8 @@ def render_auth_page():
             else:
                 user = db.verify_user(username, password)
                 if user:
-                    # Client bilgilerini al
                     client_info = get_client_info()
                     
-                    # Session oluştur (browser_id ile)
                     token = db.create_session(
                         user['id'], 
                         browser_id=client_info['browser_id'],
@@ -483,26 +476,22 @@ def render_auth_page():
                     )
                     
                     if token:
-                        # Session State'i doldur
                         st.session_state.user = user
                         st.session_state.session_token = token
                         st.session_state.authenticated = True
                         
-                        # file_token_checked'i sıfırla
-                        if 'file_token_checked' in st.session_state:
-                            del st.session_state.file_token_checked
+                        # Token'ı cookie'ye kaydet (JavaScript ile - app.py'de)
+                        # Production'da bu en güvenilir yöntem
                         
-                        # BENİ HATIRLA - DOSYAYA KAYDET
+                        # Dosyaya kaydetmeyi dene (opsiyonel - production'da çalışmayabilir)
                         if remember_me:
-                            success = save_token_to_file(token, user['username'], client_info['browser_id'])
-                            if success:
-                                st.success("✅ Login successful! You'll stay logged in for 30 days.")
-                            else:
-                                st.warning("✅ Login successful! (But 'Remember me' could not be saved)")
-                        else:
-                            st.success("✅ Login successful!")
+                            try:
+                                save_token_to_file(token, user['username'], client_info['browser_id'])
+                            except:
+                                pass
                         
-                        # Otomatik yönlendirme
+                        st.success("✅ Login successful!")
+                        
                         import time
                         time.sleep(1.5)
                         

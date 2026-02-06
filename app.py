@@ -93,32 +93,104 @@ st.set_page_config(
 components.html("""
     <script>
         (function() {
+            'use strict';
+            
             try {
-                // localStorage'dan browser_id'yi al veya oluştur
+                // 1. Browser ID Setup (tüm sekmeler için aynı)
                 let browserId = localStorage.getItem('hooplife_browser_id');
                 
                 if (!browserId) {
                     browserId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                     localStorage.setItem('hooplife_browser_id', browserId);
-                    console.log('🆕 New browser ID created:', browserId);
+                    console.log('🆕 New browser ID:', browserId);
                 } else {
                     console.log('✅ Browser ID loaded:', browserId);
                 }
                 
-                // Cookie'ye kaydet (30 gün süreyle)
+                // Cookie ayarları (Production-safe)
+                const isHTTPS = window.location.protocol === 'https:';
                 const expiry = new Date();
                 expiry.setDate(expiry.getDate() + 30);
-                document.cookie = `hooplife_browser_id=${browserId}; expires=${expiry.toUTCString()}; path=/; SameSite=Lax`;
+                
+                // Secure flag sadece HTTPS'de
+                const secureFlag = isHTTPS ? '; Secure' : '';
+                
+                // Browser ID cookie'si
+                document.cookie = `hooplife_browser_id=${browserId}; expires=${expiry.toUTCString()}; path=/; SameSite=Lax${secureFlag}`;
+                console.log('✅ Browser ID cookie set');
+                
+                
+                // 2. Auth Token Restore (localStorage'dan)
+                const authData = localStorage.getItem('hooplife_auth_data');
+                
+                if (authData) {
+                    try {
+                        const data = JSON.parse(authData);
+                        const tokenExpiry = new Date(data.expiry);
+                        const now = new Date();
+                        
+                        if (now < tokenExpiry) {
+                            // Token geçerli, cookie'ye yaz
+                            const expirySeconds = Math.floor((tokenExpiry - now) / 1000);
+                            document.cookie = `hooplife_auth_token=${data.token}; max-age=${expirySeconds}; path=/; SameSite=Lax${secureFlag}`;
+                            console.log('✅ Auth token restored from localStorage');
+                        } else {
+                            // Token süresi dolmuş, temizle
+                            localStorage.removeItem('hooplife_auth_data');
+                            console.log('🗑️ Expired auth token removed');
+                        }
+                    } catch(e) {
+                        console.error('❌ Auth token restore error:', e);
+                        localStorage.removeItem('hooplife_auth_data');
+                    }
+                }
                 
             } catch(e) {
-                console.error('❌ Browser ID error:', e);
+                console.error('❌ Cookie setup error:', e);
             }
         })();
     </script>
 """, height=0)
 
 
-# 2. COOKIE MANAGER SETUP (mevcut kodu DEĞIŞTIRIN)
+# 2. SESSION TOKEN SAVER (Login sonrası çalışacak - auth.py'den sonra)
+# ================================================================================
+
+# Login başarılı olduğunda auth token'ı localStorage'a kaydet
+if st.session_state.get('authenticated') and st.session_state.get('session_token'):
+    token = st.session_state.session_token
+    
+    # JavaScript ile localStorage'a kaydet
+    components.html(f"""
+        <script>
+            (function() {{
+                try {{
+                    const authData = {{
+                        token: '{token}',
+                        expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                        savedAt: new Date().toISOString()
+                    }};
+                    
+                    localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                    
+                    // Cookie'ye de kaydet (Production için)
+                    const isHTTPS = window.location.protocol === 'https:';
+                    const secureFlag = isHTTPS ? '; Secure' : '';
+                    const expiry = new Date();
+                    expiry.setDate(expiry.getDate() + 30);
+                    
+                    document.cookie = `hooplife_auth_token={token}; expires=${{expiry.toUTCString()}}; path=/; SameSite=Lax${{secureFlag}}`;
+                    
+                    console.log('✅ Auth token saved to localStorage and cookie');
+                }} catch(e) {{
+                    console.error('❌ Token save error:', e);
+                }}
+            }})();
+        </script>
+    """, height=0)
+
+
+# 3. COOKIE MANAGER SETUP
 # ================================================================================
 
 def get_cookie_manager():
@@ -131,14 +203,38 @@ def get_cookie_manager():
     return manager
 
 cookie_manager = get_cookie_manager()
-
-# Çerezleri al
 all_cookies = cookie_manager.get_all()
 
 # Yükleme kontrolü
 if all_cookies is None:
     st.info("🏀 HoopLife is loading...")
     st.stop()
+
+
+# 4. AUTHENTICATION CHECK
+# ================================================================================
+
+is_authenticated = check_authentication(all_cookies)
+user = st.session_state.get('user', None)
+is_pro = user.get('is_pro', False) if user else False
+
+
+# ================================================================================
+# DEBUG MODE (Geliştirme sırasında açın, production'da kapatın)
+# ================================================================================
+
+DEBUG = False  # Production'da False yapın
+
+if DEBUG:
+    with st.sidebar:
+        st.markdown("---")
+        st.caption("DEBUG INFO")
+        st.caption(f"Authenticated: {is_authenticated}")
+        st.caption(f"User: {user.get('username') if user else 'None'}")
+        if all_cookies:
+            st.caption(f"Browser ID: {all_cookies.get('hooplife_browser_id', 'N/A')[:16]}...")
+            st.caption(f"Auth Token: {'Yes' if all_cookies.get('hooplife_auth_token') else 'No'}")
+
 
 
 # 3. AUTHENTICATION CHECK (mevcut kodu DEĞIŞTIRIN)
