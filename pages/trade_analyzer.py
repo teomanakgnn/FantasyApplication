@@ -114,7 +114,7 @@ st.markdown(f"""
         
         /* Sidebar temel geçişler */
         [data-testid="stSidebar"] {{
-            transition: transform 0.3s ease, width 0.3s ease !important;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease !important;
         }}
         
         /* ============================================
@@ -124,7 +124,7 @@ st.markdown(f"""
         #hooplife-master-trigger {{
             z-index: 999999999 !important;
             transform: translateZ(0);
-            will-change: transform, width;
+            will-change: transform, width, left, top;
         }}
         
         @media (max-width: 768px) {{
@@ -167,14 +167,15 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
+# MOBİL SIDEBAR: SMOOTH ANIMATIONS
 components.html("""
 <script>
     (function() {
         'use strict';
         
-        let isInitialLoad = true;
-        let lastKnownState = null;
+        var isInitialLoad = true;
+        var isTransitioning = false;
+        var animationFrame = null;
         
         function saveSidebarState(isClosed) {
             try {
@@ -186,6 +187,14 @@ components.html("""
         function getSavedSidebarState() {
             try {
                 return window.parent.localStorage.getItem('hooplife_sidebar_closed') === 'true';
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        function wasUserClosed() {
+            try {
+                return window.parent.localStorage.getItem('hooplife_sidebar_user_closed') === 'true';
             } catch(e) {
                 return false;
             }
@@ -214,26 +223,31 @@ components.html("""
             const sidebar = state.element;
             const isMobile = window.parent.innerWidth <= 768;
             
-            sidebar.style.transition = 'transform 0.3s ease, width 0.3s ease';
+            sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
             sidebar.style.width = '0';
             sidebar.style.minWidth = '0';
             sidebar.style.transform = 'translateX(-100%)';
             sidebar.setAttribute('aria-expanded', 'false');
             
             if (isMobile) {
-                sidebar.style.display = 'none';
+                setTimeout(() => {
+                    sidebar.style.display = 'none';
+                }, 300);
             }
         }
         
         function toggleSidebar() {
+            if (isTransitioning) return;
+            
             const state = getSidebarState();
             if (!state) return;
             
-            // Önce görsel güncellemesi yap (ANINDA)
-            const willBeClosed = !state.isClosed;
-            updateVisibility(willBeClosed);
+            isTransitioning = true;
+            const isMobile = window.parent.innerWidth <= 768;
             
-            // Sonra Streamlit'i tetikle
+            // Buton güncelleme - INSTANT
+            requestAnimationFrame(() => updateVisibility(true));
+            
             const selectors = [
                 '[data-testid="stSidebarCollapsedControl"] button',
                 '[data-testid="collapsedControl"] button',
@@ -241,27 +255,57 @@ components.html("""
                 '[data-testid="baseButton-header"]'
             ];
             
+            let clicked = false;
             for (let selector of selectors) {
                 const btn = window.parent.document.querySelector(selector);
                 if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
                     btn.click();
+                    clicked = true;
                     break;
                 }
             }
             
-            // Durumu kaydet
-            saveSidebarState(willBeClosed);
-            lastKnownState = willBeClosed;
+            if (!clicked) {
+                const sidebar = state.element;
+                sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
+                
+                if (state.isClosed) {
+                    sidebar.style.width = isMobile ? '85vw' : '336px';
+                    sidebar.style.minWidth = isMobile ? '85vw' : '336px';
+                    sidebar.style.transform = 'translateX(0)';
+                    sidebar.style.display = 'flex';
+                    sidebar.setAttribute('aria-expanded', 'true');
+                    saveSidebarState(false);
+                    
+                    if (isMobile) {
+                        sidebar.style.overflowY = 'auto';
+                        sidebar.style.overflowX = 'hidden';
+                        sidebar.style.webkitOverflowScrolling = 'touch';
+                    }
+                } else {
+                    forceSidebarClose();
+                    saveSidebarState(true);
+                }
+            }
+            
+            setTimeout(() => {
+                const finalState = getSidebarState();
+                if (finalState) {
+                    saveSidebarState(finalState.isClosed);
+                }
+                isTransitioning = false;
+                requestAnimationFrame(() => updateVisibility());
+            }, 320);
         }
 
         function createHoopLifeDock() {
             const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (oldTrigger) return;
+            if (oldTrigger) oldTrigger.remove();
             
-            const triggerElement = window.parent.document.createElement('div');
-            triggerElement.id = 'hooplife-master-trigger';
+            const trigger = window.parent.document.createElement('div');
+            trigger.id = 'hooplife-master-trigger';
             
-            triggerElement.style.cssText = `
+            trigger.style.cssText = `
                 position: fixed;
                 top: 20%;
                 left: 0;
@@ -277,199 +321,205 @@ components.html("""
                 align-items: center;
                 justify-content: center;
                 box-shadow: 5px 0 15px rgba(0,0,0,0.4);
-                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                 pointer-events: auto;
+                transform: translateZ(0);
+                will-change: transform, left, top, width, height, background;
             `;
             
-            triggerElement.innerHTML = `
-                <div id="hl-icon" style="
-                    font-size: 26px; 
-                    transition: transform 0.3s ease;
-                    filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));
-                    will-change: transform;
-                ">🏀</div>
-            `;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
             
-            triggerElement.addEventListener('click', function(e) {
+            trigger.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 toggleSidebar();
             });
             
-            triggerElement.addEventListener('mouseenter', function() {
-                if (lastKnownState === true) { // Kapalı ise
-                    triggerElement.style.width = '60px';
-                    triggerElement.style.background = '#ff4b4b';
-                    const icon = triggerElement.querySelector('#hl-icon');
+            trigger.addEventListener('mouseenter', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '60px';
+                    trigger.style.background = '#ff4b4b';
+                    const icon = trigger.querySelector('#hl-icon');
                     if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
                 }
             });
             
-            triggerElement.addEventListener('mouseleave', function() {
-                if (lastKnownState === true) { // Kapalı ise
-                    triggerElement.style.width = '45px';
-                    triggerElement.style.background = '#1a1c24';
-                    const icon = triggerElement.querySelector('#hl-icon');
+            trigger.addEventListener('mouseleave', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '45px';
+                    trigger.style.background = '#1a1c24';
+                    const icon = trigger.querySelector('#hl-icon');
                     if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
                 }
             });
             
-            window.parent.document.body.appendChild(triggerElement);
+            window.parent.document.body.appendChild(trigger);
         }
 
-        function updateVisibility(forceState) {
+        function updateVisibility(instant = false) {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+            
             const trigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (!trigger) return;
+            if (!trigger) {
+                createHoopLifeDock();
+                return;
+            }
             
             const state = getSidebarState();
             if (!state) return;
             
-            // forceState varsa onu kullan, yoksa gerçek durumu
-            const isClosed = forceState !== undefined ? forceState : state.isClosed;
-            lastKnownState = isClosed;
-            
             const isMobile = window.parent.innerWidth <= 768;
+            
+            // Transition ayarı
+            if (instant) {
+                trigger.style.transition = 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)';
+            } else {
+                trigger.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+            }
 
-            if (!isClosed) {
+            if (!state.isClosed) {
                 if (isMobile) {
-                    // Mobile close button - ANINDA
-                    trigger.style.cssText = `
-                        position: fixed;
-                        top: 15px;
-                        left: calc(100% - 60px);
-                        background: rgba(255, 75, 75, 0.9);
-                        backdrop-filter: blur(8px);
-                        width: 40px;
-                        height: 40px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 12px;
-                        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.3);
-                        border: 1px solid rgba(255, 255, 255, 0.2);
-                        cursor: pointer;
-                        pointer-events: auto;
-                        z-index: 999999999;
-                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                        transform: translateZ(0);
-                    `;
+                    // AÇIK DURUM - MOBİL (Çarpı butonu)
+                    Object.assign(trigger.style, {
+                        position: 'fixed',
+                        top: '15px',
+                        left: 'calc(85vw - 50px)',
+                        background: 'rgba(255, 75, 75, 0.95)',
+                        backdropFilter: 'blur(10px)',
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 20px rgba(255, 75, 75, 0.4)',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                        cursor: 'pointer',
+                        pointerEvents: 'auto',
+                        borderLeft: '1px solid rgba(255, 255, 255, 0.25)'
+                    });
 
                     trigger.innerHTML = `
-                        <div style="position: relative; width: 16px; height: 16px;">
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.2s;"></span>
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.2s;"></span>
+                        <div style="position: relative; width: 18px; height: 18px;">
+                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(45deg); border-radius: 1px;"></span>
+                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(-45deg); border-radius: 1px;"></span>
                         </div>
                     `;
                 } else {
-                    // Desktop - hide when open
                     trigger.style.display = 'none';
                 }
             } else {
-                // Closed state - ANINDA basketball göster
-                trigger.style.cssText = `
-                    position: fixed;
-                    display: flex;
-                    left: 0;
-                    top: 20%;
-                    width: 45px;
-                    height: 60px;
-                    background: #1a1c24;
-                    border: 2px solid #ff4b4b;
-                    border-left: none;
-                    border-radius: 0 15px 15px 0;
-                    pointer-events: auto;
-                    cursor: pointer;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 999999999;
-                    box-shadow: 5px 0 15px rgba(0,0,0,0.4);
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                    transform: translateZ(0);
-                `;
+                // KAPALI DURUM (Basketbol butonu)
+                Object.assign(trigger.style, {
+                    display: 'flex',
+                    left: '0',
+                    top: '20%',
+                    width: '45px',
+                    height: '60px',
+                    background: '#1a1c24',
+                    border: '2px solid #ff4b4b',
+                    borderLeft: 'none',
+                    borderRadius: '0 15px 15px 0',
+                    pointerEvents: 'auto',
+                    cursor: 'pointer',
+                    backdropFilter: 'none'
+                });
                 
-                trigger.innerHTML = `
-                    <div id="hl-icon" style="
-                        font-size: 26px; 
-                        transition: transform 0.3s ease;
-                        filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));
-                        will-change: transform;
-                    ">🏀</div>
-                `;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
+                
+                trigger.onmouseenter = () => {
+                    if (!isTransitioning) {
+                        trigger.style.width = '60px';
+                        trigger.style.background = '#ff4b4b';
+                        const icon = trigger.querySelector('#hl-icon');
+                        if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                    }
+                };
+                
+                trigger.onmouseleave = () => {
+                    if (!isTransitioning) {
+                        trigger.style.width = '45px';
+                        trigger.style.background = '#1a1c24';
+                        const icon = trigger.querySelector('#hl-icon');
+                        if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                    }
+                };
             }
+            
+            trigger.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar();
+            };
         }
         
         function checkAndFixSidebar() {
+            if (isTransitioning) return;
+            
             const state = getSidebarState();
             
             if (isInitialLoad) {
                 isInitialLoad = false;
-                const shouldBeClosed = getSavedSidebarState();
-                
-                if (shouldBeClosed && state && !state.isClosed) {
-                    forceSidebarClose();
-                    updateVisibility(true);
-                } else if (state) {
-                    updateVisibility(state.isClosed);
+                if (wasUserClosed() && state && !state.isClosed) {
+                    setTimeout(() => {
+                        forceSidebarClose();
+                        updateVisibility();
+                    }, 400);
+                    return;
                 }
-                return;
             }
             
-            if (!state) return;
-            
-            // Durum değiştiyse güncelle
-            if (lastKnownState !== state.isClosed) {
-                lastKnownState = state.isClosed;
-                updateVisibility(state.isClosed);
+            const shouldBeClosed = getSavedSidebarState();
+            if (shouldBeClosed && state && !state.isClosed) {
+                setTimeout(() => {
+                    forceSidebarClose();
+                    updateVisibility();
+                }, 500);
+            } else if (state) {
                 saveSidebarState(state.isClosed);
             }
-        }
-        
-        // MutationObserver: Sidebar DOM değişikliklerini ANINDA yakala
-        function observeSidebar() {
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (!sidebar) {
-                setTimeout(observeSidebar, 100);
-                return;
-            }
-            
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'attributes' && 
-                        (mutation.attributeName === 'aria-expanded' || 
-                         mutation.attributeName === 'style')) {
-                        
-                        // ANINDA güncelle
-                        requestAnimationFrame(() => {
-                            checkAndFixSidebar();
-                        });
-                    }
-                });
-            });
-            
-            observer.observe(sidebar, {
-                attributes: true,
-                attributeFilter: ['aria-expanded', 'style', 'class']
-            });
         }
         
         function init() {
             createHoopLifeDock();
             
-            // İlk yükleme
             setTimeout(() => {
                 checkAndFixSidebar();
-            }, 200);
+                updateVisibility();
+            }, 800);
             
-            // MutationObserver başlat (ANINDA senkronizasyon)
-            observeSidebar();
+            // RequestAnimationFrame ile smooth updates
+            function smoothUpdate() {
+                if (!isTransitioning) {
+                    updateVisibility();
+                }
+                animationFrame = requestAnimationFrame(smoothUpdate);
+            }
+            smoothUpdate();
             
-            // Yedek polling (daha seyrek)
-            setInterval(checkAndFixSidebar, 3000);
-            
-            // Resize
+            // Resize listener
+            let resizeTimer;
             window.parent.addEventListener('resize', () => {
-                requestAnimationFrame(() => updateVisibility());
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => updateVisibility(true), 100);
             });
+            
+            // MutationObserver - sidebar değişikliklerini izle
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                const observer = new MutationObserver(() => {
+                    if (!isTransitioning) {
+                        requestAnimationFrame(() => updateVisibility());
+                    }
+                });
+                
+                observer.observe(sidebar, {
+                    attributes: true,
+                    attributeFilter: ['style', 'aria-expanded', 'class']
+                });
+            }
         }
         
         if (window.parent.document.readyState === 'loading') {
@@ -477,7 +527,6 @@ components.html("""
         } else {
             init();
         }
-        
     })();
 </script>
 """, height=0, width=0)
@@ -761,7 +810,7 @@ def render_trade_analyzer_page():
         # THRESHOLD AYARLARI (sadece Threshold Smart için)
         if scoring_method == "Threshold Smart":
             st.markdown("---")
-            st.subheader(" Threshold Settings")
+            st.subheader("🎯 Threshold Settings")
             
             min_threshold = st.slider(
                 "Minimum FP Threshold",
@@ -781,12 +830,12 @@ def render_trade_analyzer_page():
                 help="Higher value = harsher penalty (lower value players = less value)"
             )
             
-            st.info(f" Threshold: {min_threshold} FP\nPenalty: {penalty_curve:.1f}")
+            st.info(f"📊 Threshold: {min_threshold} FP\n⚡ Penalty: {penalty_curve:.1f}")
         
         st.markdown("---")
         
         # PUNT STRATEGY
-        st.subheader(" Punt Strategy")
+        st.subheader("🎯 Punt Strategy")
         punt_cats = st.multiselect(
             "Punt categories",
             ["FG Punt", "FT Punt", "TO Punt"],
@@ -815,7 +864,7 @@ def render_trade_analyzer_page():
         weights_df = weights_df.sort_values(by='Weight', ascending=False)
         st.dataframe(weights_df, hide_index=True, use_container_width=True)
 
-    st.title(" NBA Trade Analyzer")
+    st.title("🏀 NBA Trade Analyzer")
     st.markdown(f"Using **{scoring_method}** method")
     
     # Session State
@@ -1051,7 +1100,7 @@ def render_trade_analyzer_page():
 
     st.markdown("---")
     with st.container(border=True):
-        st.markdown("## Trade Result")
+        st.markdown("## 📊 Trade Result")
         r1, r2, r3 = st.columns([1, 2, 1])
         
         with r1:
@@ -1070,17 +1119,17 @@ def render_trade_analyzer_page():
 
         with r2:
             if abs(diff) < 2:
-                st.success(" FAIR TRADE")
+                st.success("✅ FAIR TRADE")
             elif diff > 0:
-                st.success(f" TEAM 1 WINS")
+                st.success(f"🏆 TEAM 1 WINS")
                 st.caption(f"+{diff:.1f} advantage")
             else:
-                st.error(f" TEAM 2 WINS")
+                st.error(f"🏆 TEAM 2 WINS")
                 st.caption(f"+{abs(diff):.1f} advantage")
             st.progress(confidence / 100)
 
     # --- STAT BREAKDOWN ---
-    st.markdown("### Stat Breakdown")
+    st.markdown("### 📈 Stat Breakdown")
     stats_config = [
         ('PTS', 'Points', False), ('REB', 'Rebs', False), ('AST', 'Asts', False),
         ('STL', 'Stls', False), ('BLK', 'Blks', False), ('3PM', '3PM', False), ('TO', 'TO', True)
@@ -1106,7 +1155,7 @@ def render_trade_analyzer_page():
             """, unsafe_allow_html=True)
 
     # --- DETAILED STATS ---
-    st.markdown("### Detailed Stats")
+    st.markdown("### 📋 Detailed Stats")
     
     c_t1, c_t2 = st.columns(2)
     
