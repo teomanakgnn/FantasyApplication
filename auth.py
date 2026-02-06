@@ -236,25 +236,22 @@ def check_authentication(all_cookies):
             else:
                 print(f"⚠️ Cookie token invalid")
     
-    # 3. Dosyadan token yükle (sadece bir kez)
-    if 'file_token_checked' not in st.session_state:
-        st.session_state.file_token_checked = True
+    # 3. Dosyadan token yükle (her sayfa yüklendiğinde kontrol et)
+    token_data = load_token_from_file(browser_id)
+    
+    if token_data:
+        # Token'ı database'de doğrula
+        user = db.validate_session(token_data['token'], browser_id)
         
-        token_data = load_token_from_file(browser_id)
-        
-        if token_data:
-            # Token'ı database'de doğrula
-            user = db.validate_session(token_data['token'], browser_id)
-            
-            if user:
-                st.session_state.user = user
-                st.session_state.session_token = token_data['token']
-                st.session_state.authenticated = True
-                print(f"✅ File login: {user['username']}")
-                return True
-            else:
-                # Token geçersiz, dosyayı sil
-                delete_token_file(token_data['username'], browser_id)
+        if user:
+            st.session_state.user = user
+            st.session_state.session_token = token_data['token']
+            st.session_state.authenticated = True
+            print(f"✅ File login: {user['username']}")
+            return True
+        else:
+            # Token geçersiz, dosyayı sil
+            delete_token_file(token_data['username'], browser_id)
     
     return False
 
@@ -293,7 +290,7 @@ def render_auth_page():
             st.session_state.page = "home"
             st.rerun()
 
-    # CSS (aynı)
+    # CSS
     st.markdown("""
         <style>
         .block-container {
@@ -472,7 +469,7 @@ def render_auth_page():
                         if remember_me:
                             success = save_token_to_file(token, user['username'], client_info['browser_id'])
                             if success:
-                                st.success("✅ Login successful! Session will persist for 30 days.")
+                                st.success("✅ Login successful! You'll stay logged in for 30 days.")
                             else:
                                 st.warning("✅ Login successful! (But 'Remember me' could not be saved)")
                         else:
