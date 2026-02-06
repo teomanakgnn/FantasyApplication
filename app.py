@@ -31,7 +31,6 @@ def cleanup_expired_tokens():
                     os.remove(file_path)
                     print(f"🧹 Expired token removed: {token_data['username']}")
             except:
-                # Bozuk dosyayı sil
                 os.remove(file_path)
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
@@ -39,73 +38,47 @@ def cleanup_expired_tokens():
 # app.py başlangıcında çağır
 cleanup_expired_tokens()
 
-# app.py en başında (cleanup_expired_tokens()'dan sonra)
-
-# LocalStorage'dan token oku
+# ÖNEMLİ: LocalStorage'dan token'ı cookie'ye aktar
+# Bu kod sayfa her yüklendiğinde çalışır
 components.html("""
+    <div id="auth-loader" style="display:none;"></div>
     <script>
         (function() {
             try {
                 const authData = localStorage.getItem('hooplife_auth_data');
+                const loader = document.getElementById('auth-loader');
+                
                 if (authData) {
                     const data = JSON.parse(authData);
                     const expiry = new Date(data.expiry);
                     const now = new Date();
                     
                     if (now < expiry) {
-                        // Token geçerli, cookie'ye kopyala
-                        document.cookie = `hooplife_auth_token=${data.token}; max-age=${60*60*24*30}; path=/; SameSite=Lax`;
-                        console.log('✅ Auth token loaded from localStorage');
+                        // Token geçerli, cookie'ye yaz
+                        const expirySeconds = Math.floor((expiry - now) / 1000);
+                        document.cookie = `hooplife_auth_token=${data.token}; max-age=${expirySeconds}; path=/; SameSite=Lax`;
+                        
+                        if (loader) loader.setAttribute('data-status', 'loaded');
+                        console.log('✅ Auth token restored from localStorage');
                     } else {
-                        // Token süresi dolmuş
+                        // Token süresi dolmuş, temizle
                         localStorage.removeItem('hooplife_auth_data');
-                        console.log('🗑️ Expired token removed from localStorage');
+                        if (loader) loader.setAttribute('data-status', 'expired');
+                        console.log('🗑️ Expired token removed');
                     }
+                } else {
+                    if (loader) loader.setAttribute('data-status', 'none');
                 }
             } catch(e) {
-                console.error('❌ LocalStorage read error:', e);
+                console.error('❌ Auth restore error:', e);
+                if (document.getElementById('auth-loader')) {
+                    document.getElementById('auth-loader').setAttribute('data-status', 'error');
+                }
             }
         })();
     </script>
 """, height=0)
 
-def load_token_from_storage():
-    """localStorage'dan token'ı yükle"""
-    if 'token_loaded' not in st.session_state:
-        result = components.html("""
-            <div id="token-container" style="display:none;"></div>
-            <script>
-                (function() {
-                    const data = localStorage.getItem('hooplife_auth_data');
-                    const container = document.getElementById('token-container');
-                    
-                    if (data && container) {
-                        try {
-                            const authData = JSON.parse(data);
-                            const expiry = new Date(authData.expiry);
-                            const now = new Date();
-                            
-                            if (now > expiry) {
-                                localStorage.removeItem('hooplife_auth_data');
-                                container.setAttribute('data-token', 'EXPIRED');
-                            } else {
-                                container.setAttribute('data-token', authData.token);
-                                console.log(' Token yüklendi:', authData.token.substring(0, 15) + '...');
-                            }
-                        } catch(e) {
-                            console.error('Token okuma hatası:', e);
-                            container.setAttribute('data-token', 'ERROR');
-                        }
-                    } else {
-                        if (container) container.setAttribute('data-token', 'NONE');
-                    }
-                })();
-            </script>
-        """, height=0)
-        st.session_state.token_loaded = True
-
-
-load_token_from_storage()
 
 st.set_page_config(
     page_title="HoopLife NBA", 
