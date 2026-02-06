@@ -9,6 +9,35 @@ from services.espn_api import (calculate_game_score, get_score_color)
 from auth import check_authentication
 
 
+def cleanup_expired_tokens():
+    """Süresi dolmuş tüm token dosyalarını temizle"""
+    try:
+        home_dir = os.path.expanduser("~")
+        token_dir = os.path.join(home_dir, ".hooplife")
+        
+        if not os.path.exists(token_dir):
+            return
+        
+        import glob
+        token_files = glob.glob(os.path.join(token_dir, "auth_token_*.pkl"))
+        
+        for file_path in token_files:
+            try:
+                with open(file_path, 'rb') as f:
+                    token_data = pickle.load(f)
+                
+                expiry = datetime.fromisoformat(token_data['expiry'])
+                if datetime.now() > expiry:
+                    os.remove(file_path)
+                    print(f"🧹 Expired token removed: {token_data['username']}")
+            except:
+                # Bozuk dosyayı sil
+                os.remove(file_path)
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
+# app.py başlangıcında çağır
+cleanup_expired_tokens()
 
 def load_token_from_storage():
     """localStorage'dan token'ı yükle"""
