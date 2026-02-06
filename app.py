@@ -6,7 +6,7 @@ import textwrap
 import extra_streamlit_components as stx
 import time 
 from services.espn_api import (calculate_game_score, get_score_color)
-from auth import check_authentication
+from auth import check_authentication, get_browser_id
 
 
 def cleanup_expired_tokens():
@@ -123,17 +123,18 @@ def get_cookie_manager():
     st.session_state.cookie_manager = manager
     return manager
 
+# app.py içinde
 cookie_manager = get_cookie_manager()
-
-# 2. Çerezleri uygulama genelinde SADECE BURADA çekiyoruz
 all_cookies = cookie_manager.get_all()
 
-# 3. Yükleme kontrolü (Iframe hızı için kritik)
 if all_cookies is None:
     st.info("🏀 HoopLife is loading...")
     st.stop()
 
-# 4. Kimlik kontrolü (Manager'ı değil, çektiğimiz all_cookies'i gönderiyoruz)
+# Kalıcı ID'yi al
+browser_id = get_browser_id(all_cookies) 
+
+# Şimdi doğrula
 is_authenticated = check_authentication(all_cookies)
 
 # Iframe'de çerezlerin yüklenmesi 1 saniye sürebilir, 

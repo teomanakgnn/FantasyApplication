@@ -11,11 +11,29 @@ import streamlit.components.v1 as components
 
 # --- BROWSER ID FONKSİYONLARI ---
 
-def get_browser_id():
-    """Her browser/sekme için benzersiz ID oluştur"""
-    if 'browser_id' not in st.session_state:
-        st.session_state.browser_id = str(uuid.uuid4())
-    return st.session_state.browser_id
+def get_browser_id(all_cookies):
+    """
+    Browser ID'yi önce çerezlerden oku, yoksa oluştur ve çerezlere yaz.
+    """
+    # 1. Önce çerezlerde var mı bak
+    bid = all_cookies.get('hooplife_device_id')
+    
+    # 2. Session state'de varsa onu kullan (hız için)
+    if 'browser_id' in st.session_state:
+        return st.session_state.browser_id
+
+    # 3. Hiçbir yerde yoksa yeni oluştur
+    if not bid:
+        bid = str(uuid.uuid4())
+        # JavaScript ile bu ID'yi kalıcı çereze yaz (365 gün)
+        components.html(f"""
+            <script>
+                document.cookie = "hooplife_device_id={bid}; max-age=31536000; path=/; SameSite=Lax";
+            </script>
+        """, height=0)
+    
+    st.session_state.browser_id = bid
+    return bid
 
 def get_client_info():
     """İstemci bilgilerini topla"""
