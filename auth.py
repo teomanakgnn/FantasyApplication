@@ -11,11 +11,30 @@ import uuid
 # --- BROWSER ID FONKSİYONLARI ---
 
 def get_browser_id():
-    """Her browser/sekme için benzersiz ID oluştur"""
-    if 'browser_id' not in st.session_state:
-        # Yeni bir benzersiz ID oluştur
-        st.session_state.browser_id = str(uuid.uuid4())
-    return st.session_state.browser_id
+    """Tarayıcı için kalıcı benzersiz ID (tüm sekmeler için aynı)"""
+    # İlk olarak session_state'te kontrol et
+    if 'browser_id' in st.session_state and st.session_state.browser_id:
+        return st.session_state.browser_id
+    
+    # Cookie'den almaya çalış (app.py'deki JavaScript tarafından set edilmiş)
+    try:
+        # Streamlit context'inden cookie'leri al
+        if hasattr(st, 'context') and hasattr(st.context, 'cookies'):
+            cookies = st.context.cookies
+            if 'hooplife_browser_id' in cookies:
+                browser_id = cookies['hooplife_browser_id']
+                st.session_state.browser_id = browser_id
+                print(f"✅ Browser ID loaded from cookie: {browser_id[:16]}...")
+                return browser_id
+    except Exception as e:
+        print(f"⚠️ Could not read browser_id from cookie: {e}")
+    
+    # Session'da yoksa yeni oluştur
+    new_id = f'browser_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}'
+    st.session_state.browser_id = new_id
+    print(f"🆕 New browser ID created: {new_id[:16]}...")
+    
+    return new_id
 
 def get_client_info():
     """İstemci bilgilerini topla"""
@@ -200,7 +219,15 @@ def is_valid_email(email):
 def check_authentication(all_cookies):
     """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
     
-    browser_id = get_browser_id()
+    # Browser ID'yi cookie'den al (tüm sekmeler için aynı)
+    browser_id = None
+    if all_cookies and 'hooplife_browser_id' in all_cookies:
+        browser_id = all_cookies['hooplife_browser_id']
+        st.session_state.browser_id = browser_id
+        print(f"✅ Browser ID from cookie: {browser_id[:16]}...")
+    else:
+        # Cookie'de yoksa session'dan al veya oluştur
+        browser_id = get_browser_id()
     
     # 1. Session'da zaten varsa - token'ı yeniden doğrula
     if st.session_state.get('authenticated') and st.session_state.get('user'):

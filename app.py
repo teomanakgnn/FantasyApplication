@@ -7,6 +7,8 @@ import extra_streamlit_components as stx
 import time 
 from services.espn_api import (calculate_game_score, get_score_color)
 from auth import check_authentication
+import os
+import pickle
 
 
 def cleanup_expired_tokens():
@@ -90,61 +92,61 @@ st.set_page_config(
 
 components.html("""
     <script>
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'HOOPLIFE_AUTH_TOKEN' && event.data.token) {
-                // Streamlit'in session state'ine token'ı gönder
-                const stateEvent = new CustomEvent('streamlit:setComponentValue', {
-                    detail: {
-                        value: {
-                            token: event.data.token,
-                            savedAt: event.data.savedAt
-                        }
-                    }
-                });
-                window.dispatchEvent(stateEvent);
+        (function() {
+            try {
+                // localStorage'dan browser_id'yi al veya oluştur
+                let browserId = localStorage.getItem('hooplife_browser_id');
+                
+                if (!browserId) {
+                    browserId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('hooplife_browser_id', browserId);
+                    console.log('🆕 New browser ID created:', browserId);
+                } else {
+                    console.log('✅ Browser ID loaded:', browserId);
+                }
+                
+                // Cookie'ye kaydet (30 gün süreyle)
+                const expiry = new Date();
+                expiry.setDate(expiry.getDate() + 30);
+                document.cookie = `hooplife_browser_id=${browserId}; expires=${expiry.toUTCString()}; path=/; SameSite=Lax`;
+                
+            } catch(e) {
+                console.error('❌ Browser ID error:', e);
             }
-        });
+        })();
     </script>
 """, height=0)
 
-# Token'ı session state'e kaydet
-if 'stored_auth_token' not in st.session_state:
-    st.session_state.stored_auth_token = None
 
-# Sadece şu fonksiyonu kullanın:
+# 2. COOKIE MANAGER SETUP (mevcut kodu DEĞIŞTIRIN)
+# ================================================================================
+
 def get_cookie_manager():
-    # Eğer session state içinde manager zaten varsa onu döndür (Tekrar oluşturma)
+    """Cookie manager - sadece bir kez oluştur"""
     if 'cookie_manager' in st.session_state:
         return st.session_state.cookie_manager
     
-    # Yoksa yeni oluştur ve session state'e kaydet
-    # key="nba_cookies" ekleyerek benzersiz olmasını sağlıyoruz
     manager = stx.CookieManager(key="nba_cookies")
     st.session_state.cookie_manager = manager
     return manager
 
 cookie_manager = get_cookie_manager()
 
-# 2. Çerezleri uygulama genelinde SADECE BURADA çekiyoruz
+# Çerezleri al
 all_cookies = cookie_manager.get_all()
 
-# 3. Yükleme kontrolü (Iframe hızı için kritik)
+# Yükleme kontrolü
 if all_cookies is None:
     st.info("🏀 HoopLife is loading...")
     st.stop()
 
-# 4. Kimlik kontrolü (Manager'ı değil, çektiğimiz all_cookies'i gönderiyoruz)
+
+# 3. AUTHENTICATION CHECK (mevcut kodu DEĞIŞTIRIN)
+# ================================================================================
+
+# Kimlik kontrolü (all_cookies parametresi ile)
 is_authenticated = check_authentication(all_cookies)
 
-# Iframe'de çerezlerin yüklenmesi 1 saniye sürebilir, 
-# veri gelene kadar uygulamayı bekletmek hata almanı önler.
-if all_cookies is None:
-    st.info("🏀 HoopLife is loading...")
-    st.stop()
-
-# 2. Bu manager'ı auth.py'deki fonksiyona gönder
-if not st.session_state.get('authenticated'):
-    check_authentication(cookie_manager) # Manager'ı parametre olarak geçiyoruz
 
 st.markdown("""
     <script>
@@ -1367,7 +1369,7 @@ if "slider_index" not in st.session_state:
     st.session_state.slider_index = 0
 
 # Check if user is authenticated (opsiyonel)
-is_authenticated = check_authentication(cookie_manager)
+is_authenticated = check_authentication(all_cookies)
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
 
