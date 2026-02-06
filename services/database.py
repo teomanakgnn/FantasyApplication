@@ -104,62 +104,92 @@ class Database:
             st.error(f"Login error: {e}")
             return None
     
-    def create_session(self, user_id):
-        """Oturum oluştur"""
-        conn = self.get_connection()
-        if not conn:
-            return None
-        
+    def create_session(self, user_id, browser_id=None, ip_address=None, user_agent=None):
+        """Yeni session oluştur (browser_id ile)"""
         try:
-            token = secrets.token_urlsafe(32)
-            expires_at = datetime.now() + timedelta(days=7)
+            session_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now() + timedelta(days=30)
             
-            cursor = conn.cursor()
-            cursor.execute(
-                """INSERT INTO sessions (user_id, session_token, expires_at)
-                   VALUES (%s, %s, %s) RETURNING session_token""",
-                (user_id, token, expires_at)
+            query = """
+                INSERT INTO sessions (user_id, session_token, browser_id, ip_address, user_agent, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING session_token
+            """
+            
+            result = self.execute_query(
+                query, 
+                (user_id, session_token, browser_id, ip_address, user_agent, expires_at),
+                fetch=True
             )
-            conn.commit()
-            cursor.close()
-            return token
+            
+            if result:
+                # Last login güncelle
+                self.execute_query(
+                    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s",
+                    (user_id,)
+                )
+                return session_token
+            
+            return None
+            
         except Exception as e:
-            st.error(f"Session creation error: {e}")
+            print(f"❌ Session create error: {e}")
             return None
     
-    def validate_session(self, token):
-        """Oturum doğrula"""
-        conn = self.get_connection()
-        if not conn:
-            return None
-        
+    def validate_session(self, session_token, browser_id=None):
+        """Session token'ı doğrula (browser_id ile)"""
         try:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute(
-                """SELECT u.* FROM users u
-                   JOIN sessions s ON u.id = s.user_id
-                   WHERE s.session_token = %s AND s.expires_at > %s""",
-                (token, datetime.now())
-            )
-            user = cursor.fetchone()
-            cursor.close()
-            return dict(user) if user else None
+            # Browser ID kontrolü ile
+            if browser_id:
+                query = """
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_token = %s 
+                    AND s.browser_id = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """
+                result = self.execute_query(query, (session_token, browser_id), fetch=True)
+            else:
+                # Fallback (eski sistem uyumluluğu için)
+                query = """
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_token = %s 
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """
+                result = self.execute_query(query, (session_token,), fetch=True)
+            
+            if result:
+                return result[0]
+            
+            return None
+            
         except Exception as e:
+            print(f"❌ Session validation error: {e}")
             return None
     
-    def logout_session(self, token):
-        """Oturumu sonlandır"""
-        conn = self.get_connection()
-        if not conn:
-            return
-        
+    def logout_session(self, session_token, browser_id=None):
+        """Session'ı sonlandır"""
         try:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM sessions WHERE session_token = %s", (token,))
-            conn.commit()
-            cursor.close()
+            if browser_id:
+                # Sadece bu browser'ın session'ını sil
+                query = "DELETE FROM sessions WHERE session_token = %s AND browser_id = %s"
+                self.execute_query(query, (session_token, browser_id))
+            else:
+                # Token'a ait tüm session'ları sil
+                query = "DELETE FROM sessions WHERE session_token = %s"
+                self.execute_query(query, (session_token,))
+            
+            print(f"✅ Session logged out")
+            return True
+            
         except Exception as e:
-            pass
+            print(f"❌ Logout error: {e}")
+            return False
     
     # ==================== USER PREFERENCES ====================
     
