@@ -7,7 +7,7 @@ import extra_streamlit_components as stx
 import time 
 from services.espn_api import (calculate_game_score, get_score_color)
 from auth import check_authentication, get_browser_id
-
+import pickle
 
 def cleanup_expired_tokens():
     """Süresi dolmuş tüm token dosyalarını temizle"""
