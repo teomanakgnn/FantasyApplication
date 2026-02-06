@@ -39,6 +39,36 @@ def cleanup_expired_tokens():
 # app.py başlangıcında çağır
 cleanup_expired_tokens()
 
+# app.py en başında (cleanup_expired_tokens()'dan sonra)
+
+# LocalStorage'dan token oku
+components.html("""
+    <script>
+        (function() {
+            try {
+                const authData = localStorage.getItem('hooplife_auth_data');
+                if (authData) {
+                    const data = JSON.parse(authData);
+                    const expiry = new Date(data.expiry);
+                    const now = new Date();
+                    
+                    if (now < expiry) {
+                        // Token geçerli, cookie'ye kopyala
+                        document.cookie = `hooplife_auth_token=${data.token}; max-age=${60*60*24*30}; path=/; SameSite=Lax`;
+                        console.log('✅ Auth token loaded from localStorage');
+                    } else {
+                        // Token süresi dolmuş
+                        localStorage.removeItem('hooplife_auth_data');
+                        console.log('🗑️ Expired token removed from localStorage');
+                    }
+                }
+            } catch(e) {
+                console.error('❌ LocalStorage read error:', e);
+            }
+        })();
+    </script>
+""", height=0)
+
 def load_token_from_storage():
     """localStorage'dan token'ı yükle"""
     if 'token_loaded' not in st.session_state:
