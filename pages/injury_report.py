@@ -182,19 +182,15 @@ components.html("""
     (function() {
         'use strict';
         
-        var triggerElement = null;
-        var backdropElement = null;
-        var isInitialLoad = true;  // ← YENİ: İlk yükleme kontrolü
+        var isInitialLoad = true;
+        var isTransitioning = false;
+        var animationFrame = null;
         
-        // LocalStorage kullanarak sidebar durumunu sakla
         function saveSidebarState(isClosed) {
             try {
                 window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
-                // Sayfa değişikliklerinde kullanmak için ayrı bir flag
                 window.parent.localStorage.setItem('hooplife_sidebar_user_closed', isClosed ? 'true' : 'false');
-            } catch(e) {
-                console.log('LocalStorage kullanılamıyor');
-            }
+            } catch(e) {}
         }
         
         function getSavedSidebarState() {
@@ -205,7 +201,6 @@ components.html("""
             }
         }
         
-        // Kullanıcının manuel olarak kapatıp kapatmadığını kontrol et
         function wasUserClosed() {
             try {
                 return window.parent.localStorage.getItem('hooplife_sidebar_user_closed') === 'true';
@@ -214,7 +209,6 @@ components.html("""
             }
         }
         
-        // SIDEBAR DURUMUNU KONTROL ET
         function getSidebarState() {
             const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
             if (!sidebar) return null;
@@ -226,11 +220,11 @@ components.html("""
                 element: sidebar,
                 width: rect.width,
                 display: computed.display,
-                isClosed: rect.width < 50 || computed.display === 'none'
+                isClosed: rect.width < 50 || computed.display === 'none',
+                transform: computed.transform
             };
         }
         
-        // SIDEBAR'I ZORLA KAPAT
         function forceSidebarClose() {
             const state = getSidebarState();
             if (!state || state.isClosed) return;
@@ -238,24 +232,31 @@ components.html("""
             const sidebar = state.element;
             const isMobile = window.parent.innerWidth <= 768;
             
+            sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
             sidebar.style.width = '0';
             sidebar.style.minWidth = '0';
             sidebar.style.transform = 'translateX(-100%)';
             sidebar.setAttribute('aria-expanded', 'false');
             
             if (isMobile) {
-                sidebar.style.display = 'none';
+                setTimeout(() => {
+                    sidebar.style.display = 'none';
+                }, 300);
             }
         }
         
-        // SIDEBAR'I AÇ/KAPA
         function toggleSidebar() {
+            if (isTransitioning) return;
+            
             const state = getSidebarState();
             if (!state) return;
             
+            isTransitioning = true;
             const isMobile = window.parent.innerWidth <= 768;
             
-            // YÖNTEM 1: Toggle butonunu bul ve tıkla
+            // Buton güncelleme - INSTANT
+            requestAnimationFrame(() => updateVisibility(true));
+            
             const selectors = [
                 '[data-testid="stSidebarCollapsedControl"] button',
                 '[data-testid="collapsedControl"] button',
@@ -263,92 +264,57 @@ components.html("""
                 '[data-testid="baseButton-header"]'
             ];
             
+            let clicked = false;
             for (let selector of selectors) {
                 const btn = window.parent.document.querySelector(selector);
                 if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
                     btn.click();
-                    
-                    if (isMobile) {
-                        setTimeout(() => {
-                            const newState = getSidebarState();
-                            if (newState && newState.isClosed === state.isClosed) {
-                                btn.click();
-                            }
-                        }, 200);
-                    }
-                    
-                    // Toggle gerçekleştikten SONRA durumu kaydet
-                    setTimeout(() => {
-                        const finalState = getSidebarState();
-                        if (finalState) {
-                            saveSidebarState(finalState.isClosed);
-                        }
-                    }, 400);
-                    return;
+                    clicked = true;
+                    break;
                 }
             }
             
-            // YÖNTEM 2: Keyboard event
-            const keyEvent = new KeyboardEvent('keydown', {
-                key: '[',
-                code: 'BracketLeft',
-                keyCode: 219,
-                bubbles: true
-            });
-            window.parent.document.dispatchEvent(keyEvent);
+            if (!clicked) {
+                const sidebar = state.element;
+                sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
+                
+                if (state.isClosed) {
+                    sidebar.style.width = isMobile ? '85vw' : '336px';
+                    sidebar.style.minWidth = isMobile ? '85vw' : '336px';
+                    sidebar.style.transform = 'translateX(0)';
+                    sidebar.style.display = 'flex';
+                    sidebar.setAttribute('aria-expanded', 'true');
+                    saveSidebarState(false);
+                    
+                    if (isMobile) {
+                        sidebar.style.overflowY = 'auto';
+                        sidebar.style.overflowX = 'hidden';
+                        sidebar.style.webkitOverflowScrolling = 'touch';
+                    }
+                } else {
+                    forceSidebarClose();
+                    saveSidebarState(true);
+                }
+            }
             
-            // YÖNTEM 3: Direct DOM manipulation
             setTimeout(() => {
                 const finalState = getSidebarState();
-                if (finalState && finalState.isClosed === state.isClosed) {
-                    const sidebar = finalState.element;
-                    
-                    if (state.isClosed) {
-                        // Aç
-                        sidebar.style.width = isMobile ? '85vw' : '336px';
-                        sidebar.style.minWidth = isMobile ? '85vw' : '336px';
-                        sidebar.style.transform = 'translateX(0)';
-                        sidebar.style.display = 'flex';
-                        sidebar.setAttribute('aria-expanded', 'true');
-                        saveSidebarState(false);
-                        
-                        // MOBİL: Scroll'u enable et
-                        if (isMobile) {
-                            sidebar.style.overflowY = 'auto';
-                            sidebar.style.overflowX = 'hidden';
-                            sidebar.style.webkitOverflowScrolling = 'touch';
-                            
-                            const innerContainers = sidebar.querySelectorAll('div');
-                            innerContainers.forEach(container => {
-                                if (container.getAttribute('data-testid') === 'stSidebarContent') {
-                                    container.style.overflowY = 'visible';
-                                    container.style.height = 'auto';
-                                    container.style.minHeight = '100vh';
-                                }
-                            });
-                        }
-                    } else {
-                        // Kapat
-                        forceSidebarClose();
-                        saveSidebarState(true);
-                    }
+                if (finalState) {
+                    saveSidebarState(finalState.isClosed);
                 }
-            }, 300);
+                isTransitioning = false;
+                requestAnimationFrame(() => updateVisibility());
+            }, 320);
         }
-        
-        let hoopLifeTrigger = null;
 
         function createHoopLifeDock() {
             const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (oldTrigger) {
-                oldTrigger.remove();
-            }
+            if (oldTrigger) oldTrigger.remove();
             
-            const triggerElement = window.parent.document.createElement('div');
-            triggerElement.id = 'hooplife-master-trigger';
-            hoopLifeTrigger = triggerElement;
+            const trigger = window.parent.document.createElement('div');
+            trigger.id = 'hooplife-master-trigger';
             
-            triggerElement.style.cssText = `
+            trigger.style.cssText = `
                 position: fixed;
                 top: 20%;
                 left: 0;
@@ -364,92 +330,97 @@ components.html("""
                 align-items: center;
                 justify-content: center;
                 box-shadow: 5px 0 15px rgba(0,0,0,0.4);
-                transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                 pointer-events: auto;
+                transform: translateZ(0);
+                will-change: transform, left, top, width, height, background;
             `;
             
-            triggerElement.innerHTML = `
-                <div id="hl-icon" style="
-                    font-size: 26px; 
-                    transition: transform 0.5s ease;
-                    filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));
-                ">🏀</div>
-            `;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
             
-            triggerElement.addEventListener('click', function(e) {
+            trigger.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                toggleSidebar(); 
-                setTimeout(updateVisibility, 100);
+                toggleSidebar();
             });
             
-            triggerElement.addEventListener('mouseenter', function() {
-                triggerElement.style.width = '60px';
-                triggerElement.style.background = '#ff4b4b';
-                const icon = triggerElement.querySelector('#hl-icon');
-                if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+            trigger.addEventListener('mouseenter', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '60px';
+                    trigger.style.background = '#ff4b4b';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                }
             });
             
-            triggerElement.addEventListener('mouseleave', function() {
-                triggerElement.style.width = '45px';
-                triggerElement.style.background = '#1a1c24';
-                const icon = triggerElement.querySelector('#hl-icon');
-                if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+            trigger.addEventListener('mouseleave', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '45px';
+                    trigger.style.background = '#1a1c24';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                }
             });
             
-            window.parent.document.body.appendChild(triggerElement);
+            window.parent.document.body.appendChild(trigger);
         }
 
-        function updateVisibility() {
+        function updateVisibility(instant = false) {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+            
             const trigger = window.parent.document.getElementById('hooplife-master-trigger');
             if (!trigger) {
                 createHoopLifeDock();
                 return;
             }
             
-            const state = getSidebarState(); 
+            const state = getSidebarState();
             if (!state) return;
             
             const isMobile = window.parent.innerWidth <= 768;
+            
+            // Transition ayarı
+            if (instant) {
+                trigger.style.transition = 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)';
+            } else {
+                trigger.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+            }
 
             if (!state.isClosed) {
                 if (isMobile) {
+                    // AÇIK DURUM - MOBİL (Çarpı butonu)
                     Object.assign(trigger.style, {
                         position: 'fixed',
                         top: '15px',
-                        left: 'calc(100% - 60px)',
-                        background: 'rgba(255, 75, 75, 0.9)',
-                        backdropFilter: 'blur(8px)',
+                        left: 'calc(85vw - 50px)',
+                        background: 'rgba(255, 75, 75, 0.95)',
+                        backdropFilter: 'blur(10px)',
                         width: '40px',
                         height: '40px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderRadius: '12px',
-                        boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        boxShadow: '0 4px 20px rgba(255, 75, 75, 0.4)',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
                         cursor: 'pointer',
                         pointerEvents: 'auto',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                        borderLeft: '1px solid rgba(255, 255, 255, 0.25)'
                     });
 
                     trigger.innerHTML = `
-                        <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
+                        <div style="position: relative; width: 18px; height: 18px;">
+                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(45deg); border-radius: 1px;"></span>
+                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(-45deg); border-radius: 1px;"></span>
                         </div>
                     `;
-                    
-                    trigger.onclick = function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleSidebar();
-                        setTimeout(updateVisibility, 100);
-                    };
                 } else {
                     trigger.style.display = 'none';
                 }
             } else {
+                // KAPALI DURUM (Basketbol butonu)
                 Object.assign(trigger.style, {
                     display: 'flex',
                     left: '0',
@@ -461,56 +432,55 @@ components.html("""
                     borderLeft: 'none',
                     borderRadius: '0 15px 15px 0',
                     pointerEvents: 'auto',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    backdropFilter: 'none'
                 });
                 
-                trigger.innerHTML = `
-                    <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
-                `;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
                 
-                trigger.onclick = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleSidebar();
-                    setTimeout(updateVisibility, 100);
+                trigger.onmouseenter = () => {
+                    if (!isTransitioning) {
+                        trigger.style.width = '60px';
+                        trigger.style.background = '#ff4b4b';
+                        const icon = trigger.querySelector('#hl-icon');
+                        if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                    }
                 };
                 
-                trigger.onmouseenter = function() {
-                    trigger.style.width = '60px';
-                    trigger.style.background = '#ff4b4b';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
-                };
-                
-                trigger.onmouseleave = function() {
-                    trigger.style.width = '45px';
-                    trigger.style.background = '#1a1c24';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                trigger.onmouseleave = () => {
+                    if (!isTransitioning) {
+                        trigger.style.width = '45px';
+                        trigger.style.background = '#1a1c24';
+                        const icon = trigger.querySelector('#hl-icon');
+                        if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                    }
                 };
             }
+            
+            trigger.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar();
+            };
         }
         
-        // ← YENİ: Sayfa değişikliğinde sidebar durumunu koru
         function checkAndFixSidebar() {
+            if (isTransitioning) return;
+            
             const state = getSidebarState();
             
-            // İLK YÜKLEME: Kullanıcı daha önce kapattıysa kapalı tut
             if (isInitialLoad) {
                 isInitialLoad = false;
-                
                 if (wasUserClosed() && state && !state.isClosed) {
                     setTimeout(() => {
                         forceSidebarClose();
                         updateVisibility();
-                    }, 300); // ← Biraz daha gecikme ekle
+                    }, 400);
                     return;
                 }
             }
             
-            // SONRAKI KONTROLLER: Normal senkronizasyon
             const shouldBeClosed = getSavedSidebarState();
-            
             if (shouldBeClosed && state && !state.isClosed) {
                 setTimeout(() => {
                     forceSidebarClose();
@@ -524,19 +494,41 @@ components.html("""
         function init() {
             createHoopLifeDock();
             
-            // İlk kontrolü biraz geciktir - Streamlit'in sidebar'ı render etmesini bekle
             setTimeout(() => {
                 checkAndFixSidebar();
                 updateVisibility();
-            }, 800); // ← 500ms'den 800ms'ye çıkar
+            }, 800);
             
-            // Periyodik kontrol
-            setInterval(() => {
-                checkAndFixSidebar();
-                updateVisibility();
-            }, 1000);
+            // RequestAnimationFrame ile smooth updates
+            function smoothUpdate() {
+                if (!isTransitioning) {
+                    updateVisibility();
+                }
+                animationFrame = requestAnimationFrame(smoothUpdate);
+            }
+            smoothUpdate();
             
-            window.parent.addEventListener('resize', updateVisibility);
+            // Resize listener
+            let resizeTimer;
+            window.parent.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => updateVisibility(true), 100);
+            });
+            
+            // MutationObserver - sidebar değişikliklerini izle
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                const observer = new MutationObserver(() => {
+                    if (!isTransitioning) {
+                        requestAnimationFrame(() => updateVisibility());
+                    }
+                });
+                
+                observer.observe(sidebar, {
+                    attributes: true,
+                    attributeFilter: ['style', 'aria-expanded', 'class']
+                });
+            }
         }
         
         if (window.parent.document.readyState === 'loading') {
@@ -544,7 +536,6 @@ components.html("""
         } else {
             init();
         }
-        
     })();
 </script>
 """, height=0, width=0)
