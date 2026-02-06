@@ -173,19 +173,14 @@ components.html("""
     (function() {
         'use strict';
         
-        var triggerElement = null;
-        var backdropElement = null;
-        var isInitialLoad = true;  // ← YENİ: İlk yükleme kontrolü
+        let isInitialLoad = true;
+        let lastKnownState = null;
         
-        // LocalStorage kullanarak sidebar durumunu sakla
         function saveSidebarState(isClosed) {
             try {
                 window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
-                // Sayfa değişikliklerinde kullanmak için ayrı bir flag
                 window.parent.localStorage.setItem('hooplife_sidebar_user_closed', isClosed ? 'true' : 'false');
-            } catch(e) {
-                console.log('LocalStorage kullanılamıyor');
-            }
+            } catch(e) {}
         }
         
         function getSavedSidebarState() {
@@ -196,16 +191,6 @@ components.html("""
             }
         }
         
-        // Kullanıcının manuel olarak kapatıp kapatmadığını kontrol et
-        function wasUserClosed() {
-            try {
-                return window.parent.localStorage.getItem('hooplife_sidebar_user_closed') === 'true';
-            } catch(e) {
-                return false;
-            }
-        }
-        
-        // SIDEBAR DURUMUNU KONTROL ET
         function getSidebarState() {
             const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
             if (!sidebar) return null;
@@ -217,11 +202,11 @@ components.html("""
                 element: sidebar,
                 width: rect.width,
                 display: computed.display,
-                isClosed: rect.width < 50 || computed.display === 'none'
+                isClosed: rect.width < 50 || computed.display === 'none',
+                transform: computed.transform
             };
         }
         
-        // SIDEBAR'I ZORLA KAPAT
         function forceSidebarClose() {
             const state = getSidebarState();
             if (!state || state.isClosed) return;
@@ -229,6 +214,7 @@ components.html("""
             const sidebar = state.element;
             const isMobile = window.parent.innerWidth <= 768;
             
+            sidebar.style.transition = 'transform 0.3s ease, width 0.3s ease';
             sidebar.style.width = '0';
             sidebar.style.minWidth = '0';
             sidebar.style.transform = 'translateX(-100%)';
@@ -239,14 +225,15 @@ components.html("""
             }
         }
         
-        // SIDEBAR'I AÇ/KAPA
         function toggleSidebar() {
             const state = getSidebarState();
             if (!state) return;
             
-            const isMobile = window.parent.innerWidth <= 768;
+            // Önce görsel güncellemesi yap (ANINDA)
+            const willBeClosed = !state.isClosed;
+            updateVisibility(willBeClosed);
             
-            // YÖNTEM 1: Toggle butonunu bul ve tıkla
+            // Sonra Streamlit'i tetikle
             const selectors = [
                 '[data-testid="stSidebarCollapsedControl"] button',
                 '[data-testid="collapsedControl"] button',
@@ -258,86 +245,21 @@ components.html("""
                 const btn = window.parent.document.querySelector(selector);
                 if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
                     btn.click();
-                    
-                    if (isMobile) {
-                        setTimeout(() => {
-                            const newState = getSidebarState();
-                            if (newState && newState.isClosed === state.isClosed) {
-                                btn.click();
-                            }
-                        }, 200);
-                    }
-                    
-                    // Toggle gerçekleştikten SONRA durumu kaydet
-                    setTimeout(() => {
-                        const finalState = getSidebarState();
-                        if (finalState) {
-                            saveSidebarState(finalState.isClosed);
-                        }
-                    }, 400);
-                    return;
+                    break;
                 }
             }
             
-            // YÖNTEM 2: Keyboard event
-            const keyEvent = new KeyboardEvent('keydown', {
-                key: '[',
-                code: 'BracketLeft',
-                keyCode: 219,
-                bubbles: true
-            });
-            window.parent.document.dispatchEvent(keyEvent);
-            
-            // YÖNTEM 3: Direct DOM manipulation
-            setTimeout(() => {
-                const finalState = getSidebarState();
-                if (finalState && finalState.isClosed === state.isClosed) {
-                    const sidebar = finalState.element;
-                    
-                    if (state.isClosed) {
-                        // Aç
-                        sidebar.style.width = isMobile ? '85vw' : '336px';
-                        sidebar.style.minWidth = isMobile ? '85vw' : '336px';
-                        sidebar.style.transform = 'translateX(0)';
-                        sidebar.style.display = 'flex';
-                        sidebar.setAttribute('aria-expanded', 'true');
-                        saveSidebarState(false);
-                        
-                        // MOBİL: Scroll'u enable et
-                        if (isMobile) {
-                            sidebar.style.overflowY = 'auto';
-                            sidebar.style.overflowX = 'hidden';
-                            sidebar.style.webkitOverflowScrolling = 'touch';
-                            
-                            const innerContainers = sidebar.querySelectorAll('div');
-                            innerContainers.forEach(container => {
-                                if (container.getAttribute('data-testid') === 'stSidebarContent') {
-                                    container.style.overflowY = 'visible';
-                                    container.style.height = 'auto';
-                                    container.style.minHeight = '100vh';
-                                }
-                            });
-                        }
-                    } else {
-                        // Kapat
-                        forceSidebarClose();
-                        saveSidebarState(true);
-                    }
-                }
-            }, 300);
+            // Durumu kaydet
+            saveSidebarState(willBeClosed);
+            lastKnownState = willBeClosed;
         }
-        
-        let hoopLifeTrigger = null;
 
         function createHoopLifeDock() {
             const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (oldTrigger) {
-                oldTrigger.remove();
-            }
+            if (oldTrigger) return;
             
             const triggerElement = window.parent.document.createElement('div');
             triggerElement.id = 'hooplife-master-trigger';
-            hoopLifeTrigger = triggerElement;
             
             triggerElement.style.cssText = `
                 position: fixed;
@@ -355,179 +277,199 @@ components.html("""
                 align-items: center;
                 justify-content: center;
                 box-shadow: 5px 0 15px rgba(0,0,0,0.4);
-                transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 pointer-events: auto;
             `;
             
             triggerElement.innerHTML = `
                 <div id="hl-icon" style="
                     font-size: 26px; 
-                    transition: transform 0.5s ease;
+                    transition: transform 0.3s ease;
                     filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));
+                    will-change: transform;
                 ">🏀</div>
             `;
             
             triggerElement.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                toggleSidebar(); 
-                setTimeout(updateVisibility, 100);
+                toggleSidebar();
             });
             
             triggerElement.addEventListener('mouseenter', function() {
-                triggerElement.style.width = '60px';
-                triggerElement.style.background = '#ff4b4b';
-                const icon = triggerElement.querySelector('#hl-icon');
-                if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                if (lastKnownState === true) { // Kapalı ise
+                    triggerElement.style.width = '60px';
+                    triggerElement.style.background = '#ff4b4b';
+                    const icon = triggerElement.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                }
             });
             
             triggerElement.addEventListener('mouseleave', function() {
-                triggerElement.style.width = '45px';
-                triggerElement.style.background = '#1a1c24';
-                const icon = triggerElement.querySelector('#hl-icon');
-                if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                if (lastKnownState === true) { // Kapalı ise
+                    triggerElement.style.width = '45px';
+                    triggerElement.style.background = '#1a1c24';
+                    const icon = triggerElement.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                }
             });
             
             window.parent.document.body.appendChild(triggerElement);
         }
 
-        function updateVisibility() {
+        function updateVisibility(forceState) {
             const trigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (!trigger) {
-                createHoopLifeDock();
-                return;
-            }
+            if (!trigger) return;
             
-            const state = getSidebarState(); 
+            const state = getSidebarState();
             if (!state) return;
+            
+            // forceState varsa onu kullan, yoksa gerçek durumu
+            const isClosed = forceState !== undefined ? forceState : state.isClosed;
+            lastKnownState = isClosed;
             
             const isMobile = window.parent.innerWidth <= 768;
 
-            if (!state.isClosed) {
+            if (!isClosed) {
                 if (isMobile) {
-                    Object.assign(trigger.style, {
-                        position: 'fixed',
-                        top: '15px',
-                        left: 'calc(100% - 60px)',
-                        background: 'rgba(255, 75, 75, 0.9)',
-                        backdropFilter: 'blur(8px)',
-                        width: '40px',
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 15px rgba(255, 75, 75, 0.3)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        cursor: 'pointer',
-                        pointerEvents: 'auto',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                    });
+                    // Mobile close button - ANINDA
+                    trigger.style.cssText = `
+                        position: fixed;
+                        top: 15px;
+                        left: calc(100% - 60px);
+                        background: rgba(255, 75, 75, 0.9);
+                        backdrop-filter: blur(8px);
+                        width: 40px;
+                        height: 40px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.3);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        cursor: pointer;
+                        pointer-events: auto;
+                        z-index: 999999999;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        transform: translateZ(0);
+                    `;
 
                     trigger.innerHTML = `
-                        <div class="close-icon-wrapper" style="position: relative; width: 16px; height: 16px;">
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.3s;"></span>
-                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.3s;"></span>
+                        <div style="position: relative; width: 16px; height: 16px;">
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(45deg); transition: 0.2s;"></span>
+                            <span style="position: absolute; top: 50%; width: 100%; height: 1.5px; background: white; transform: rotate(-45deg); transition: 0.2s;"></span>
                         </div>
                     `;
-                    
-                    trigger.onclick = function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleSidebar();
-                        setTimeout(updateVisibility, 100);
-                    };
                 } else {
+                    // Desktop - hide when open
                     trigger.style.display = 'none';
                 }
             } else {
-                Object.assign(trigger.style, {
-                    display: 'flex',
-                    left: '0',
-                    top: '20%',
-                    width: '45px',
-                    height: '60px',
-                    background: '#1a1c24',
-                    border: '2px solid #ff4b4b',
-                    borderLeft: 'none',
-                    borderRadius: '0 15px 15px 0',
-                    pointerEvents: 'auto',
-                    cursor: 'pointer'
-                });
-                
-                trigger.innerHTML = `
-                    <div id="hl-icon" style="font-size: 26px; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>
+                // Closed state - ANINDA basketball göster
+                trigger.style.cssText = `
+                    position: fixed;
+                    display: flex;
+                    left: 0;
+                    top: 20%;
+                    width: 45px;
+                    height: 60px;
+                    background: #1a1c24;
+                    border: 2px solid #ff4b4b;
+                    border-left: none;
+                    border-radius: 0 15px 15px 0;
+                    pointer-events: auto;
+                    cursor: pointer;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 999999999;
+                    box-shadow: 5px 0 15px rgba(0,0,0,0.4);
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    transform: translateZ(0);
                 `;
                 
-                trigger.onclick = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleSidebar();
-                    setTimeout(updateVisibility, 100);
-                };
-                
-                trigger.onmouseenter = function() {
-                    trigger.style.width = '60px';
-                    trigger.style.background = '#ff4b4b';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
-                };
-                
-                trigger.onmouseleave = function() {
-                    trigger.style.width = '45px';
-                    trigger.style.background = '#1a1c24';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
-                };
+                trigger.innerHTML = `
+                    <div id="hl-icon" style="
+                        font-size: 26px; 
+                        transition: transform 0.3s ease;
+                        filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));
+                        will-change: transform;
+                    ">🏀</div>
+                `;
             }
         }
         
-        // ← YENİ: Sayfa değişikliğinde sidebar durumunu koru
         function checkAndFixSidebar() {
             const state = getSidebarState();
             
-            // İLK YÜKLEME: Kullanıcı daha önce kapattıysa kapalı tut
             if (isInitialLoad) {
                 isInitialLoad = false;
+                const shouldBeClosed = getSavedSidebarState();
                 
-                if (wasUserClosed() && state && !state.isClosed) {
-                    setTimeout(() => {
-                        forceSidebarClose();
-                        updateVisibility();
-                    }, 300); // ← Biraz daha gecikme ekle
-                    return;
+                if (shouldBeClosed && state && !state.isClosed) {
+                    forceSidebarClose();
+                    updateVisibility(true);
+                } else if (state) {
+                    updateVisibility(state.isClosed);
                 }
+                return;
             }
             
-            // SONRAKI KONTROLLER: Normal senkronizasyon
-            const shouldBeClosed = getSavedSidebarState();
+            if (!state) return;
             
-            if (shouldBeClosed && state && !state.isClosed) {
-                setTimeout(() => {
-                    forceSidebarClose();
-                    updateVisibility();
-                }, 500);
-            } else if (state) {
+            // Durum değiştiyse güncelle
+            if (lastKnownState !== state.isClosed) {
+                lastKnownState = state.isClosed;
+                updateVisibility(state.isClosed);
                 saveSidebarState(state.isClosed);
             }
+        }
+        
+        // MutationObserver: Sidebar DOM değişikliklerini ANINDA yakala
+        function observeSidebar() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) {
+                setTimeout(observeSidebar, 100);
+                return;
+            }
+            
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && 
+                        (mutation.attributeName === 'aria-expanded' || 
+                         mutation.attributeName === 'style')) {
+                        
+                        // ANINDA güncelle
+                        requestAnimationFrame(() => {
+                            checkAndFixSidebar();
+                        });
+                    }
+                });
+            });
+            
+            observer.observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['aria-expanded', 'style', 'class']
+            });
         }
         
         function init() {
             createHoopLifeDock();
             
-            // İlk kontrolü biraz geciktir - Streamlit'in sidebar'ı render etmesini bekle
+            // İlk yükleme
             setTimeout(() => {
                 checkAndFixSidebar();
-                updateVisibility();
-            }, 800); // ← 500ms'den 800ms'ye çıkar
+            }, 200);
             
-            // Periyodik kontrol
-            setInterval(() => {
-                checkAndFixSidebar();
-                updateVisibility();
-            }, 1000);
+            // MutationObserver başlat (ANINDA senkronizasyon)
+            observeSidebar();
             
-            window.parent.addEventListener('resize', updateVisibility);
+            // Yedek polling (daha seyrek)
+            setInterval(checkAndFixSidebar, 3000);
+            
+            // Resize
+            window.parent.addEventListener('resize', () => {
+                requestAnimationFrame(() => updateVisibility());
+            });
         }
         
         if (window.parent.document.readyState === 'loading') {
