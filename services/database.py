@@ -535,6 +535,78 @@ class Database:
         except Exception as e:
             conn.rollback()
             return False
+        
+    def validate_session_by_id(self, session_id, browser_id=None):
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            if browser_id:
+                cursor.execute(
+                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                            CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_id = %s 
+                    AND s.browser_id = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP""",
+                    (session_id, browser_id)
+                )
+            else:
+                cursor.execute(
+                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                            CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_id = %s 
+                    AND s.expires_at > CURRENT_TIMESTAMP""",
+                    (session_id,)
+                )
+            
+            result = cursor.fetchone()
+            cursor.close()
+            
+            if result:
+                return dict(result)
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Session ID validation error: {e}")
+            return None    
 
+
+    def logout_session_by_id(self, session_id, browser_id=None):
+        """Session ID ile session'ı sonlandır"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+        
+        try:
+            cursor = conn.cursor()
+            
+            if browser_id:
+                cursor.execute(
+                    "DELETE FROM sessions WHERE session_id = %s AND browser_id = %s",
+                    (session_id, browser_id)
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM sessions WHERE session_id = %s",
+                    (session_id,)
+                )
+            
+            conn.commit()
+            cursor.close()
+            print(f"✅ Session logged out by ID")
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Logout error: {e}")
+            return False
 # Singleton instance
 db = Database()
