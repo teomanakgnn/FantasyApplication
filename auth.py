@@ -333,7 +333,7 @@ def logout():
 # --- ARAYÜZ FONKSİYONU ---
 
 def render_auth_page(cookie_manager=None):
-    """Login ve Register sayfası"""
+    """Login ve Register sayfası - Cookie Fix Uygulandı"""
     
     # Üst kısım (Geri butonu)
     col1, col2, col3 = st.columns([1, 10, 1])
@@ -342,7 +342,7 @@ def render_auth_page(cookie_manager=None):
             st.session_state.page = "home"
             st.rerun()
 
-    # CSS
+    # CSS Tasarımı
     st.markdown("""
         <style>
         .block-container {
@@ -490,10 +490,6 @@ def render_auth_page(cookie_manager=None):
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
         
-# auth.py - render_auth_page fonksiyonunda LOGIN TAB kısmını değiştir
-
-# auth.py içinde render_auth_page fonksiyonu, "Sign In" butonu mantığı
-
         if submit:
             if not username or not password:
                 st.error("Please enter your credentials.")
@@ -518,40 +514,50 @@ def render_auth_page(cookie_manager=None):
                         st.session_state.session_id = session_data['session_id']
                         st.session_state.authenticated = True
                         
-                        # file_token_checked'i sıfırla
                         if 'file_token_checked' in st.session_state:
                             del st.session_state['file_token_checked']
                         
-                        # ---------------------------------------------------------
-                        # DÜZELTME BAŞLANGICI: COOKIE VE LOCALSTORAGE YAZMA
-                        # ---------------------------------------------------------
+                        # -------------------------------------------------------------
+                        # ÇEREZ YAZMA İŞLEMİ (DÜZELTİLDİ)
+                        # -------------------------------------------------------------
                         
-                        # JavaScript ile Token'ı Tarayıcıya Kaydet
-                        # Bu kısım app.py'deki "LocalStorage'dan Cookie'ye aktar" script'i ile uyumlu çalışır.
-                        
+                        # 1. Cookie Manager ile yaz (Eğer manager geldiyse)
+                        if remember_me and cookie_manager:
+                            try:
+                                expires = datetime.now() + timedelta(days=30)
+                                cookie_manager.set(
+                                    'hooplife_auth_token', 
+                                    session_data['token'], 
+                                    expires_at=expires,
+                                    key="auth_token_setter" # Çakışmayı önlemek için unique key
+                                )
+                                print(f"✅ Cookie set via Manager for: {user['username']}")
+                            except Exception as e:
+                                print(f"⚠️ Cookie Manager Error: {e}")
+
+                        # 2. JavaScript & LocalStorage Yedekleme
                         js_code = f"""
                             <script>
-                                // 1. Token verisini hazırla
                                 const authData = {{
                                     token: "{session_data['token']}",
-                                    expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Gün
+                                    expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                                     username: "{user['username']}"
                                 }};
-
-                                // 2. LocalStorage'a kaydet (Kalıcı hafıza)
+                                
+                                // LocalStorage Kayıt
                                 localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
                                 localStorage.setItem('hooplife_username', "{user['username']}");
-
-                                // 3. Cookie'yi manuel olarak da set et (Anlık erişim için)
+                                
+                                // JS ile Cookie'yi Zorla (Yedek yöntem)
                                 document.cookie = "hooplife_auth_token={session_data['token']}; max-age=2592000; path=/; SameSite=Lax";
                                 
-                                console.log('✅ Token saved to Browser (Cookie & LS)');
+                                console.log('✅ Auth tokens saved to storage');
                             </script>
                         """
                         st.markdown(js_code, unsafe_allow_html=True)
 
                         if remember_me:
-                            # Opsiyonel: Sunucu tarafında da yedek olarak dosyaya yazabilirsiniz (Eski kodunuz)
+                            # 3. Dosyaya Kaydet (Sunucu Tarafı Yedek)
                             save_token_to_file(
                                 session_data['token'], 
                                 user['username'], 
@@ -559,19 +565,11 @@ def render_auth_page(cookie_manager=None):
                             )
                             st.success(f"✅ Welcome back, {user['username']}!")
                         else:
-                            # Beni hatırla seçili değilse LocalStorage'ı temizleyen JS (Sadece session süresince kalsın)
-                            st.markdown("""
-                                <script>
-                                    localStorage.removeItem('hooplife_auth_data');
-                                </script>
-                            """, unsafe_allow_html=True)
+                            # Beni hatırla yoksa LocalStorage'ı temizle
+                            st.markdown("<script>localStorage.removeItem('hooplife_auth_data');</script>", unsafe_allow_html=True)
                             st.success(f"✅ Welcome, {user['username']}!")
 
-                        # ---------------------------------------------------------
-                        # DÜZELTME BİTİŞİ
-                        # ---------------------------------------------------------
-
-                        # IFRAME içindeyse parent'a session_id gönder
+                        # IFRAME Mesajı
                         is_embedded = st.query_params.get("embed") == "true"
                         if is_embedded:
                             st.markdown(f"""
@@ -584,9 +582,9 @@ def render_auth_page(cookie_manager=None):
                                 </script>
                             """, unsafe_allow_html=True)
                         
-                        # Otomatik yönlendirme
+                        # Yönlendirme (Cookie yazılması için bekleme süresini artırdık)
                         import time
-                        time.sleep(1)
+                        time.sleep(1.5) 
                         
                         st.session_state.page = "home"
                         st.rerun()
