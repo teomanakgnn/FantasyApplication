@@ -333,7 +333,7 @@ def logout():
 # --- ARAYÜZ FONKSİYONU ---
 
 def render_auth_page(cookie_manager=None):
-    """Login ve Register sayfası - JS Reload Fix Uygulandı"""
+    """Login ve Register sayfası - JS Only Reload Fix"""
     
     # Üst kısım (Geri butonu)
     col1, col2, col3 = st.columns([1, 10, 1])
@@ -349,7 +349,6 @@ def render_auth_page(cookie_manager=None):
             padding-top: 0.5rem;
             padding-bottom: 2rem;
         }
-        
         .auth-card {
             background-color: #1a1c24 !important;
             border: 1px solid #2d2d2d;
@@ -359,17 +358,14 @@ def render_auth_page(cookie_manager=None):
             max-width: 500px;
             margin: 0 auto;
         }
-        
         .auth-card h1, .auth-card h2 { color: #ececf1 !important; }
         .auth-card p, .auth-card div, .brand-header p { color: #9ca3af !important; }
-
         .brand-header {
             text-align: center;
             margin-bottom: 1.5rem;
             margin-top: 0;
             padding-top: 0;
         }
-
         .logo-container {
             display: flex;
             justify-content: center;
@@ -384,7 +380,6 @@ def render_auth_page(cookie_manager=None):
             height: auto;
             display: block;
         }
-
         div[data-testid="stTabs"] button {
             color: #9ca3af !important;
         }
@@ -392,7 +387,6 @@ def render_auth_page(cookie_manager=None):
             color: #ececf1 !important;
             border-bottom-color: #1D428A !important;
         }
-
         .plan-container {
             border: 1px solid #2d2d2d;
             border-radius: 12px;
@@ -429,7 +423,6 @@ def render_auth_page(cookie_manager=None):
             text-transform: uppercase;
             margin-left: 5px;
         }
-        
         input[type="text"], input[type="password"] {
             background-color: #262730 !important;
             color: #ececf1 !important;
@@ -438,7 +431,6 @@ def render_auth_page(cookie_manager=None):
         .stCheckbox label {
             color: #9ca3af !important;
         }
-        
         div[data-testid="stFormSubmitButton"] button {
             border-radius: 8px;
             font-weight: 600;
@@ -499,7 +491,7 @@ def render_auth_page(cookie_manager=None):
                     # Client bilgilerini al
                     client_info = get_client_info()
                     
-                    # Session oluştur (session_id döner)
+                    # Session oluştur
                     session_data = db.create_session(
                         user['id'], 
                         browser_id=client_info['browser_id'],
@@ -514,84 +506,70 @@ def render_auth_page(cookie_manager=None):
                         st.session_state.session_id = session_data['session_id']
                         st.session_state.authenticated = True
                         
-                        # Eğer dosya kontrolü flag'i varsa temizle
                         if 'file_token_checked' in st.session_state:
                             del st.session_state['file_token_checked']
                         
-                        # -------------------------------------------------------------
-                        # ÇEREZ VE YÖNLENDİRME (JavaScript Reload Stratejisi)
-                        # -------------------------------------------------------------
-                        
-                        # 1. Cookie Manager ile yaz (Opsiyonel ama iyi bir pratik)
+                        # ==============================================================
+                        # 1. KESİN ÇÖZÜM: Python ile Cookie Yazmayı Dene (Cookie Manager)
+                        # ==============================================================
                         if remember_me and cookie_manager:
                             try:
                                 expires = datetime.now() + timedelta(days=30)
-                                # Token için
-                                cookie_manager.set(
-                                    'hooplife_auth_token', 
-                                    session_data['token'], 
-                                    expires_at=expires,
-                                    key=f"auth_token_set_{int(datetime.now().timestamp())}"
-                                )
-                                # Browser ID için (Session çakışmasını önler)
-                                cookie_manager.set(
-                                    'hooplife_browser_id',
-                                    client_info['browser_id'],
-                                    expires_at=expires,
-                                    key=f"browser_id_set_{int(datetime.now().timestamp())}"
-                                )
-                            except Exception as e:
-                                print(f"⚠️ Cookie Manager Set Error: {e}")
+                                cookie_manager.set('hooplife_auth_token', session_data['token'], expires_at=expires, key="set_token_py")
+                                cookie_manager.set('hooplife_browser_id', client_info['browser_id'], expires_at=expires, key="set_browser_py")
+                            except:
+                                pass
 
                         if remember_me:
-                            # 2. Dosyaya Kaydet (Sunucu Tarafı Yedek)
-                            save_token_to_file(
-                                session_data['token'], 
-                                user['username'], 
-                                client_info['browser_id']
-                            )
+                            save_token_to_file(session_data['token'], user['username'], client_info['browser_id'])
                             st.success(f"✅ Welcome back, {user['username']}!")
                         else:
                             st.success(f"✅ Welcome, {user['username']}!")
 
-                        # 3. KESİN ÇÖZÜM: JavaScript ile Cookie Yaz ve Sayfayı YENİLE
-                        # st.rerun() yerine window.location.reload() kullanıyoruz.
+                        # ==============================================================
+                        # 2. KESİN ÇÖZÜM: JavaScript ile Cookie Yaz + ZORLA YENİLE
+                        # ==============================================================
+                        # Python'un st.rerun()'ını BURADA KULLANMIYORUZ.
+                        # JS'in sayfayı tamamen yenilemesini (F5 gibi) bekliyoruz.
+                        
                         js_code = f"""
                             <script>
-                                // Verileri hazırla
-                                const authData = {{
-                                    token: "{session_data['token']}",
-                                    expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                                    username: "{user['username']}"
-                                }};
-                                const browserId = "{client_info['browser_id']}";
+                                console.log("🔐 Starting login process...");
                                 
-                                // 1. LocalStorage
+                                // Verileri hazırla
+                                const token = "{session_data['token']}";
+                                const user = "{user['username']}";
+                                const browserId = "{client_info['browser_id']}";
+                                const expiry = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+                                
+                                // 1. LocalStorage Kayıt
+                                const authData = {{ token: token, expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), username: user }};
                                 localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
-                                localStorage.setItem('hooplife_username', "{user['username']}");
+                                localStorage.setItem('hooplife_username', user);
                                 localStorage.setItem('hooplife_browser_id', browserId);
                                 
-                                // 2. Document Cookie (En önemlisi)
-                                const maxAge = 30 * 24 * 60 * 60; // 30 gün saniye cinsinden
-                                document.cookie = `hooplife_auth_token={session_data['token']}; max-age=${{maxAge}}; path=/; SameSite=Lax`;
-                                document.cookie = `hooplife_browser_id=${{browserId}}; max-age=${{maxAge}}; path=/; SameSite=Lax`;
+                                // 2. Document Cookie (Kritik: path=/)
+                                document.cookie = "hooplife_auth_token=" + token + "; expires=" + expiry + "; path=/; SameSite=Lax";
+                                document.cookie = "hooplife_browser_id=" + browserId + "; expires=" + expiry + "; path=/; SameSite=Lax";
                                 
-                                console.log('✅ Auth tokens saved via JS. Reloading...');
-                                
-                                // 3. Sayfayı Yenile (Gecikmeli ki cookie yazılabilsin)
+                                console.log("✅ Cookies & LS set. Reloading in 1s...");
+
+                                // 3. Parent Window Reload (Sayfayı tamamen yenile)
                                 setTimeout(function() {{
-                                    const url = new URL(window.location.href);
-                                    url.searchParams.delete('page'); // Login sayfasından çık
+                                    const url = new URL(window.parent.location.href);
+                                    url.searchParams.delete('page'); // Login sayfasında takılı kalmasın
                                     window.parent.location.href = url.toString();
-                                }}, 1000);
+                                }}, 800);
                             </script>
                         """
-                        # Yüksekliği 0 olan bir html bileşeni olarak ekle
+                        # JS'i çalıştır (yükseklik 0 iframe içinde)
                         st.components.v1.html(js_code, height=0)
                         
-                        # Python tarafında bekleme (JS çalışana kadar dur)
-                        import time
-                        time.sleep(2) 
+                        # Kullanıcıya beklemesini söyle (JS reload yapana kadar)
+                        st.info("🔄 Redirecting securely...")
+                        
+                        # Python'u burada durduruyoruz, st.rerun() yapmıyoruz!
+                        # JS reload yapana kadar kod burada biter.
                         
                     else:
                         st.error("Connection error. Please try again.")
@@ -601,7 +579,6 @@ def render_auth_page(cookie_manager=None):
     # ==================== REGISTER TAB ====================
     with tab2:
         st.write("")
-        
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("""
@@ -612,7 +589,6 @@ def render_auth_page(cookie_manager=None):
                     <div class="feature-text">✓ Free Forever</div>
                 </div>
             """, unsafe_allow_html=True)
-            
         with c2:
             st.markdown("""
                 <div class="plan-container" style="background: linear-gradient(145deg, #262730 0%, #2d2d2d 100%);">
@@ -626,15 +602,12 @@ def render_auth_page(cookie_manager=None):
         with st.form("register_form", clear_on_submit=True):
             reg_username = st.text_input("Username", placeholder="Choose a username")
             reg_email = st.text_input("Email", placeholder="name@example.com")
-            
             p1, p2 = st.columns(2)
             with p1:
                 reg_password = st.text_input("Password", type="password")
             with p2:
                 reg_password2 = st.text_input("Confirm", type="password")
-            
             terms = st.checkbox("I agree to the Terms of Service")
-            
             st.markdown("---")
             submit_reg = st.form_submit_button("Create Free Account", use_container_width=True)
             

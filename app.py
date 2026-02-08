@@ -97,7 +97,7 @@ cookie_manager = get_cookie_manager()
 
 # Cookie manager yüklenmesi için kısa bir bekleme gerekebilir
 import time
-time.sleep(0.1) 
+time.sleep(0.5) 
 
 # 3. Tüm çerezleri al
 all_cookies = cookie_manager.get_all()
