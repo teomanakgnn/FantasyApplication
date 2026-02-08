@@ -11,6 +11,7 @@ import os
 import pickle
 
 
+
 def cleanup_expired_tokens():
     """Süresi dolmuş tüm token dosyalarını temizle"""
     try:
@@ -88,6 +89,52 @@ st.set_page_config(
     page_icon="🏀",
     initial_sidebar_state="expanded"
 )
+
+
+# IFRAME SESSION MANAGEMENT - app.py başına ekle
+components.html("""
+    <script>
+        (function() {
+            // 1. Parent'tan gelen session mesajlarını dinle
+            window.addEventListener('message', function(event) {
+                if (event.data.type === 'hooplife_session') {
+                    const sessionId = event.data.session_id;
+                    const username = event.data.username;
+                    
+                    // localStorage'a kaydet
+                    localStorage.setItem('hooplife_session_id', sessionId);
+                    localStorage.setItem('hooplife_username', username);
+                    
+                    console.log('✅ Session received from parent:', username);
+                    
+                    // Sayfayı yenile (session_id query param ile)
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('session_id', sessionId);
+                    window.location.href = url.toString();
+                }
+                
+                // Logout mesajı
+                if (event.data.type === 'hooplife_logout') {
+                    localStorage.removeItem('hooplife_session_id');
+                    localStorage.removeItem('hooplife_username');
+                    console.log('🔒 Session cleared');
+                }
+            });
+            
+            // 2. Sayfa yüklendiğinde localStorage'dan session_id'yi URL'ye ekle
+            const savedSessionId = localStorage.getItem('hooplife_session_id');
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSessionId = urlParams.get('session_id');
+            
+            if (savedSessionId && !urlSessionId) {
+                // localStorage'da var ama URL'de yok - URL'ye ekle
+                const url = new URL(window.location.href);
+                url.searchParams.set('session_id', savedSessionId);
+                window.location.href = url.toString();
+            }
+        })();
+    </script>
+""", height=0)
 
 
 components.html("""

@@ -216,39 +216,51 @@ def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+# auth.py - check_authentication fonksiyonunu değiştir
+
 def check_authentication(all_cookies):
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder"""
+    """Kullanıcının giriş yapıp yapmadığını kontrol eder - IFRAME UYUMLU"""
     
-    # Browser ID'yi cookie'den al (tüm sekmeler için aynı)
+    # Browser ID'yi al
     browser_id = None
     if all_cookies and 'hooplife_browser_id' in all_cookies:
         browser_id = all_cookies['hooplife_browser_id']
         st.session_state.browser_id = browser_id
-        print(f"✅ Browser ID from cookie: {browser_id[:16]}...")
     else:
-        # Cookie'de yoksa session'dan al veya oluştur
         browser_id = get_browser_id()
     
-    # 1. Session'da zaten varsa - token'ı yeniden doğrula
+    # 1. Session State'te varsa (sayfa yenilenmemiş)
     if st.session_state.get('authenticated') and st.session_state.get('user'):
-        current_token = st.session_state.get('session_token')
+        session_id = st.session_state.get('session_id')
         
-        if current_token:
-            # Token'ı database'de doğrula (browser_id ile)
-            user = db.validate_session(current_token, browser_id)
+        if session_id:
+            # Session ID ile doğrula
+            user = db.validate_session_by_id(session_id, browser_id)
             
             if user:
-                # Token hala geçerli
                 st.session_state.user = user
                 return True
             else:
-                # Token geçersiz olmuş, temizle
-                print(f"⚠️ Session token expired or invalid")
+                # Session süresi dolmuş
                 st.session_state.authenticated = False
                 st.session_state.user = None
-                st.session_state.session_token = None
+                st.session_state.session_id = None
     
-    # 2. Cookie'den token yükle
+    # 2. URL Query Parameter'dan session_id kontrol et (iframe için)
+    query_params = st.query_params
+    if 'session_id' in query_params:
+        session_id = query_params['session_id']
+        
+        user = db.validate_session_by_id(session_id, browser_id)
+        
+        if user:
+            st.session_state.user = user
+            st.session_state.session_id = session_id
+            st.session_state.authenticated = True
+            print(f"✅ Query param login: {user['username']}")
+            return True
+    
+    # 3. Cookie'den token yükle (normal kullanım)
     if all_cookies:
         cookie_token = all_cookies.get('hooplife_auth_token')
         if cookie_token:
@@ -260,14 +272,11 @@ def check_authentication(all_cookies):
                 st.session_state.authenticated = True
                 print(f"✅ Cookie login: {user['username']}")
                 return True
-            else:
-                print(f"⚠️ Cookie token invalid")
     
-    # 3. Dosyadan token yükle (her sayfa yüklendiğinde kontrol et)
+    # 4. Dosyadan token yükle
     token_data = load_token_from_file(browser_id)
     
     if token_data:
-        # Token'ı database'de doğrula
         user = db.validate_session(token_data['token'], browser_id)
         
         if user:
@@ -277,7 +286,6 @@ def check_authentication(all_cookies):
             print(f"✅ File login: {user['username']}")
             return True
         else:
-            # Token geçersiz, dosyayı sil
             delete_token_file(token_data['username'], browser_id)
     
     return False
@@ -286,9 +294,12 @@ def logout():
     """Kullanıcı çıkış işlemi"""
     browser_id = get_browser_id()
     current_user = st.session_state.get('user')
+    session_id = st.session_state.get('session_id')
     
     # Database session'ı iptal et
-    if 'session_token' in st.session_state:
+    if session_id:
+        db.logout_session_by_id(session_id, browser_id)
+    elif 'session_token' in st.session_state:
         db.logout_session(st.session_state.session_token, browser_id)
     
     # Token dosyasını sil
@@ -299,9 +310,23 @@ def logout():
     st.session_state.authenticated = False
     st.session_state.user = None
     st.session_state.session_token = None
+    st.session_state.session_id = None
     
     if 'file_token_checked' in st.session_state:
         del st.session_state.file_token_checked
+    
+    # iframe içindeyse parent'a bildir
+    is_embedded = st.query_params.get("embed") == "true"
+    if is_embedded:
+        st.markdown("""
+            <script>
+                window.parent.postMessage({
+                    type: 'hooplife_logout'
+                }, '*');
+                localStorage.removeItem('hooplife_session_id');
+                localStorage.removeItem('hooplife_username');
+            </script>
+        """, unsafe_allow_html=True)
     
     st.rerun()
 
@@ -465,6 +490,8 @@ def render_auth_page():
             st.write("")
             submit = st.form_submit_button("Sign In", use_container_width=True)
         
+# auth.py - render_auth_page fonksiyonunda LOGIN TAB kısmını değiştir
+
         if submit:
             if not username or not password:
                 st.error("Please enter your credentials.")
@@ -474,33 +501,51 @@ def render_auth_page():
                     # Client bilgilerini al
                     client_info = get_client_info()
                     
-                    # Session oluştur (browser_id ile)
-                    token = db.create_session(
+                    # Session oluştur (session_id döner)
+                    session_data = db.create_session(
                         user['id'], 
                         browser_id=client_info['browser_id'],
                         ip_address=client_info['ip_address'],
                         user_agent=client_info['user_agent']
                     )
                     
-                    if token:
+                    if session_data:
                         # Session State'i doldur
                         st.session_state.user = user
-                        st.session_state.session_token = token
+                        st.session_state.session_token = session_data['token']
+                        st.session_state.session_id = session_data['session_id']  # ← YENİ
                         st.session_state.authenticated = True
                         
                         # file_token_checked'i sıfırla
                         if 'file_token_checked' in st.session_state:
-                            del st.session_state.file_token_checked
+                            del st.session_state['file_token_checked']
                         
                         # BENİ HATIRLA - DOSYAYA KAYDET
                         if remember_me:
-                            success = save_token_to_file(token, user['username'], client_info['browser_id'])
+                            success = save_token_to_file(
+                                session_data['token'], 
+                                user['username'], 
+                                client_info['browser_id']
+                            )
                             if success:
                                 st.success("✅ Login successful! You'll stay logged in for 30 days.")
                             else:
                                 st.warning("✅ Login successful! (But 'Remember me' could not be saved)")
                         else:
                             st.success("✅ Login successful!")
+                        
+                        # IFRAME içindeyse parent'a session_id gönder
+                        is_embedded = st.query_params.get("embed") == "true"
+                        if is_embedded:
+                            st.markdown(f"""
+                                <script>
+                                    window.parent.postMessage({{
+                                        type: 'hooplife_session',
+                                        session_id: '{session_data["session_id"]}',
+                                        username: '{user["username"]}'
+                                    }}, '*');
+                                </script>
+                            """, unsafe_allow_html=True)
                         
                         # Otomatik yönlendirme
                         import time
