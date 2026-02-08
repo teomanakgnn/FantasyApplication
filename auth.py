@@ -7,342 +7,487 @@ from datetime import datetime, timedelta
 import pickle
 import hashlib
 import uuid
+import json
+import time
 
-# --- BROWSER ID FONKSİYONLARI ---
+# --- ÇOKLU KATMANLI KALICILIK SİSTEMİ ---
 
-def get_browser_id():
-    """Tarayıcı için kalıcı benzersiz ID (tüm sekmeler için aynı)"""
-    # İlk olarak session_state'te kontrol et
-    if 'browser_id' in st.session_state and st.session_state.browser_id:
-        return st.session_state.browser_id
+class PersistentAuthManager:
+    """
+    3 Katmanlı Kalıcılık Sistemi:
+    1. LocalStorage (JavaScript - En hızlı)
+    2. URL Query Params (Sayfa yenileme için)
+    3. File System (Tarayıcı değişse bile)
+    """
     
-    # Cookie'den almaya çalış (app.py'deki JavaScript tarafından set edilmiş)
-    try:
-        # Streamlit context'inden cookie'leri al
-        if hasattr(st, 'context') and hasattr(st.context, 'cookies'):
-            cookies = st.context.cookies
-            if 'hooplife_browser_id' in cookies:
-                browser_id = cookies['hooplife_browser_id']
-                st.session_state.browser_id = browser_id
-                print(f"✅ Browser ID loaded from cookie: {browser_id[:16]}...")
-                return browser_id
-    except Exception as e:
-        print(f"⚠️ Could not read browser_id from cookie: {e}")
+    def __init__(self):
+        self.storage_dir = self._get_storage_dir()
+        
+    def _get_storage_dir(self):
+        """Güvenli storage dizini oluştur"""
+        possible_dirs = [
+            os.path.join(os.path.expanduser("~"), ".hooplife_auth"),
+            os.path.join("/tmp", ".hooplife_auth"),
+            os.path.join(os.getcwd(), ".hooplife_auth")
+        ]
+        
+        for dir_path in possible_dirs:
+            try:
+                if not os.path.exists(dir_path):
+                    os.makedirs(dir_path, mode=0o700)
+                # Test yazma izni
+                test_file = os.path.join(dir_path, ".test")
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+                return dir_path
+            except:
+                continue
+        
+        return "/tmp/.hooplife_auth"  # Fallback
     
-    # Session'da yoksa yeni oluştur
-    new_id = f'browser_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}'
-    st.session_state.browser_id = new_id
-    print(f"🆕 New browser ID created: {new_id[:16]}...")
+    def generate_device_fingerprint(self):
+        """Tarayıcı + cihaz kombinasyonu için benzersiz ID"""
+        # Session state'te varsa kullan
+        if 'device_fingerprint' in st.session_state:
+            return st.session_state.device_fingerprint
+        
+        # Yoksa oluştur
+        timestamp = str(datetime.now().timestamp())
+        random_part = uuid.uuid4().hex[:12]
+        fingerprint = f"device_{hashlib.sha256(f'{timestamp}{random_part}'.encode()).hexdigest()[:16]}"
+        
+        st.session_state.device_fingerprint = fingerprint
+        return fingerprint
     
-    return new_id
-
-def get_client_info():
-    """İstemci bilgilerini topla"""
-    try:
-        # Streamlit'ten IP almaya çalış (production'da çalışır)
-        headers = st.context.headers if hasattr(st, 'context') else {}
-        ip_address = headers.get('X-Forwarded-For', headers.get('Remote-Addr', 'unknown'))
-        user_agent = headers.get('User-Agent', 'unknown')
-    except:
-        ip_address = 'unknown'
-        user_agent = 'unknown'
-    
-    return {
-        'ip_address': ip_address,
-        'user_agent': user_agent,
-        'browser_id': get_browser_id()
-    }
-
-# --- TOKEN SAKLAMA FONKSİYONLARI ---
-
-def get_token_file_path(username, browser_id):
-    """Token dosyasının yolunu döndür - Her kullanıcı + browser için benzersiz"""
-    home_dir = os.path.expanduser("~")
-    token_dir = os.path.join(home_dir, ".hooplife")
-    
-    if not os.path.exists(token_dir):
-        try:
-            os.makedirs(token_dir)
-        except:
-            token_dir = os.path.join("/tmp", ".hooplife")
-            if not os.path.exists(token_dir):
-                os.makedirs(token_dir)
-    
-    # Username + browser_id kombinasyonu ile benzersiz dosya
-    safe_username = hashlib.md5(username.encode()).hexdigest()[:16]
-    safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
-    filename = f"auth_token_{safe_username}_{safe_browser}.pkl"
-    
-    return os.path.join(token_dir, filename)
-
-def save_token_to_file(token, username, browser_id):
-    """Token'ı kullanıcı + browser'a özel dosyaya kaydet"""
-    try:
-        token_data = {
-            'token': token,
+    def save_persistent_session(self, user_id, username, session_token, remember_me=True):
+        """Kalıcı oturum kaydet - 3 katmanlı"""
+        device_id = self.generate_device_fingerprint()
+        
+        session_data = {
+            'user_id': user_id,
             'username': username,
-            'browser_id': browser_id,
-            'expiry': (datetime.now() + timedelta(days=30)).isoformat(),
-            'saved_at': datetime.now().isoformat()
+            'session_token': session_token,
+            'device_id': device_id,
+            'created_at': datetime.now().isoformat(),
+            'expires_at': (datetime.now() + timedelta(days=30)).isoformat(),
+            'remember_me': remember_me
         }
         
-        file_path = get_token_file_path(username, browser_id)
+        # 1. Session State (Immediate)
+        st.session_state.persistent_auth = session_data
+        st.session_state.authenticated = True
+        st.session_state.user = {'id': user_id, 'username': username}
+        st.session_state.session_token = session_token
         
-        with open(file_path, 'wb') as f:
-            pickle.dump(token_data, f)
+        # 2. File System (Long-term)
+        if remember_me:
+            self._save_to_file(device_id, session_data)
         
-        print(f"✅ Token saved: {username} (browser: {browser_id[:8]}...)")
-        return True
-    except Exception as e:
-        print(f"❌ Token save error: {e}")
-        return False
-
-def load_token_from_file(browser_id):
-    """Bu browser için kaydedilmiş token'ı yükle"""
-    try:
-        home_dir = os.path.expanduser("~")
-        token_dir = os.path.join(home_dir, ".hooplife")
-        
-        if not os.path.exists(token_dir):
-            return None
-        
-        import glob
-        # Bu browser_id'ye ait dosyaları bul
-        safe_browser = hashlib.md5(browser_id.encode()).hexdigest()[:8]
-        pattern = os.path.join(token_dir, f"auth_token_*_{safe_browser}.pkl")
-        token_files = glob.glob(pattern)
-        
-        for file_path in token_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    token_data = pickle.load(f)
-                
-                # Browser ID kontrolü
-                if token_data.get('browser_id') != browser_id:
-                    continue
-                
-                # Expiry kontrolü
-                expiry = datetime.fromisoformat(token_data['expiry'])
-                if datetime.now() > expiry:
-                    os.remove(file_path)
-                    print(f"🗑️ Expired token deleted: {token_data.get('username')}")
-                    continue
-                
-                # Token'ı database'de doğrula
-                user = db.validate_session(token_data['token'], browser_id)
-                
-                if user and user['username'] == token_data['username']:
-                    print(f"✅ File token loaded: {user['username']}")
-                    return token_data
-                else:
-                    # Geçersiz token, dosyayı sil
-                    os.remove(file_path)
-                    print(f"🗑️ Invalid token deleted: {token_data.get('username')}")
-                    
-            except Exception as e:
-                print(f"⚠️ Corrupt token file: {file_path} → {e}")
-                try:
-                    os.remove(file_path)
-                except:
-                    pass
-        
-        return None
-        
-    except Exception as e:
-        print(f"❌ Token load error: {e}")
-        return None
-
-def delete_token_file(username, browser_id):
-    """Kullanıcı + browser'a özel token dosyasını sil"""
-    try:
-        file_path = get_token_file_path(username, browser_id)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"🗑️ Token deleted: {username}")
+        # 3. Return data for JavaScript storage
+        return {
+            'device_id': device_id,
+            'session_token': session_token,
+            'username': username,
+            'expires_at': session_data['expires_at']
+        }
+    
+    def _save_to_file(self, device_id, session_data):
+        """Dosyaya güvenli şekilde kaydet"""
+        try:
+            filename = f"auth_{hashlib.md5(device_id.encode()).hexdigest()}.pkl"
+            filepath = os.path.join(self.storage_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                pickle.dump(session_data, f)
+            
+            os.chmod(filepath, 0o600)  # Sadece kullanıcı okuyabilsin
+            print(f"✅ Auth saved to file: {filepath}")
             return True
-    except Exception as e:
-        print(f"❌ Token delete error: {e}")
+        except Exception as e:
+            print(f"❌ File save error: {e}")
+            return False
+    
+    def load_persistent_session(self):
+        """Kalıcı oturumu yükle - 3 katmandan ara"""
+        
+        # 1. Session State kontrolü (en hızlı)
+        if 'persistent_auth' in st.session_state:
+            session_data = st.session_state.persistent_auth
+            if self._is_valid_session(session_data):
+                print("✅ Loaded from session state")
+                return session_data
+        
+        # 2. URL Query Params kontrolü
+        query_session = self._load_from_query_params()
+        if query_session:
+            print("✅ Loaded from URL params")
+            st.session_state.persistent_auth = query_session
+            return query_session
+        
+        # 3. File System kontrolü
+        device_id = self.generate_device_fingerprint()
+        file_session = self._load_from_file(device_id)
+        if file_session:
+            print("✅ Loaded from file")
+            st.session_state.persistent_auth = file_session
+            return file_session
+        
+        # 4. JavaScript LocalStorage'dan gelecek veri (sayfa ilk yüklemede)
+        # Bu component ile handle ediliyor
+        
+        return None
+    
+    def _load_from_query_params(self):
+        """URL'den session yükle"""
+        try:
+            params = st.query_params
+            
+            if 'auth_token' in params and 'auth_user' in params:
+                token = params['auth_token']
+                username = params['auth_user']
+                
+                # Database'de doğrula
+                user = db.validate_session_by_token(token)
+                if user and user['username'] == username:
+                    return {
+                        'user_id': user['id'],
+                        'username': username,
+                        'session_token': token,
+                        'device_id': self.generate_device_fingerprint(),
+                        'loaded_from': 'url_params'
+                    }
+        except Exception as e:
+            print(f"⚠️ URL load error: {e}")
+        
+        return None
+    
+    def _load_from_file(self, device_id):
+        """Dosyadan session yükle"""
+        try:
+            filename = f"auth_{hashlib.md5(device_id.encode()).hexdigest()}.pkl"
+            filepath = os.path.join(self.storage_dir, filename)
+            
+            if not os.path.exists(filepath):
+                return None
+            
+            with open(filepath, 'rb') as f:
+                session_data = pickle.load(f)
+            
+            if not self._is_valid_session(session_data):
+                os.remove(filepath)
+                print(f"🗑️ Expired session file deleted")
+                return None
+            
+            # Database'de doğrula
+            user = db.validate_session_by_token(session_data['session_token'])
+            if user:
+                session_data['user_id'] = user['id']
+                return session_data
+            else:
+                os.remove(filepath)
+                return None
+                
+        except Exception as e:
+            print(f"❌ File load error: {e}")
+            return None
+    
+    def _is_valid_session(self, session_data):
+        """Session geçerliliğini kontrol et"""
+        if not session_data or not isinstance(session_data, dict):
+            return False
+        
+        try:
+            expires_at = datetime.fromisoformat(session_data['expires_at'])
+            return datetime.now() < expires_at
+        except:
+            return False
+    
+    def clear_session(self, device_id=None):
+        """Tüm katmanlardan session'ı temizle"""
+        if device_id is None:
+            device_id = st.session_state.get('device_fingerprint')
+        
+        # Session state temizle
+        for key in ['persistent_auth', 'authenticated', 'user', 'session_token']:
+            if key in st.session_state:
+                del st.session_state[key]
+        
+        # Dosyayı sil
+        if device_id:
+            try:
+                filename = f"auth_{hashlib.md5(device_id.encode()).hexdigest()}.pkl"
+                filepath = os.path.join(self.storage_dir, filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    print(f"🗑️ Session file deleted")
+            except Exception as e:
+                print(f"⚠️ File delete error: {e}")
+        
+        return True
+
+
+# Global instance
+auth_manager = PersistentAuthManager()
+
+
+# --- JAVASCRIPT KÖPRÜSÜ ---
+
+def inject_auth_bridge():
+    """
+    LocalStorage ve Python arasında köprü kurar
+    Sayfa yüklendiğinde LocalStorage'dan veriyi alır ve Python'a gönderir
+    """
+    
+    bridge_html = """
+    <div id="auth-bridge" style="display:none;"></div>
+    <script>
+        (function() {
+            'use strict';
+            
+            const STORAGE_KEY = 'hooplife_persistent_auth';
+            const bridge = document.getElementById('auth-bridge');
+            
+            // LocalStorage'dan veri oku
+            function loadFromStorage() {
+                try {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    if (!stored) {
+                        console.log('📭 No stored auth found');
+                        return null;
+                    }
+                    
+                    const data = JSON.parse(stored);
+                    const expiresAt = new Date(data.expires_at);
+                    
+                    if (new Date() > expiresAt) {
+                        console.log('⏰ Stored auth expired');
+                        localStorage.removeItem(STORAGE_KEY);
+                        return null;
+                    }
+                    
+                    console.log('✅ Valid auth found:', data.username);
+                    return data;
+                    
+                } catch(e) {
+                    console.error('❌ Storage read error:', e);
+                    localStorage.removeItem(STORAGE_KEY);
+                    return null;
+                }
+            }
+            
+            // URL'ye session ekle ve yenile (sayfa yenileme sonrası otomatik giriş)
+            function restoreSession(data) {
+                const url = new URL(window.location.href);
+                const currentToken = url.searchParams.get('auth_token');
+                
+                // Zaten URL'de doğru token varsa, yenileme yapma
+                if (currentToken === data.session_token) {
+                    console.log('✅ Session already in URL');
+                    return;
+                }
+                
+                // URL'ye ekle ve yenile
+                url.searchParams.set('auth_token', data.session_token);
+                url.searchParams.set('auth_user', data.username);
+                
+                console.log('🔄 Restoring session...');
+                
+                // Sadece bir kez yenile
+                if (!sessionStorage.getItem('auth_restored')) {
+                    sessionStorage.setItem('auth_restored', 'true');
+                    window.location.href = url.toString();
+                }
+            }
+            
+            // LocalStorage'a kaydet (Login'den sonra çağrılacak)
+            window.saveAuthToStorage = function(authData) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(authData));
+                    console.log('💾 Auth saved to storage');
+                    return true;
+                } catch(e) {
+                    console.error('❌ Storage save error:', e);
+                    return false;
+                }
+            };
+            
+            // LocalStorage'dan temizle (Logout'tan sonra çağrılacak)
+            window.clearAuthStorage = function() {
+                localStorage.removeItem(STORAGE_KEY);
+                sessionStorage.removeItem('auth_restored');
+                console.log('🗑️ Auth cleared from storage');
+            };
+            
+            // Sayfa yüklendiğinde çalıştır
+            const storedAuth = loadFromStorage();
+            if (storedAuth) {
+                bridge.setAttribute('data-auth', JSON.stringify(storedAuth));
+                restoreSession(storedAuth);
+            } else {
+                bridge.setAttribute('data-auth', 'null');
+            }
+            
+        })();
+    </script>
+    """
+    
+    st.components.v1.html(bridge_html, height=0)
+
+
+# --- GÜNCELLENMİŞ CHECK_AUTHENTICATION ---
+
+def check_authentication_enhanced():
+    """Geliştirilmiş authentication - 3 katmanlı kontrol"""
+    
+    # JavaScript bridge'i inject et
+    inject_auth_bridge()
+    
+    # Persistent session yükle
+    session_data = auth_manager.load_persistent_session()
+    
+    if session_data:
+        # Database'de tekrar doğrula
+        user = db.get_user_by_id(session_data['user_id'])
+        
+        if user:
+            st.session_state.authenticated = True
+            st.session_state.user = user
+            st.session_state.session_token = session_data['session_token']
+            print(f"✅ Auto-login successful: {user['username']}")
+            return True
+    
     return False
 
-def cleanup_expired_tokens():
-    """Süresi dolmuş tüm token dosyalarını temizle"""
-    try:
-        home_dir = os.path.expanduser("~")
-        token_dir = os.path.join(home_dir, ".hooplife")
-        
-        if not os.path.exists(token_dir):
-            return
-        
-        import glob
-        token_files = glob.glob(os.path.join(token_dir, "auth_token_*.pkl"))
-        
-        cleaned = 0
-        for file_path in token_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    token_data = pickle.load(f)
-                
-                expiry = datetime.fromisoformat(token_data['expiry'])
-                if datetime.now() > expiry:
-                    os.remove(file_path)
-                    cleaned += 1
-            except:
-                try:
-                    os.remove(file_path)
-                    cleaned += 1
-                except:
-                    pass
-        
-        if cleaned > 0:
-            print(f"🧹 Cleaned {cleaned} expired token(s)")
+
+# --- GÜNCELLENMİŞ LOGIN FONKSIYONU ---
+
+def handle_login(username, password, remember_me=True):
+    """Login işlemi - kalıcılık desteği ile"""
+    
+    user = db.verify_user(username, password)
+    
+    if not user:
+        return False, "Invalid credentials"
+    
+    # Session oluştur
+    client_info = get_client_info()
+    session_data = db.create_session(
+        user['id'],
+        browser_id=client_info.get('browser_id', 'default'),
+        ip_address=client_info.get('ip_address', 'unknown'),
+        user_agent=client_info.get('user_agent', 'unknown')
+    )
+    
+    if not session_data:
+        return False, "Session creation failed"
+    
+    # Persistent session kaydet
+    auth_data = auth_manager.save_persistent_session(
+        user['id'],
+        user['username'],
+        session_data['token'],
+        remember_me
+    )
+    
+    # JavaScript'e bildir (LocalStorage'a kaydetmesi için)
+    if remember_me:
+        save_to_localstorage_html = f"""
+        <script>
+            if (window.saveAuthToStorage) {{
+                window.saveAuthToStorage({json.dumps(auth_data)});
+            }}
             
-    except Exception as e:
-        print(f"⚠️ Cleanup error: {e}")
+            // URL'yi güncelle
+            const url = new URL(window.location.href);
+            url.searchParams.set('auth_token', '{session_data["token"]}');
+            url.searchParams.set('auth_user', '{user["username"]}');
+            
+            setTimeout(() => {{
+                window.top.location.href = url.toString();
+            }}, 500);
+        </script>
+        """
+        
+        st.components.v1.html(save_to_localstorage_html, height=0)
+    
+    return True, "Login successful"
 
-# --- AUTHENTICATION FONKSİYONLARI ---
 
-def get_img_as_base64(file_path):
-    """Yerel resim dosyasını base64 string'e çevirir."""
+# --- GÜNCELLENMİŞ LOGOUT FONKSIYONU ---
+
+def logout_enhanced():
+    """Logout - tüm katmanları temizle"""
+    
+    device_id = st.session_state.get('device_fingerprint')
+    
+    # Database session'ı iptal et
+    if 'session_token' in st.session_state:
+        db.logout_session(st.session_state.session_token, device_id or 'default')
+    
+    # Tüm katmanları temizle
+    auth_manager.clear_session(device_id)
+    
+    # JavaScript'ten temizle
+    st.components.v1.html("""
+        <script>
+            if (window.clearAuthStorage) {
+                window.clearAuthStorage();
+            }
+            
+            // URL'yi temizle
+            const url = new URL(window.location.href);
+            url.searchParams.delete('auth_token');
+            url.searchParams.delete('auth_user');
+            url.searchParams.delete('page');
+            
+            setTimeout(() => {
+                window.top.location.href = url.toString();
+            }, 300);
+        </script>
+    """, height=0)
+    
+    return True
+
+
+# --- HELPER FUNCTIONS ---
+
+def get_client_info():
+    """İstemci bilgilerini al"""
     try:
-        with open(file_path, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except FileNotFoundError:
-        print(f"Uyarı: {file_path} bulunamadı.")
-        return None
+        headers = st.context.headers if hasattr(st, 'context') else {}
+        return {
+            'ip_address': headers.get('X-Forwarded-For', 'unknown'),
+            'user_agent': headers.get('User-Agent', 'streamlit-client'),
+            'browser_id': auth_manager.generate_device_fingerprint()
+        }
+    except:
+        return {
+            'ip_address': 'unknown',
+            'user_agent': 'unknown',
+            'browser_id': auth_manager.generate_device_fingerprint()
+        }
+
 
 def is_valid_email(email):
     """Email formatı doğrulama"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-# auth.py - check_authentication fonksiyonunu değiştir
 
-def check_authentication(all_cookies):
-    """Kullanıcının giriş yapıp yapmadığını kontrol eder - IFRAME UYUMLU"""
-    
-    # Browser ID'yi al
-    browser_id = None
-    if all_cookies and 'hooplife_browser_id' in all_cookies:
-        browser_id = all_cookies['hooplife_browser_id']
-        st.session_state.browser_id = browser_id
-    else:
-        browser_id = get_browser_id()
-    
-    # 1. Session State'te varsa (sayfa yenilenmemiş)
-    if st.session_state.get('authenticated') and st.session_state.get('user'):
-        session_id = st.session_state.get('session_id')
-        
-        if session_id:
-            # Session ID ile doğrula
-            user = db.validate_session_by_id(session_id, browser_id)
-            
-            if user:
-                st.session_state.user = user
-                return True
-            else:
-                # Session süresi dolmuş
-                st.session_state.authenticated = False
-                st.session_state.user = None
-                st.session_state.session_id = None
-    
-    # 2. URL Query Parameter'dan session_id kontrol et (iframe için)
-    query_params = st.query_params
-    if 'session_id' in query_params:
-        session_id = query_params['session_id']
-        
-        user = db.validate_session_by_id(session_id, browser_id)
-        
-        if user:
-            st.session_state.user = user
-            st.session_state.session_id = session_id
-            st.session_state.authenticated = True
-            print(f"✅ Query param login: {user['username']}")
-            return True
-    
-    # 3. Cookie'den token yükle (normal kullanım)
-    if all_cookies:
-        cookie_token = all_cookies.get('hooplife_auth_token')
-        if cookie_token:
-            user = db.validate_session(cookie_token, browser_id)
-            
-            if user:
-                st.session_state.user = user
-                st.session_state.session_token = cookie_token
-                st.session_state.authenticated = True
-                print(f"✅ Cookie login: {user['username']}")
-                return True
-    
-    # 4. Dosyadan token yükle
-    token_data = load_token_from_file(browser_id)
-    
-    if token_data:
-        user = db.validate_session(token_data['token'], browser_id)
-        
-        if user:
-            st.session_state.user = user
-            st.session_state.session_token = token_data['token']
-            st.session_state.authenticated = True
-            print(f"✅ File login: {user['username']}")
-            return True
-        else:
-            delete_token_file(token_data['username'], browser_id)
-    
-    return False
+# --- RENDER AUTH PAGE WITH ENHANCED SYSTEM ---
 
-def logout():
-    """Kullanıcı çıkış işlemi"""
-    browser_id = get_browser_id()
-    current_user = st.session_state.get('user')
-    session_id = st.session_state.get('session_id')
+def render_auth_page_enhanced():
+    """Login ve Register sayfası - Geliştirilmiş kalıcılık ile"""
     
-    # Database session'ı iptal et
-    if session_id:
-        db.logout_session_by_id(session_id, browser_id)
-    elif 'session_token' in st.session_state:
-        db.logout_session(st.session_state.session_token, browser_id)
-    
-    # Token dosyasını sil
-    if current_user:
-        delete_token_file(current_user['username'], browser_id)
-    
-    # Session state temizle
-    st.session_state.authenticated = False
-    st.session_state.user = None
-    st.session_state.session_token = None
-    st.session_state.session_id = None
-    
-    if 'file_token_checked' in st.session_state:
-        del st.session_state.file_token_checked
-    
-    # iframe içindeyse parent'a bildir
-    is_embedded = st.query_params.get("embed") == "true"
-    if is_embedded:
-        st.markdown("""
-            <script>
-                window.parent.postMessage({
-                    type: 'hooplife_logout'
-                }, '*');
-                localStorage.removeItem('hooplife_session_id');
-                localStorage.removeItem('hooplife_username');
-            </script>
-        """, unsafe_allow_html=True)
-    
-    st.rerun()
-
-# --- ARAYÜZ FONKSİYONU ---
-
-def render_auth_page(cookie_manager=None):
-    """Login ve Register sayfası - JS Only Reload Fix"""
-    
-    # Üst kısım (Geri butonu)
+    # Geri butonu
     col1, col2, col3 = st.columns([1, 10, 1])
     with col1:
         if st.button("⬅️", help="Back to Home"):
             st.session_state.page = "home"
             st.rerun()
 
-    # CSS Tasarımı
+    # CSS (orijinal tasarım korunuyor)
     st.markdown("""
         <style>
         .block-container {
@@ -358,8 +503,6 @@ def render_auth_page(cookie_manager=None):
             max-width: 500px;
             margin: 0 auto;
         }
-        .auth-card h1, .auth-card h2 { color: #ececf1 !important; }
-        .auth-card p, .auth-card div, .brand-header p { color: #9ca3af !important; }
         .brand-header {
             text-align: center;
             margin-bottom: 1.5rem;
@@ -396,11 +539,6 @@ def render_auth_page(cookie_manager=None):
             background-color: #262730;
             transition: all 0.3s ease;
         }
-        .plan-container:hover {
-            border-color: #1D428A;
-            transform: translateY(-2px);
-            background-color: #2d2d2d;
-        }
         .plan-title {
             font-weight: 700;
             font-size: 1.1rem;
@@ -428,9 +566,6 @@ def render_auth_page(cookie_manager=None):
             color: #ececf1 !important;
             border: 1px solid #4b5563 !important;
         }
-        .stCheckbox label {
-            color: #9ca3af !important;
-        }
         div[data-testid="stFormSubmitButton"] button {
             border-radius: 8px;
             font-weight: 600;
@@ -448,6 +583,15 @@ def render_auth_page(cookie_manager=None):
     """, unsafe_allow_html=True)
 
     # Logo
+    def get_img_as_base64(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                data = f.read()
+            return base64.b64encode(data).decode()
+        except FileNotFoundError:
+            print(f"Warning: {file_path} not found")
+            return None
+
     logo_path = "HoopLifeNBA_logo.png"
     logo_b64 = get_img_as_base64(logo_path)
 
@@ -486,95 +630,17 @@ def render_auth_page(cookie_manager=None):
             if not username or not password:
                 st.error("Please enter your credentials.")
             else:
-                user = db.verify_user(username, password)
-                if user:
-                    # Client bilgilerini al
-                    client_info = get_client_info()
+                success, message = handle_login(username, password, remember_me)
+                
+                if success:
+                    st.success(f"✅ Welcome back, {username}!")
+                    st.info("🔄 Redirecting...")
                     
-                    # Session oluştur
-                    session_data = db.create_session(
-                        user['id'], 
-                        browser_id=client_info['browser_id'],
-                        ip_address=client_info['ip_address'],
-                        user_agent=client_info['user_agent']
-                    )
+                    # Auto-redirect kodu zaten handle_login içinde
+                    st.rerun()
                     
-                    if session_data:
-                        # Session State'i doldur
-                        st.session_state.user = user
-                        st.session_state.session_token = session_data['token']
-                        st.session_state.session_id = session_data['session_id']
-                        st.session_state.authenticated = True
-                        
-                        if 'file_token_checked' in st.session_state:
-                            del st.session_state['file_token_checked']
-                        
-                        # ==============================================================
-                        # 1. KESİN ÇÖZÜM: Python ile Cookie Yazmayı Dene (Cookie Manager)
-                        # ==============================================================
-                        if remember_me and cookie_manager:
-                            try:
-                                expires = datetime.now() + timedelta(days=30)
-                                cookie_manager.set('hooplife_auth_token', session_data['token'], expires_at=expires, key="set_token_py")
-                                cookie_manager.set('hooplife_browser_id', client_info['browser_id'], expires_at=expires, key="set_browser_py")
-                            except:
-                                pass
-
-                        if remember_me:
-                            save_token_to_file(session_data['token'], user['username'], client_info['browser_id'])
-                            st.success(f"✅ Welcome back, {user['username']}!")
-                        else:
-                            st.success(f"✅ Welcome, {user['username']}!")
-
-                        # ==============================================================
-                        # 2. KESİN ÇÖZÜM: JavaScript ile Cookie Yaz + ZORLA YENİLE
-                        # ==============================================================
-                        # Python'un st.rerun()'ını BURADA KULLANMIYORUZ.
-                        # JS'in sayfayı tamamen yenilemesini (F5 gibi) bekliyoruz.
-                        
-                        js_code = f"""
-                            <script>
-                                console.log("🔐 Starting login process...");
-                                
-                                // Verileri hazırla
-                                const token = "{session_data['token']}";
-                                const user = "{user['username']}";
-                                const browserId = "{client_info['browser_id']}";
-                                const expiry = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toUTCString();
-                                
-                                // 1. LocalStorage Kayıt
-                                const authData = {{ token: token, expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), username: user }};
-                                localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
-                                localStorage.setItem('hooplife_username', user);
-                                localStorage.setItem('hooplife_browser_id', browserId);
-                                
-                                // 2. Document Cookie (Kritik: path=/)
-                                document.cookie = "hooplife_auth_token=" + token + "; expires=" + expiry + "; path=/; SameSite=Lax";
-                                document.cookie = "hooplife_browser_id=" + browserId + "; expires=" + expiry + "; path=/; SameSite=Lax";
-                                
-                                console.log("✅ Cookies & LS set. Reloading in 1s...");
-
-                                // 3. Parent Window Reload (Sayfayı tamamen yenile)
-                                setTimeout(function() {{
-                                    const url = new URL(window.parent.location.href);
-                                    url.searchParams.delete('page'); // Login sayfasında takılı kalmasın
-                                    window.parent.location.href = url.toString();
-                                }}, 800);
-                            </script>
-                        """
-                        # JS'i çalıştır (yükseklik 0 iframe içinde)
-                        st.components.v1.html(js_code, height=0)
-                        
-                        # Kullanıcıya beklemesini söyle (JS reload yapana kadar)
-                        st.info("🔄 Redirecting securely...")
-                        
-                        # Python'u burada durduruyoruz, st.rerun() yapmıyoruz!
-                        # JS reload yapana kadar kod burada biter.
-                        
-                    else:
-                        st.error("Connection error. Please try again.")
                 else:
-                    st.error("Invalid username or password.")
+                    st.error(f"❌ {message}")
 
     # ==================== REGISTER TAB ====================
     with tab2:
@@ -632,13 +698,24 @@ def render_auth_page(cookie_manager=None):
                 else:
                     success, message = db.create_user(reg_username, reg_email, reg_password)
                     if success:
-                        st.success("Account created! Please switch to Sign In tab.")
+                        st.success("✅ Account created! Please switch to Sign In tab.")
                         st.balloons()
                     else:
-                        st.error(f"Error: {message}")
+                        st.error(f"❌ {message}")
 
     st.markdown("""
         <div style="text-align: center; margin-top: 1rem; color: #6b7280; font-size: 0.8rem;">
             © 2024 HoopLife NBA. All rights reserved.
         </div>
     """, unsafe_allow_html=True)
+
+
+# --- EXPORT EDİLECEK FONKSİYONLAR ---
+__all__ = [
+    'check_authentication_enhanced',
+    'handle_login',
+    'logout_enhanced',
+    'auth_manager',
+    'is_valid_email',
+    'render_auth_page_enhanced'
+]
