@@ -333,7 +333,7 @@ def logout():
 # --- ARAYÜZ FONKSİYONU ---
 
 def render_auth_page(cookie_manager=None):
-    """Login ve Register sayfası - Cookie Fix Uygulandı"""
+    """Login ve Register sayfası - JS Reload Fix Uygulandı"""
     
     # Üst kısım (Geri butonu)
     col1, col2, col3 = st.columns([1, 10, 1])
@@ -514,50 +514,37 @@ def render_auth_page(cookie_manager=None):
                         st.session_state.session_id = session_data['session_id']
                         st.session_state.authenticated = True
                         
+                        # Eğer dosya kontrolü flag'i varsa temizle
                         if 'file_token_checked' in st.session_state:
                             del st.session_state['file_token_checked']
                         
                         # -------------------------------------------------------------
-                        # ÇEREZ YAZMA İŞLEMİ (DÜZELTİLDİ)
+                        # ÇEREZ VE YÖNLENDİRME (JavaScript Reload Stratejisi)
                         # -------------------------------------------------------------
                         
-                        # 1. Cookie Manager ile yaz (Eğer manager geldiyse)
+                        # 1. Cookie Manager ile yaz (Opsiyonel ama iyi bir pratik)
                         if remember_me and cookie_manager:
                             try:
                                 expires = datetime.now() + timedelta(days=30)
+                                # Token için
                                 cookie_manager.set(
                                     'hooplife_auth_token', 
                                     session_data['token'], 
                                     expires_at=expires,
-                                    key="auth_token_setter" # Çakışmayı önlemek için unique key
+                                    key=f"auth_token_set_{int(datetime.now().timestamp())}"
                                 )
-                                print(f"✅ Cookie set via Manager for: {user['username']}")
+                                # Browser ID için (Session çakışmasını önler)
+                                cookie_manager.set(
+                                    'hooplife_browser_id',
+                                    client_info['browser_id'],
+                                    expires_at=expires,
+                                    key=f"browser_id_set_{int(datetime.now().timestamp())}"
+                                )
                             except Exception as e:
-                                print(f"⚠️ Cookie Manager Error: {e}")
-
-                        # 2. JavaScript & LocalStorage Yedekleme
-                        js_code = f"""
-                            <script>
-                                const authData = {{
-                                    token: "{session_data['token']}",
-                                    expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                                    username: "{user['username']}"
-                                }};
-                                
-                                // LocalStorage Kayıt
-                                localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
-                                localStorage.setItem('hooplife_username', "{user['username']}");
-                                
-                                // JS ile Cookie'yi Zorla (Yedek yöntem)
-                                document.cookie = "hooplife_auth_token={session_data['token']}; max-age=2592000; path=/; SameSite=Lax";
-                                
-                                console.log('✅ Auth tokens saved to storage');
-                            </script>
-                        """
-                        st.markdown(js_code, unsafe_allow_html=True)
+                                print(f"⚠️ Cookie Manager Set Error: {e}")
 
                         if remember_me:
-                            # 3. Dosyaya Kaydet (Sunucu Tarafı Yedek)
+                            # 2. Dosyaya Kaydet (Sunucu Tarafı Yedek)
                             save_token_to_file(
                                 session_data['token'], 
                                 user['username'], 
@@ -565,29 +552,46 @@ def render_auth_page(cookie_manager=None):
                             )
                             st.success(f"✅ Welcome back, {user['username']}!")
                         else:
-                            # Beni hatırla yoksa LocalStorage'ı temizle
-                            st.markdown("<script>localStorage.removeItem('hooplife_auth_data');</script>", unsafe_allow_html=True)
                             st.success(f"✅ Welcome, {user['username']}!")
 
-                        # IFRAME Mesajı
-                        is_embedded = st.query_params.get("embed") == "true"
-                        if is_embedded:
-                            st.markdown(f"""
-                                <script>
-                                    window.parent.postMessage({{
-                                        type: 'hooplife_session',
-                                        session_id: '{session_data["session_id"]}',
-                                        username: '{user["username"]}'
-                                    }}, '*');
-                                </script>
-                            """, unsafe_allow_html=True)
+                        # 3. KESİN ÇÖZÜM: JavaScript ile Cookie Yaz ve Sayfayı YENİLE
+                        # st.rerun() yerine window.location.reload() kullanıyoruz.
+                        js_code = f"""
+                            <script>
+                                // Verileri hazırla
+                                const authData = {{
+                                    token: "{session_data['token']}",
+                                    expiry: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                                    username: "{user['username']}"
+                                }};
+                                const browserId = "{client_info['browser_id']}";
+                                
+                                // 1. LocalStorage
+                                localStorage.setItem('hooplife_auth_data', JSON.stringify(authData));
+                                localStorage.setItem('hooplife_username', "{user['username']}");
+                                localStorage.setItem('hooplife_browser_id', browserId);
+                                
+                                // 2. Document Cookie (En önemlisi)
+                                const maxAge = 30 * 24 * 60 * 60; // 30 gün saniye cinsinden
+                                document.cookie = `hooplife_auth_token={session_data['token']}; max-age=${{maxAge}}; path=/; SameSite=Lax`;
+                                document.cookie = `hooplife_browser_id=${{browserId}}; max-age=${{maxAge}}; path=/; SameSite=Lax`;
+                                
+                                console.log('✅ Auth tokens saved via JS. Reloading...');
+                                
+                                // 3. Sayfayı Yenile (Gecikmeli ki cookie yazılabilsin)
+                                setTimeout(function() {{
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.delete('page'); // Login sayfasından çık
+                                    window.parent.location.href = url.toString();
+                                }}, 1000);
+                            </script>
+                        """
+                        # Yüksekliği 0 olan bir html bileşeni olarak ekle
+                        st.components.v1.html(js_code, height=0)
                         
-                        # Yönlendirme (Cookie yazılması için bekleme süresini artırdık)
+                        # Python tarafında bekleme (JS çalışana kadar dur)
                         import time
-                        time.sleep(1.5) 
-                        
-                        st.session_state.page = "home"
-                        st.rerun()
+                        time.sleep(2) 
                         
                     else:
                         st.error("Connection error. Please try again.")
