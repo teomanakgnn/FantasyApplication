@@ -90,6 +90,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def get_cookie_manager():
+    return stx.CookieManager(key="hooplife_cookies")
+
+cookie_manager = get_cookie_manager()
+
+# Cookie manager yüklenmesi için kısa bir bekleme gerekebilir
+import time
+time.sleep(0.1) 
+
+# 3. Tüm çerezleri al
+all_cookies = cookie_manager.get_all()
+
+# 4. Auth Kontrolü (Senin kendi auth.py dosyanı kullanacağız)
+from auth import check_authentication
+# all_cookies'i gönderiyoruz ki token'ı okuyabilsin
+is_authenticated = check_authentication(all_cookies)
 
 # IFRAME SESSION MANAGEMENT - app.py başına ekle
 components.html("""
@@ -136,47 +152,7 @@ components.html("""
     </script>
 """, height=0)
 
-def get_manager():
-    return stx.CookieManager()
 
-cookie_manager = get_manager()
-
-# 2. Cookie'den Login Durumunu Oku (Sayfa her yenilendiğinde burası çalışır)
-cookie_token = cookie_manager.get(cookie="user_token")
-
-# Eğer cookie varsa ve biz session'a henüz yazmadıysak, session'ı güncelle
-if cookie_token and "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = cookie_token # Veya token'dan kullanıcıyı bul
-    st.rerun() # Sayfayı yenileyip içeriği göster
-
-# 3. Login Ekranı ve İşlemi
-if "logged_in" not in st.session_state:
-    st.write("### Giriş Yap")
-    username = st.text_input("Kullanıcı Adı")
-    password = st.text_input("Şifre", type="password")
-
-    if st.button("Giriş"):
-        # Buraya kendi auth kontrolünü koy (DB kontrolü vs.)
-        if username == "admin" and password == "1234": # Örnek kontrol
-            st.session_state["logged_in"] = True
-            
-            # --- KRİTİK NOKTA: Cookie'yi yazıyoruz ---
-            # expire_seconds=86400 (1 gün sakla demek)
-            cookie_manager.set("user_token", username, expires_at=datetime.datetime.now() + datetime.timedelta(days=1))
-            
-            st.success("Giriş Başarılı!")
-            time.sleep(1)
-            st.rerun()
-        else:
-            st.error("Hatalı giriş")
-else:
-    st.write(f"Hoşgeldin {st.session_state.get('username')}")
-    # Çıkış butonu
-    if st.button("Çıkış Yap"):
-        cookie_manager.delete("user_token") # Cookie'yi sil
-        del st.session_state["logged_in"]
-        st.rerun()
 
 
 components.html("""
@@ -1533,9 +1509,11 @@ with st.sidebar:
             """)
 
 # Sayfa yönlendirmesi
+# app.py içinde login yönlendirmesi kısmı:
 if st.session_state.page == "login":
     from auth import render_auth_page
-    render_auth_page()
+    # Cookie manager'ı parametre olarak gönderiyoruz (auth.py'yi buna göre güncellemelisin)
+    render_auth_page(cookie_manager) 
     st.stop()
 
 if st.session_state.page == "injury":
