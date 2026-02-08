@@ -13,4 +13,5 @@ bcrypt
 requests-oauthlib
 extra-streamlit-components
 feedparser
-uuid
+Pillow
+python-dotenv

@@ -24,28 +24,26 @@ class PersistentAuthManager:
         self.storage_dir = self._get_storage_dir()
         
     def _get_storage_dir(self):
-        """Güvenli storage dizini oluştur"""
-        possible_dirs = [
-            os.path.join(os.path.expanduser("~"), ".hooplife_auth"),
-            os.path.join("/tmp", ".hooplife_auth"),
-            os.path.join(os.getcwd(), ".hooplife_auth")
-        ]
+        """Streamlit Cloud uyumlu storage dizini"""
+        # Streamlit Cloud'da SADECE /tmp kullanılabilir
+        storage_dir = "/tmp/.hooplife_auth"
         
-        for dir_path in possible_dirs:
-            try:
-                if not os.path.exists(dir_path):
-                    os.makedirs(dir_path, mode=0o700)
-                # Test yazma izni
-                test_file = os.path.join(dir_path, ".test")
-                with open(test_file, 'w') as f:
-                    f.write("test")
-                os.remove(test_file)
-                return dir_path
-            except:
-                continue
+        try:
+            os.makedirs(storage_dir, mode=0o700, exist_ok=True)
+            
+            # Test yazma izni
+            test_file = os.path.join(storage_dir, ".test")
+            with open(test_file, 'w') as f:
+                f.write("test")
+            os.remove(test_file)
+            
+            return storage_dir
+            
+        except Exception as e:
+            # Hata durumunda session-only mode
+            print(f"⚠️ Storage unavailable, using session-only mode: {e}")
+            return None  # Session state kullanılacak
         
-        return "/tmp/.hooplife_auth"  # Fallback
-    
     def generate_device_fingerprint(self):
         """Tarayıcı + cihaz kombinasyonu için benzersiz ID"""
         # Session state'te varsa kullan
@@ -93,7 +91,10 @@ class PersistentAuthManager:
         }
     
     def _save_to_file(self, device_id, session_data):
-        """Dosyaya güvenli şekilde kaydet"""
+        """Dosyaya güvenli şekilde kaydet - Cloud safe"""
+        if not self.storage_dir:  # ← Eklendi
+            return False  # Storage yoksa skip et
+            
         try:
             filename = f"auth_{hashlib.md5(device_id.encode()).hexdigest()}.pkl"
             filepath = os.path.join(self.storage_dir, filename)
@@ -101,12 +102,13 @@ class PersistentAuthManager:
             with open(filepath, 'wb') as f:
                 pickle.dump(session_data, f)
             
-            os.chmod(filepath, 0o600)  # Sadece kullanıcı okuyabilsin
+            os.chmod(filepath, 0o600)
             print(f"✅ Auth saved to file: {filepath}")
             return True
+            
         except Exception as e:
-            print(f"❌ File save error: {e}")
-            return False
+            print(f"❌ File save error (non-critical): {e}")
+            return False  # Hata olsa da devam et
     
     def load_persistent_session(self):
         """Kalıcı oturumu yükle - 3 katmandan ara"""
