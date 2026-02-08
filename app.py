@@ -6,7 +6,7 @@ import textwrap
 import extra_streamlit_components as stx
 import time 
 from services.espn_api import (calculate_game_score, get_score_color)
-from auth import check_authentication
+from auth import check_authentication_enhanced
 import os
 import pickle
 
@@ -90,48 +90,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def get_cookie_manager():
-    # Benzersiz bir key veriyoruz
-    return stx.CookieManager(key="main_manager_v2")
-
-cookie_manager = get_cookie_manager()
-
-# Çerezlerin tarayıcıdan gelmesi için kısa bir bekleme
-# Not: Eğer giriş sorunu devam ederse burayı 0.5 veya 0.7 yap
-time.sleep(0.4) 
-
-# Tüm çerezleri çek
-all_cookies = cookie_manager.get_all()
-
-# --- KRİTİK DÜZELTME: Çerez Gecikmesi Kontrolü ---
-# Eğer çerezler henüz yüklenmediyse (None) veya boşsa ve biz daha önce denemediysek,
-# Sayfayı bir kez yenileyip çerezlerin gelmesini bekleyelim.
-if all_cookies is None:
-    # Henüz yüklenmedi, kullanıcıya hissettirmeden tekrar dene
-    if "cookie_retry" not in st.session_state:
-        st.session_state["cookie_retry"] = True
-        st.rerun()
-    else:
-        # İkinci denemede de yoksa boş kabul et
-        all_cookies = {}
-else:
-    # Başarılı yüklendiyse retry flag'ini sil
-    if "cookie_retry" in st.session_state:
-        del st.session_state["cookie_retry"]
-
-# 3. AUTHENTICATION CHECK
-# ================================================================================
-
-from auth import check_authentication
-
-# Çerezleri kontrol fonksiyonuna gönder
-is_authenticated = check_authentication(all_cookies)
-
-# Eğer giriş yapılmış görünüyorsa ama session_state'de user yoksa (Refresh durumu)
-if is_authenticated and "user" not in st.session_state:
-    # check_authentication fonksiyonu session_state'i doldurmuş olmalı.
-    # Eğer doldurmadıysa, sayfa yenilendiğinde veriler kaybolmasın diye rerun yapabiliriz.
-    st.rerun()
 
 # IFRAME SESSION MANAGEMENT - app.py başına ekle
 components.html("""
@@ -179,6 +137,45 @@ components.html("""
 """, height=0)
 
 
+components.html("""
+<script>
+    (function() {
+        try {
+            // LocalStorage'dan token ve kullanıcı adını al
+            const token = localStorage.getItem("hooplife_token");
+            
+            // URL parametrelerini kontrol et
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get("token");
+
+            // Eğer LocalStorage'da token var ama URL'de yoksa -> URL'e ekle ve yenile
+            if (token && !urlToken) {
+                urlParams.set("token", token);
+                window.location.search = urlParams.toString();
+            }
+            // Eğer LocalStorage boşsa ama URL'de token kalmışsa (Logout durumu) -> Temizle
+            else if (!token && urlToken) {
+                urlParams.delete("token");
+                window.location.search = urlParams.toString();
+            }
+        } catch(e) {
+            console.error("Auth Bridge Error:", e);
+        }
+    })();
+</script>
+""", height=0)
+
+# -----------------------------------------------------------
+# 2. AUTHENTICATION CHECK (URL Parametresinden)
+# -----------------------------------------------------------
+from auth import check_authentication_enhanced
+
+# Kimlik kontrolü artık URL'den veya Session'dan yapılıyor
+is_authenticated = check_authentication_enhanced()
+
+# Kullanıcı bilgisini al
+user = st.session_state.get('user', None)
+is_pro = user.get('is_pro', False) if user else False
 
 
 components.html("""
@@ -207,15 +204,6 @@ components.html("""
         })();
     </script>
 """, height=0)
-
-
-
-# 3. AUTHENTICATION CHECK (mevcut kodu DEĞIŞTIRIN)
-# ================================================================================
-
-# Kimlik kontrolü (all_cookies parametresi ile)
-is_authenticated = check_authentication(all_cookies)
-
 
 st.markdown("""
     <script>
@@ -1018,7 +1006,7 @@ def render_adsense():
 
 
 # Authentication kontrolü (opsiyonel)
-from auth import check_authentication, logout
+from auth import check_authentication_enhanced, logout_enhanced
 
 from components.styles import load_styles
 from components.header import render_header
@@ -1437,8 +1425,8 @@ if "show_all_games" not in st.session_state:
 if "slider_index" not in st.session_state:
     st.session_state.slider_index = 0
 
-# Check if user is authenticated (opsiyonel)
-is_authenticated = check_authentication(all_cookies)
+
+is_authenticated = st.session_state.get('authenticated', False)
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
 
@@ -1481,8 +1469,9 @@ with st.sidebar:
                 st.info("Contact admin for PRO upgrade")
         
         # Logout button
-        if st.button(" Logout", use_container_width=True, type="secondary"):
-            logout()
+        if st.button(" Logout", ...):
+            from auth import logout_enhanced
+            logout_enhanced()
     else:
         # Not logged in - show login/register option
         st.markdown("""
@@ -1515,9 +1504,8 @@ with st.sidebar:
 # Sayfa yönlendirmesi
 # app.py içinde login yönlendirmesi kısmı:
 if st.session_state.page == "login":
-    from auth import render_auth_page
-    # Cookie manager'ı parametre olarak gönderiyoruz (auth.py'yi buna göre güncellemelisin)
-    render_auth_page(cookie_manager) 
+    from auth import render_auth_page_enhanced
+    render_auth_page_enhanced()
     st.stop()
 
 if st.session_state.page == "injury":
@@ -1812,7 +1800,7 @@ def home_page():
     
     # Only show trivia if no other dialog is active
     if st.session_state.active_dialog is None or st.session_state.active_dialog == 'trivia':
-        handle_daily_trivia(all_cookies)
+        handle_daily_trivia(None)
     render_header()
     
     # Load user preferences if logged in

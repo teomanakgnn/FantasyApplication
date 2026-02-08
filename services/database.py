@@ -311,6 +311,254 @@ class Database:
             conn.rollback()
             return False
     
+ # DATABASE HELPER METHODS
+# services/database.py dosyanıza bu metodları ekleyin
+
+    def validate_session_by_token(self, token):
+        """
+        Token ile session'ı doğrula
+        Returns: user dict or None
+        """
+        try:
+            c = self.conn.cursor()
+            
+            # Session tablosundan token'ı bul
+            c.execute('''
+                SELECT s.user_id, s.expires_at, u.username, u.email, u.is_pro
+                FROM sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.token = ? AND s.is_active = 1
+            ''', (token,))
+            
+            result = c.fetchone()
+            
+            if not result:
+                return None
+            
+            user_id, expires_at, username, email, is_pro = result
+            
+            # Süre kontrolü
+            from datetime import datetime
+            expiry = datetime.fromisoformat(expires_at)
+            
+            if datetime.now() > expiry:
+                # Session süresi dolmuş
+                c.execute('UPDATE sessions SET is_active = 0 WHERE token = ?', (token,))
+                self.conn.commit()
+                return None
+            
+            return {
+                'id': user_id,
+                'username': username,
+                'email': email,
+                'is_pro': bool(is_pro)
+            }
+            
+        except Exception as e:
+            print(f"❌ validate_session_by_token error: {e}")
+            return None
+
+
+    def get_user_by_id(self, user_id):
+        """
+        User ID ile kullanıcı bilgilerini getir
+        Returns: user dict or None
+        """
+        try:
+            c = self.conn.cursor()
+            
+            c.execute('''
+                SELECT id, username, email, is_pro, created_at
+                FROM users
+                WHERE id = ?
+            ''', (user_id,))
+            
+            result = c.fetchone()
+            
+            if not result:
+                return None
+            
+            user_id, username, email, is_pro, created_at = result
+            
+            return {
+                'id': user_id,
+                'username': username,
+                'email': email,
+                'is_pro': bool(is_pro),
+                'created_at': created_at
+            }
+            
+        except Exception as e:
+            print(f"❌ get_user_by_id error: {e}")
+            return None
+
+
+    def cleanup_expired_sessions(self):
+        """
+        Süresi dolmuş session'ları temizle
+        Cron job ile günlük çalıştırılmalı
+        """
+        try:
+            c = self.conn.cursor()
+            
+            from datetime import datetime
+            now = datetime.now().isoformat()
+            
+            # Süresi dolmuş session'ları pasif yap
+            c.execute('''
+                UPDATE sessions
+                SET is_active = 0
+                WHERE expires_at < ? AND is_active = 1
+            ''', (now,))
+            
+            deleted_count = c.rowcount
+            self.conn.commit()
+            
+            print(f"🧹 Cleaned up {deleted_count} expired sessions")
+            return deleted_count
+            
+        except Exception as e:
+            print(f"❌ cleanup_expired_sessions error: {e}")
+            return 0
+
+
+    def get_user_active_sessions(self, user_id):
+        """
+        Kullanıcının aktif session'larını listele
+        Multi-device kullanımı için
+        """
+        try:
+            c = self.conn.cursor()
+            
+            c.execute('''
+                SELECT token, created_at, expires_at, browser_id, ip_address, user_agent
+                FROM sessions
+                WHERE user_id = ? AND is_active = 1
+                ORDER BY created_at DESC
+            ''', (user_id,))
+            
+            results = c.fetchall()
+            
+            sessions = []
+            for row in results:
+                sessions.append({
+                    'token': row[0],
+                    'created_at': row[1],
+                    'expires_at': row[2],
+                    'browser_id': row[3],
+                    'ip_address': row[4],
+                    'user_agent': row[5]
+                })
+            
+            return sessions
+            
+        except Exception as e:
+            print(f"❌ get_user_active_sessions error: {e}")
+            return []
+
+
+    def revoke_session(self, token):
+        """
+        Belirli bir session'ı iptal et
+        Güvenlik için (örn: cihaz kaybı)
+        """
+        try:
+            c = self.conn.cursor()
+            
+            c.execute('''
+                UPDATE sessions
+                SET is_active = 0
+                WHERE token = ?
+            ''', (token,))
+            
+            self.conn.commit()
+            
+            if c.rowcount > 0:
+                print(f"✅ Session revoked: {token[:10]}...")
+                return True
+            else:
+                print(f"⚠️ Session not found: {token[:10]}...")
+                return False
+                
+        except Exception as e:
+            print(f"❌ revoke_session error: {e}")
+            return False
+
+
+    def revoke_all_user_sessions(self, user_id, except_token=None):
+        """
+        Kullanıcının tüm session'larını iptal et
+        Güvenlik için (örn: şifre değişimi sonrası)
+        
+        except_token: Bu token hariç tüm session'ları iptal et (mevcut session korunsun)
+        """
+        try:
+            c = self.conn.cursor()
+            
+            if except_token:
+                c.execute('''
+                    UPDATE sessions
+                    SET is_active = 0
+                    WHERE user_id = ? AND token != ? AND is_active = 1
+                ''', (user_id, except_token))
+            else:
+                c.execute('''
+                    UPDATE sessions
+                    SET is_active = 0
+                    WHERE user_id = ? AND is_active = 1
+                ''', (user_id,))
+            
+            revoked_count = c.rowcount
+            self.conn.commit()
+            
+            print(f"🔒 Revoked {revoked_count} sessions for user {user_id}")
+            return revoked_count
+            
+        except Exception as e:
+            print(f"❌ revoke_all_user_sessions error: {e}")
+            return 0
+
+
+    # BONUS: Session Statistics
+    def get_session_stats(self):
+        """
+        Genel session istatistikleri
+        Admin dashboard için
+        """
+        try:
+            c = self.conn.cursor()
+            
+            # Toplam aktif session
+            c.execute('SELECT COUNT(*) FROM sessions WHERE is_active = 1')
+            active_sessions = c.fetchone()[0]
+            
+            # Benzersiz aktif kullanıcı
+            c.execute('SELECT COUNT(DISTINCT user_id) FROM sessions WHERE is_active = 1')
+            active_users = c.fetchone()[0]
+            
+            # Bugün oluşturulan session
+            from datetime import datetime, timedelta
+            today_start = datetime.now().replace(hour=0, minute=0, second=0).isoformat()
+            
+            c.execute('SELECT COUNT(*) FROM sessions WHERE created_at >= ?', (today_start,))
+            today_sessions = c.fetchone()[0]
+            
+            # Süresi dolmuş session (henüz temizlenmemiş)
+            now = datetime.now().isoformat()
+            c.execute('SELECT COUNT(*) FROM sessions WHERE expires_at < ? AND is_active = 1', (now,))
+            expired_sessions = c.fetchone()[0]
+            
+            return {
+                'active_sessions': active_sessions,
+                'active_users': active_users,
+                'today_sessions': today_sessions,
+                'expired_sessions': expired_sessions
+            }
+            
+        except Exception as e:
+            print(f"❌ get_session_stats error: {e}")
+            return None
+ 
     # ==================== WATCHLIST (PRO FEATURE) ====================
     
     def add_to_watchlist(self, user_id, player_name, notes=""):
