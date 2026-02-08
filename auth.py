@@ -332,7 +332,7 @@ def logout():
 
 # --- ARAYÜZ FONKSİYONU ---
 
-def render_auth_page():
+def render_auth_page(cookie_manager=None):
     """Login ve Register sayfası"""
     
     # Üst kısım (Geri butonu)

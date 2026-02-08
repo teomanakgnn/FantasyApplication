@@ -2,7 +2,7 @@
 headless = true
 enableXsrfProtection = false
 enableCORS = false
-enableWebsocketCompression = fals
+enableWebsocketCompression = false
 
 [browser]
 gatherUsageStats = false
