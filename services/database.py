@@ -602,103 +602,153 @@ class Database:
     # ==================== DAILY TRIVIA ====================
     
     def get_daily_trivia(self):
-        """Bugünün trivia sorusunu getir"""
-        conn = self.get_connection()
-        if not conn:
-            return None
-        
+        """Günlük trivia sorusunu getir - transaction safe"""
         try:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute(
-                "SELECT * FROM trivia_questions WHERE game_date = %s",
-                (datetime.now().date(),)
-            )
-            question = cursor.fetchone()
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            today = datetime.now().date()
+            
+            cursor.execute("""
+                SELECT id, question, option_a, option_b, option_c, option_d, 
+                    correct_option, explanation
+                FROM trivia_questions
+                WHERE date = %s
+                LIMIT 1
+            """, (today,))
+            
+            row = cursor.fetchone()
             cursor.close()
-            return dict(question) if question else None
+            conn.commit()  # ← ÖNEMLİ: Commit ekle
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'question': row[1],
+                    'option_a': row[2],
+                    'option_b': row[3],
+                    'option_c': row[4],
+                    'option_d': row[5],
+                    'correct_option': row[6],
+                    'explanation': row[7]
+                }
+            return None
+            
         except Exception as e:
-            st.error(f"Trivia error: {e}")
+            print(f"❌ Trivia fetch error: {e}")
+            if conn:
+                conn.rollback()  # ← ÖNEMLİ: Rollback ekle
             return None
 
     def get_user_streak(self, user_id):
-        """Kullanıcının mevcut serisini getir"""
-        conn = self.get_connection()
-        if not conn:
-            return 0
-            
+        """Kullanıcının streak'ini getir - transaction safe"""
         try:
+            conn = self.get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT current_streak FROM users WHERE id = %s", (user_id,))
-            result = cursor.fetchone()
+            
+            cursor.execute("""
+                SELECT streak FROM user_trivia_streak
+                WHERE user_id = %s
+            """, (user_id,))
+            
+            row = cursor.fetchone()
             cursor.close()
-            return result[0] if result and result[0] is not None else 0
+            conn.commit()  # ← Ekle
+            
+            return row[0] if row else 0
+            
         except Exception as e:
+            print(f"❌ Get streak error: {e}")
+            if conn:
+                conn.rollback()  # ← Ekle
             return 0
 
     def mark_user_trivia_played(self, user_id):
-        """Kullanıcının bugün trivia oynadığını işaretle ve STREAK hesapla"""
-        conn = self.get_connection()
-        if not conn:
-            return False
-        
+        """Trivia cevabını kaydet - transaction safe"""
         try:
+            conn = self.get_connection()
             cursor = conn.cursor()
-            
-            # 1. Önce kullanıcının son oynama tarihini ve mevcut serisini al
-            cursor.execute("SELECT last_trivia_date, current_streak FROM users WHERE id = %s", (user_id,))
-            result = cursor.fetchone()
-            
-            last_date = result[0]
-            current_streak = result[1] if result[1] is not None else 0
             
             today = datetime.now().date()
-            yesterday = today - timedelta(days=1)
             
-            new_streak = 1 # Varsayılan: Zincir kırıldı veya yeni başladı
+            cursor.execute("""
+                INSERT INTO user_trivia_history (user_id, played_date)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, played_date) DO NOTHING
+            """, (user_id, today))
             
-            if last_date == today:
-                # Zaten bugün oynanmış (Hata önlemi)
-                new_streak = current_streak
-            elif last_date == yesterday:
-                # Dün oynamış, seriyi artır!
-                new_streak = current_streak + 1
-            else:
-                # Dün oynamamış, seri 1'e döner
-                new_streak = 1
-            
-            # 2. Veritabanını güncelle
-            cursor.execute(
-                "UPDATE users SET last_trivia_date = %s, current_streak = %s WHERE id = %s",
-                (today, new_streak, user_id)
-            )
-            conn.commit()
+            conn.commit()  # ← Ekle
             cursor.close()
             return True
+            
         except Exception as e:
-            conn.rollback()
-            st.error(f"Streak update error: {e}")
+            print(f"❌ Mark trivia error: {e}")
+            if conn:
+                conn.rollback()  # ← Ekle
             return False
+            
+            
+    def validate_session_by_token(self, token):
+        """Token ile session doğrula ve kullanıcıyı getir"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT u.id, u.username, u.email, u.is_pro, s.expires_at
+                FROM users u
+                JOIN user_sessions s ON u.id = s.user_id
+                WHERE s.token = %s AND s.is_active = true
+            """, (token,))
+            
+            row = cursor.fetchone()
+            cursor.close()
+            conn.commit()
+            
+            if row:
+                # Expiry kontrolü
+                expires_at = row[4]
+                if datetime.now() < expires_at:
+                    return {
+                        'id': row[0],
+                        'username': row[1],
+                        'email': row[2],
+                        'is_pro': row[3]
+                    }
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Token validation error: {e}")
+            if conn:
+                conn.rollback()
+            return None            
             
     def check_user_played_trivia_today(self, user_id):
-        """Kullanıcı bugün trivia oynadı mı?"""
-        conn = self.get_connection()
-        if not conn:
-            return False
-            
+        """Kullanıcı bugün trivia oynadı mı - transaction safe"""
         try:
+            conn = self.get_connection()
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT last_trivia_date FROM users WHERE id = %s",
-                (user_id,)
-            )
-            result = cursor.fetchone()
-            cursor.close()
             
-            if result and result[0] == datetime.now().date():
-                return True
-            return False
+            today = datetime.now().date()
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM user_trivia_history
+                WHERE user_id = %s AND played_date = %s
+            """, (user_id, today))
+            
+            count = cursor.fetchone()[0]
+            cursor.close()
+            conn.commit()  # ← Ekle
+            
+            return count > 0
+            
         except Exception as e:
-            return False
+            print(f"❌ Check trivia error: {e}")
+            if conn:
+                conn.rollback()  # ← Ekle
+            return False  # Hata durumunda False dön
+
         
     def get_score_display_preference(self, user_id):
         """Kullanıcının skor gösterim tercihini getir"""

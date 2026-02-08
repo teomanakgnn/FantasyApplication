@@ -340,24 +340,35 @@ def inject_auth_bridge():
 # --- GÜNCELLENMİŞ CHECK_AUTHENTICATION ---
 
 def check_authentication_enhanced():
-    """Geliştirilmiş authentication - 3 katmanlı kontrol"""
+    """Geliştirilmiş authentication - URL + LocalStorage"""
     
-    # JavaScript bridge'i inject et
-    inject_auth_bridge()
+    # 1. Session state kontrolü (en hızlı)
+    if st.session_state.get('authenticated'):
+        return True
     
-    # Persistent session yükle
-    session_data = auth_manager.load_persistent_session()
-    
-    if session_data:
-        # Database'de tekrar doğrula
-        user = db.get_user_by_id(session_data['user_id'])
+    # 2. URL'den token kontrolü
+    try:
+        params = st.query_params
         
-        if user:
-            st.session_state.authenticated = True
-            st.session_state.user = user
-            st.session_state.session_token = session_data['session_token']
-            print(f"✅ Auto-login successful: {user['username']}")
-            return True
+        if 'auth_token' in params and 'auth_user' in params:
+            token = params['auth_token']
+            username = params['auth_user']
+            
+            # Database'de doğrula
+            user = db.validate_session_by_token(token)
+            
+            if user and user['username'] == username:
+                # Session state'e yükle
+                st.session_state.authenticated = True
+                st.session_state.user = user
+                st.session_state.session_token = token
+                print(f"✅ Auto-login from URL: {username}")
+                return True
+    except Exception as e:
+        print(f"⚠️ URL auth failed: {e}")
+    
+    # 3. JavaScript LocalStorage bridge
+    inject_auth_bridge()
     
     return False
 
@@ -384,34 +395,47 @@ def handle_login(username, password, remember_me=True):
     if not session_data:
         return False, "Session creation failed"
     
-    # Persistent session kaydet
-    auth_data = auth_manager.save_persistent_session(
-        user['id'],
-        user['username'],
-        session_data['token'],
-        remember_me
-    )
+    # Session state'e kaydet
+    st.session_state.authenticated = True
+    st.session_state.user = user
+    st.session_state.session_token = session_data['token']
     
-    # JavaScript'e bildir (LocalStorage'a kaydetmesi için)
+    # Remember me için URL'ye token ekle
     if remember_me:
-        save_to_localstorage_html = f"""
+        auth_data = {
+            'session_token': session_data['token'],
+            'username': user['username'],
+            'user_id': user['id'],
+            'expires_at': (datetime.now() + timedelta(days=30)).isoformat()
+        }
+        
+        # JavaScript ile LocalStorage + URL update
+        save_html = f"""
         <script>
-            if (window.saveAuthToStorage) {{
-                window.saveAuthToStorage({json.dumps(auth_data)});
-            }}
-            
-            // URL'yi güncelle
-            const url = new URL(window.location.href);
-            url.searchParams.set('auth_token', '{session_data["token"]}');
-            url.searchParams.set('auth_user', '{user["username"]}');
-            
-            setTimeout(() => {{
-                window.top.location.href = url.toString();
-            }}, 500);
+            (function() {{
+                const authData = {json.dumps(auth_data)};
+                
+                // 1. LocalStorage'a kaydet
+                localStorage.setItem('hooplife_persistent_auth', JSON.stringify(authData));
+                console.log('💾 Auth saved to LocalStorage');
+                
+                // 2. URL'ye ekle
+                const url = new URL(window.location.href);
+                url.searchParams.set('auth_token', authData.session_token);
+                url.searchParams.set('auth_user', authData.username);
+                
+                // 3. Sayfayı yenile
+                setTimeout(() => {{
+                    window.top.location.href = url.toString();
+                }}, 500);
+            }})();
         </script>
         """
         
-        st.components.v1.html(save_to_localstorage_html, height=0)
+        st.components.v1.html(save_html, height=0)
+    else:
+        # Remember me kapalıysa sadece session
+        st.rerun()
     
     return True, "Login successful"
 

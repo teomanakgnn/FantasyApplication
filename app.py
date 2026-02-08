@@ -934,64 +934,71 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
 
 # app.py içindeki fonksiyon tanımı
 def handle_daily_trivia(all_cookies): # all_cookies dışarıdan geliyor
-    active = st.session_state.get('active_dialog')
-    if active is not None and active != 'trivia':
-        return
+    try:
+        active = st.session_state.get('active_dialog')
+        if active is not None and active != 'trivia':
+            return
     
     # 1. Soru verisi kontrolü
-    trivia = db.get_daily_trivia()
-    if not trivia:
-        return
+        trivia = db.get_daily_trivia()
+        if not trivia:
+            print("ℹ️ No trivia question for today")
+            return
 
-    # 2. Temel Değişkenleri Başlat (Hatanın çözümü burası)
-    today_str = str(datetime.now().date())
-    current_user = st.session_state.get('user')
-    force_open = st.session_state.get('trivia_force_open', False)
-    should_show = False
-    streak = 0
-    u_id = None # u_id burada tanımlandı, artık hata vermez
-    
-    session_played_key = f'trivia_played_{today_str}'
-    session_played = st.session_state.get(session_played_key, False)
-
-    # -------------------------------------------------------
-    # SENARYO A: GİRİŞ YAPMIŞ KULLANICI
-    # -------------------------------------------------------
-    if current_user:
-        u_id = current_user['id']
-        has_played = db.check_user_played_trivia_today(u_id)
+        # 2. Temel Değişkenleri Başlat (Hatanın çözümü burası)
+        today_str = str(datetime.now().date())
+        current_user = st.session_state.get('user')
+        force_open = st.session_state.get('trivia_force_open', False)
+        should_show = False
+        streak = 0
+        u_id = None # u_id burada tanımlandı, artık hata vermez
         
-        if force_open: 
-            should_show = True
-            streak = db.get_user_streak(u_id)
-        elif not has_played: 
-            should_show = True
-            streak = db.get_user_streak(u_id)
-        else: 
-            should_show = False
+        session_played_key = f'trivia_played_{today_str}'
+        session_played = st.session_state.get(session_played_key, False)
 
-    # -------------------------------------------------------
-    # SENARYO B: MİSAFİR KULLANICI (Çerez Kullanımı)
-    # -------------------------------------------------------
-    else:
-        if session_played:
-            should_show = force_open
-        else:
-            # ÖNEMLİ: cookie_manager.get_all() yerine parametre gelen all_cookies kullanılıyor
-            last_played_cookie = all_cookies.get('guest_trivia_date') if all_cookies else None
-
-            if force_open:
+        # -------------------------------------------------------
+        # SENARYO A: GİRİŞ YAPMIŞ KULLANICI
+        # -------------------------------------------------------
+        if current_user:
+            u_id = current_user['id']
+            has_played = db.check_user_played_trivia_today(u_id)
+            
+            if force_open: 
                 should_show = True
-            elif last_played_cookie == today_str:
-                st.session_state[session_played_key] = True
+                streak = db.get_user_streak(u_id)
+            elif not has_played: 
+                should_show = True
+                streak = db.get_user_streak(u_id)
+            else: 
                 should_show = False
-            else:
-                should_show = True
-                streak = 0
 
-    # 3. Karar verildiyse Modalı Aç
-    if should_show:
-        show_trivia_modal(trivia, u_id, streak)
+        # -------------------------------------------------------
+        # SENARYO B: MİSAFİR KULLANICI (Çerez Kullanımı)
+        # -------------------------------------------------------
+        else:
+            if session_played:
+                should_show = force_open
+            else:
+                # ÖNEMLİ: cookie_manager.get_all() yerine parametre gelen all_cookies kullanılıyor
+                last_played_cookie = all_cookies.get('guest_trivia_date') if all_cookies else None
+
+                if force_open:
+                    should_show = True
+                elif last_played_cookie == today_str:
+                    st.session_state[session_played_key] = True
+                    should_show = False
+                else:
+                    should_show = True
+                    streak = 0
+
+        # 3. Karar verildiyse Modalı Aç
+        if should_show:
+            show_trivia_modal(trivia, u_id, streak)
+        
+    except Exception as e:
+        print(f"❌ Trivia handler error: {e}")
+        # Hata olsa da app devam etsin
+        return
 
 def render_adsense():
     try:
@@ -1442,6 +1449,7 @@ with st.sidebar:
     
     if is_authenticated and user:
         # Logged in user
+# Düzeltilmiş kod:
         st.markdown(f"""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         padding: 1rem; border-radius: 10px; margin-bottom: 1rem;'>
