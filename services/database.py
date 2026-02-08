@@ -3,6 +3,7 @@ from psycopg2.extras import RealDictCursor
 import streamlit as st
 from datetime import datetime, timedelta
 import bcrypt
+import uuid
 import secrets
 
 class Database:
@@ -128,22 +129,26 @@ class Database:
             return None
     
     def create_session(self, user_id, browser_id=None, ip_address=None, user_agent=None):
-        """Yeni session oluştur (browser_id ile)"""
+        """Yeni session oluştur (browser_id ile) ve dictionary döndür"""
         conn = self.get_connection()
         if not conn:
             print("❌ Database connection failed")
             return None
         
         try:
+            # Token ve Session ID oluştur
             session_token = secrets.token_urlsafe(32)
+            session_id = str(uuid.uuid4()) # Benzersiz Session ID
             expires_at = datetime.now() + timedelta(days=30)
             
             cursor = conn.cursor()
+            
+            # session_id sütununu da INSERT işlemine ekliyoruz
             cursor.execute(
-                """INSERT INTO sessions (user_id, session_token, browser_id, ip_address, user_agent, expires_at)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                """INSERT INTO sessions (user_id, session_token, session_id, browser_id, ip_address, user_agent, expires_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING session_token""",
-                (user_id, session_token, browser_id, ip_address, user_agent, expires_at)
+                (user_id, session_token, session_id, browser_id, ip_address, user_agent, expires_at)
             )
             result = cursor.fetchone()
             conn.commit()
@@ -156,8 +161,14 @@ class Database:
                 )
                 conn.commit()
                 cursor.close()
-                print(f"✅ Session created for user_id: {user_id}, browser: {browser_id[:8] if browser_id else 'none'}")
-                return result[0]
+                
+                print(f"✅ Session created for user_id: {user_id}")
+                
+                # ARTIK SÖZLÜK DÖNDÜRÜYORUZ (Hatanın çözümü)
+                return {
+                    'token': session_token,
+                    'session_id': session_id
+                }
             
             cursor.close()
             return None
