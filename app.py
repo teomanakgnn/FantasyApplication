@@ -183,28 +183,6 @@ components.html("""
 """, height=0)
 
 
-# 2. COOKIE MANAGER SETUP (mevcut kodu DEĞIŞTIRIN)
-# ================================================================================
-
-def get_cookie_manager():
-    """Cookie manager - sadece bir kez oluştur"""
-    if 'cookie_manager' in st.session_state:
-        return st.session_state.cookie_manager
-    
-    manager = stx.CookieManager(key="nba_cookies")
-    st.session_state.cookie_manager = manager
-    return manager
-
-cookie_manager = get_cookie_manager()
-
-# Çerezleri al
-all_cookies = cookie_manager.get_all()
-
-# Yükleme kontrolü
-if all_cookies is None:
-    st.info("🏀 HoopLife is loading...")
-    st.stop()
-
 
 # 3. AUTHENTICATION CHECK (mevcut kodu DEĞIŞTIRIN)
 # ================================================================================
