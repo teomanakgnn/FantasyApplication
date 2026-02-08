@@ -91,21 +91,47 @@ st.set_page_config(
 )
 
 def get_cookie_manager():
-    return stx.CookieManager(key="hooplife_cookies")
+    # Benzersiz bir key veriyoruz
+    return stx.CookieManager(key="main_manager_v2")
 
 cookie_manager = get_cookie_manager()
 
-# Cookie manager yüklenmesi için kısa bir bekleme gerekebilir
-import time
-time.sleep(0.5) 
+# Çerezlerin tarayıcıdan gelmesi için kısa bir bekleme
+# Not: Eğer giriş sorunu devam ederse burayı 0.5 veya 0.7 yap
+time.sleep(0.4) 
 
-# 3. Tüm çerezleri al
+# Tüm çerezleri çek
 all_cookies = cookie_manager.get_all()
 
-# 4. Auth Kontrolü (Senin kendi auth.py dosyanı kullanacağız)
+# --- KRİTİK DÜZELTME: Çerez Gecikmesi Kontrolü ---
+# Eğer çerezler henüz yüklenmediyse (None) veya boşsa ve biz daha önce denemediysek,
+# Sayfayı bir kez yenileyip çerezlerin gelmesini bekleyelim.
+if all_cookies is None:
+    # Henüz yüklenmedi, kullanıcıya hissettirmeden tekrar dene
+    if "cookie_retry" not in st.session_state:
+        st.session_state["cookie_retry"] = True
+        st.rerun()
+    else:
+        # İkinci denemede de yoksa boş kabul et
+        all_cookies = {}
+else:
+    # Başarılı yüklendiyse retry flag'ini sil
+    if "cookie_retry" in st.session_state:
+        del st.session_state["cookie_retry"]
+
+# 3. AUTHENTICATION CHECK
+# ================================================================================
+
 from auth import check_authentication
-# all_cookies'i gönderiyoruz ki token'ı okuyabilsin
+
+# Çerezleri kontrol fonksiyonuna gönder
 is_authenticated = check_authentication(all_cookies)
+
+# Eğer giriş yapılmış görünüyorsa ama session_state'de user yoksa (Refresh durumu)
+if is_authenticated and "user" not in st.session_state:
+    # check_authentication fonksiyonu session_state'i doldurmuş olmalı.
+    # Eğer doldurmadıysa, sayfa yenilendiğinde veriler kaybolmasın diye rerun yapabiliriz.
+    st.rerun()
 
 # IFRAME SESSION MANAGEMENT - app.py başına ekle
 components.html("""
