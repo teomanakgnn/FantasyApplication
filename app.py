@@ -1,370 +1,147 @@
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from datetime import datetime
+from datetime import datetime, timedelta
 import textwrap
 import extra_streamlit_components as stx
-import time 
+import time
 from services.espn_api import (calculate_game_score, get_score_color)
-from auth import check_authentication_enhanced
+from auth import check_authentication_enhanced, inject_auth_bridge, logout_enhanced
 import os
 import pickle
+import json
+from streamlit_javascript import st_javascript
+import hashlib
+# Import db early so it's available for fingerprint validation
+from services.database import db
 
-
-
-def cleanup_expired_tokens():
-    """Süresi dolmuş tüm token dosyalarını temizle"""
-    try:
-        home_dir = os.path.expanduser("~")
-        token_dir = os.path.join(home_dir, ".hooplife")
-        
-        if not os.path.exists(token_dir):
-            return
-        
-        import glob
-        token_files = glob.glob(os.path.join(token_dir, "auth_token_*.pkl"))
-        
-        for file_path in token_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    token_data = pickle.load(f)
-                
-                expiry = datetime.fromisoformat(token_data['expiry'])
-                if datetime.now() > expiry:
-                    os.remove(file_path)
-                    print(f"🧹 Expired token removed: {token_data['username']}")
-            except:
-                os.remove(file_path)
-    except Exception as e:
-        print(f"⚠️ Cleanup error: {e}")
-
-# app.py başlangıcında çağır
-cleanup_expired_tokens()
-
-# ÖNEMLİ: LocalStorage'dan token'ı cookie'ye aktar
-# Bu kod sayfa her yüklendiğinde çalışır
-components.html("""
-    <div id="auth-loader" style="display:none;"></div>
-    <script>
-        (function() {
-            try {
-                const authData = localStorage.getItem('hooplife_auth_data');
-                const loader = document.getElementById('auth-loader');
-                
-                if (authData) {
-                    const data = JSON.parse(authData);
-                    const expiry = new Date(data.expiry);
-                    const now = new Date();
-                    
-                    if (now < expiry) {
-                        // Token geçerli, cookie'ye yaz
-                        const expirySeconds = Math.floor((expiry - now) / 1000);
-                        document.cookie = `hooplife_auth_token=${data.token}; max-age=${expirySeconds}; path=/; SameSite=Lax`;
-                        
-                        if (loader) loader.setAttribute('data-status', 'loaded');
-                        console.log('✅ Auth token restored from localStorage');
-                    } else {
-                        // Token süresi dolmuş, temizle
-                        localStorage.removeItem('hooplife_auth_data');
-                        if (loader) loader.setAttribute('data-status', 'expired');
-                        console.log('🗑️ Expired token removed');
-                    }
-                } else {
-                    if (loader) loader.setAttribute('data-status', 'none');
-                }
-            } catch(e) {
-                console.error('❌ Auth restore error:', e);
-                if (document.getElementById('auth-loader')) {
-                    document.getElementById('auth-loader').setAttribute('data-status', 'error');
-                }
-            }
-        })();
-    </script>
-""", height=0)
-
-
+# ==================== 1. SAYFA AYARLARI (EN BAŞTA OLMALI) ====================
 st.set_page_config(
-    page_title="HoopLife NBA", 
+    page_title="HoopLife NBA",
     layout="wide",
     page_icon="🏀",
     initial_sidebar_state="expanded"
 )
 
+client_js = """JSON.stringify({
+    ua: navigator.userAgent,
+    res: window.screen.width + "x" + window.screen.height,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+})"""
+raw_fp = st_javascript(client_js)
 
-# IFRAME SESSION MANAGEMENT - app.py başına ekle
-components.html("""
-    <script>
-        (function() {
-            // 1. Parent'tan gelen session mesajlarını dinle
-            window.addEventListener('message', function(event) {
-                if (event.data.type === 'hooplife_session') {
-                    const sessionId = event.data.session_id;
-                    const username = event.data.username;
-                    
-                    // localStorage'a kaydet
-                    localStorage.setItem('hooplife_session_id', sessionId);
-                    localStorage.setItem('hooplife_username', username);
-                    
-                    console.log('✅ Session received from parent:', username);
-                    
-                    // Sayfayı yenile (session_id query param ile)
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('session_id', sessionId);
-                    window.location.href = url.toString();
-                }
-                
-                // Logout mesajı
-                if (event.data.type === 'hooplife_logout') {
-                    localStorage.removeItem('hooplife_session_id');
-                    localStorage.removeItem('hooplife_username');
-                    console.log('🔒 Session cleared');
-                }
-            });
-            
-            // 2. Sayfa yüklendiğinde localStorage'dan session_id'yi URL'ye ekle
-            const savedSessionId = localStorage.getItem('hooplife_session_id');
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlSessionId = urlParams.get('session_id');
-            
-            if (savedSessionId && !urlSessionId) {
-                // localStorage'da var ama URL'de yok - URL'ye ekle
-                const url = new URL(window.location.href);
-                url.searchParams.set('session_id', savedSessionId);
-                window.location.href = url.toString();
-            }
-        })();
-    </script>
-""", height=0)
+# 2. KRİTİK NOKTA: Fingerprint gelene kadar bekle
+if raw_fp is None or raw_fp == 0:
+    st.info("Oturum kontrol ediliyor, lütfen bekleyin...")
+    st.stop() # Henüz veri yok, aşağıya inme, bir sonraki run'ı bekle.
+
+# 3. Veri geldi, artık işlemleri yapabiliriz
+fingerprint_hash = hashlib.sha256(raw_fp.encode()).hexdigest()
+
+# Store fingerprint in session state for use throughout the app
+st.session_state.fingerprint_hash = fingerprint_hash
+
+# Bu debug satırını geçici olarak ekle, terminalde görünüyor mu bak:
+# print(f"DEBUG: Cihaz İzi Bulundu: {fingerprint_hash}")
+
+# Otomatik giriş denemesi (Sadece login sayfasında değilsek ve authenticated değilsek)
+if not st.session_state.get('authenticated'):
+    user = db.validate_session_by_fingerprint(fingerprint_hash)
+    if user:
+        st.session_state.user = user
+        st.session_state.authenticated = True
+        st.session_state.page = "home"
+        st.rerun()
 
 
-components.html("""
-<script>
-    (function() {
-        try {
-            // LocalStorage'dan token ve kullanıcı adını al
-            const token = localStorage.getItem("hooplife_token");
-            
-            // URL parametrelerini kontrol et
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlToken = urlParams.get("token");
+# ==================== 2. SESSION STATE BAŞLATMA ====================
+if "auto_loaded" not in st.session_state:
+    st.session_state.auto_loaded = True
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "show_all_games" not in st.session_state:
+    st.session_state.show_all_games = False
+if "slider_index" not in st.session_state:
+    st.session_state.slider_index = 0
 
-            // Eğer LocalStorage'da token var ama URL'de yoksa -> URL'e ekle ve yenile
-            if (token && !urlToken) {
-                urlParams.set("token", token);
-                window.location.search = urlParams.toString();
-            }
-            // Eğer LocalStorage boşsa ama URL'de token kalmışsa (Logout durumu) -> Temizle
-            else if (!token && urlToken) {
-                urlParams.delete("token");
-                window.location.search = urlParams.toString();
-            }
-        } catch(e) {
-            console.error("Auth Bridge Error:", e);
-        }
-    })();
-</script>
-""", height=0)
+# ==================== 3. AUTH: LocalStorage RESTORE KÖPRÜSÜ ====================
+# Kullanıcı giriş yapmamışsa localStorage'ı kontrol et ve URL param ile yenile.
+# check_authentication_enhanced() URL param'ı yakalayarak oturumu başlatır.
+inject_auth_bridge()
 
-# -----------------------------------------------------------
-# 2. AUTHENTICATION CHECK (URL Parametresinden)
-# -----------------------------------------------------------
-from auth import check_authentication_enhanced
-
-# Kimlik kontrolü artık URL'den veya Session'dan yapılıyor
+# ==================== 4. KİMLİK DOĞRULAMA ====================
 is_authenticated = check_authentication_enhanced()
-
-# Kullanıcı bilgisini al
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
 
-
-components.html("""
-    <script>
-        (function() {
-            try {
-                // localStorage'dan browser_id'yi al veya oluştur
-                let browserId = localStorage.getItem('hooplife_browser_id');
-                
-                if (!browserId) {
-                    browserId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                    localStorage.setItem('hooplife_browser_id', browserId);
-                    console.log('🆕 New browser ID created:', browserId);
-                } else {
-                    console.log('✅ Browser ID loaded:', browserId);
-                }
-                
-                // Cookie'ye kaydet (30 gün süreyle)
-                const expiry = new Date();
-                expiry.setDate(expiry.getDate() + 30);
-                document.cookie = `hooplife_browser_id=${browserId}; expires=${expiry.toUTCString()}; path=/; SameSite=Lax`;
-                
-            } catch(e) {
-                console.error('❌ Browser ID error:', e);
-            }
-        })();
-    </script>
-""", height=0)
-
-st.markdown("""
-    <script>
-        function revealSpoiler(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.classList.add('revealed');
-            }
-        }
-        
-        // Tüm spoiler'ları reveal et
-        function revealAllSpoilers() {
-            document.querySelectorAll('.spoiler-score').forEach(el => {
-                el.classList.add('revealed');
-            });
-        }
-    </script>
-""", unsafe_allow_html=True)
-
+# ==================== 5. EMBED MOD KONTROLÜ ====================
 def is_embedded():
     return st.query_params.get("embed") == "true"
 
 embed_mode = is_embedded()
 
-# Embed modunda ekstra stil ekle
 extra_styles = ""
 if embed_mode:
     extra_styles = """
-        /* EMBED MODE - Her şeyi gizle */
         [data-testid="stHeader"] {display: none !important;}
         [data-testid="stToolbar"] {display: none !important;}
         header {display: none !important;}
         #MainMenu {display: none !important;}
         footer {display: none !important;}
         .stDeployButton {display: none !important;}
-        
-        /* Üst padding'i kaldır */
-        .main .block-container {
-            padding-top: 0.5rem !important;
-        }
-        
-        /* Streamlit watermark */
+        .main .block-container { padding-top: 0.5rem !important; }
         [data-testid="stStatusWidget"] {display: none !important;}
-        
-        /* ALTTAKI FOOTER KISMI */
         [data-testid="stBottom"] {display: none !important;}
         .reportview-container .main footer {display: none !important;}
     """
 
+# ==================== 6. GLOBAL CSS ====================
 st.markdown(f"""
     <style>
-        /* ============================================
-           MOBİL SIDEBAR SCROLL DÜZELTMESİ
-           ============================================ */
-        
         @media (max-width: 768px) {{
-            /* Sidebar'ı scroll edilebilir yap */
             [data-testid="stSidebar"] {{
                 position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
+                top: 0 !important; left: 0 !important;
                 height: 100vh !important;
-                width: 85vw !important;
-                max-width: 320px !important;
+                width: 85vw !important; max-width: 320px !important;
                 z-index: 999999 !important;
-                overflow-y: auto !important;  /* ← ÖNEMLİ */
+                overflow-y: auto !important;
                 overflow-x: hidden !important;
-                -webkit-overflow-scrolling: touch !important;  /* ← iOS için smooth scroll */
+                -webkit-overflow-scrolling: touch !important;
             }}
-            
-            /* Sidebar içeriği için scroll container */
             [data-testid="stSidebar"] > div {{
                 height: 100% !important;
                 overflow-y: auto !important;
                 overflow-x: hidden !important;
                 -webkit-overflow-scrolling: touch !important;
             }}
-            
-            /* Sidebar inner content */
-            [data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
-                height: auto !important;
-                min-height: 100vh !important;
-                overflow-y: visible !important;
-                padding-bottom: 60px !important;  /* Alt kısım için ekstra padding */
-            }}
-            
-            /* Kapalı durumda gizle */
             [data-testid="stSidebar"][aria-expanded="false"] {{
                 display: none !important;
                 transform: translateX(-100%) !important;
             }}
-            
-            /* Açık durumda göster */
             [data-testid="stSidebar"][aria-expanded="true"] {{
                 display: flex !important;
                 transform: translateX(0) !important;
             }}
-            
-            /* Main content mobilde full width */
             [data-testid="stMain"] {{
                 margin-left: 0 !important;
                 width: 100% !important;
             }}
-            
-            /* Sidebar backdrop (tıklanınca kapat) */
-            [data-testid="stSidebar"][aria-expanded="true"]::before {{
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 85vw;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.5);
-                z-index: -1;
-            }}
         }}
-        
-        /* ============================================
-           SIDEBAR GENEL (MOBİL + DESKTOP)
-           ============================================ */
-        
-        /* Streamlit'in default toggle butonunu gizle */
+
         [data-testid="stSidebarCollapsedControl"],
-        [data-testid="collapsedControl"] {{
-            display: none !important;
-        }}
-        
-        /* Sidebar temel geçişler */
-        [data-testid="stSidebar"] {{
-            transition: transform 0.3s ease, width 0.3s ease !important;
-        }}
-        
-        /* ============================================
-           HOOPLIFE DOCK
-           ============================================ */
-        
+        [data-testid="collapsedControl"] {{ display: none !important; }}
+
         #hooplife-master-trigger {{
             z-index: 999999999 !important;
             transform: translateZ(0);
             will-change: transform, width;
         }}
-            
-        
-        @media (max-width: 768px) {{
-            #hooplife-master-trigger {{
-                width: 40px !important;
-            }}
-            
-            #hooplife-master-trigger #hl-text {{
-                display: none !important;
-            }}
-        }}
-        
-        /* ============================================
-           DİĞER SAYFA ELEMENTLERİ
-           ============================================ */
-        
-        .main .block-container {{
-            padding-top: 1.5rem !important;
-        }}
-        
+
+        .main .block-container {{ padding-top: 1.5rem !important; }}
+
         @media (max-width: 768px) {{
             .main .block-container {{
                 padding-top: 0.75rem !important;
@@ -372,781 +149,22 @@ st.markdown(f"""
                 padding-right: 0.6rem !important;
             }}
         }}
-        
-        /* Streamlit header/toolbar/footer gizle */
+
         [data-testid="stHeader"],
         [data-testid="stToolbar"],
         [data-testid="stDecoration"],
         [data-testid="stStatusWidget"],
         footer,
-        [data-testid="stBottom"] {{
-            display: none !important;
-        }}
-        
-        {extra_styles}
-    </style>
-""", unsafe_allow_html=True)
-
-# MOBİL SIDEBAR: SCROLL + BACKDROP CLICK DÜZELTMESİ
-# Bu JavaScript bloğunu kullanın
-components.html("""
-<script>
-    (function() {
-        'use strict';
-        
-        var isInitialLoad = true;
-        var isTransitioning = false;
-        var animationFrame = null;
-        
-        function saveSidebarState(isClosed) {
-            try {
-                window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false');
-                window.parent.localStorage.setItem('hooplife_sidebar_user_closed', isClosed ? 'true' : 'false');
-            } catch(e) {}
-        }
-        
-        function getSavedSidebarState() {
-            try {
-                return window.parent.localStorage.getItem('hooplife_sidebar_closed') === 'true';
-            } catch(e) {
-                return false;
-            }
-        }
-        
-        function wasUserClosed() {
-            try {
-                return window.parent.localStorage.getItem('hooplife_sidebar_user_closed') === 'true';
-            } catch(e) {
-                return false;
-            }
-        }
-        
-        function getSidebarState() {
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (!sidebar) return null;
-            
-            const rect = sidebar.getBoundingClientRect();
-            const computed = window.parent.getComputedStyle(sidebar);
-            
-            return {
-                element: sidebar,
-                width: rect.width,
-                display: computed.display,
-                isClosed: rect.width < 50 || computed.display === 'none',
-                transform: computed.transform
-            };
-        }
-        
-        function forceSidebarClose() {
-            const state = getSidebarState();
-            if (!state || state.isClosed) return;
-            
-            const sidebar = state.element;
-            const isMobile = window.parent.innerWidth <= 768;
-            
-            sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
-            sidebar.style.width = '0';
-            sidebar.style.minWidth = '0';
-            sidebar.style.transform = 'translateX(-100%)';
-            sidebar.setAttribute('aria-expanded', 'false');
-            
-            if (isMobile) {
-                setTimeout(() => {
-                    sidebar.style.display = 'none';
-                }, 300);
-            }
-        }
-        
-        function toggleSidebar() {
-            if (isTransitioning) return;
-            
-            const state = getSidebarState();
-            if (!state) return;
-            
-            isTransitioning = true;
-            const isMobile = window.parent.innerWidth <= 768;
-            
-            // Buton güncelleme - INSTANT
-            requestAnimationFrame(() => updateVisibility(true));
-            
-            const selectors = [
-                '[data-testid="stSidebarCollapsedControl"] button',
-                '[data-testid="collapsedControl"] button',
-                'button[kind="header"]',
-                '[data-testid="baseButton-header"]'
-            ];
-            
-            let clicked = false;
-            for (let selector of selectors) {
-                const btn = window.parent.document.querySelector(selector);
-                if (btn && window.parent.getComputedStyle(btn).display !== 'none') {
-                    btn.click();
-                    clicked = true;
-                    break;
-                }
-            }
-            
-            if (!clicked) {
-                const sidebar = state.element;
-                sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease';
-                
-                if (state.isClosed) {
-                    sidebar.style.width = isMobile ? '85vw' : '336px';
-                    sidebar.style.minWidth = isMobile ? '85vw' : '336px';
-                    sidebar.style.transform = 'translateX(0)';
-                    sidebar.style.display = 'flex';
-                    sidebar.setAttribute('aria-expanded', 'true');
-                    saveSidebarState(false);
-                    
-                    if (isMobile) {
-                        sidebar.style.overflowY = 'auto';
-                        sidebar.style.overflowX = 'hidden';
-                        sidebar.style.webkitOverflowScrolling = 'touch';
-                    }
-                } else {
-                    forceSidebarClose();
-                    saveSidebarState(true);
-                }
-            }
-            
-            setTimeout(() => {
-                const finalState = getSidebarState();
-                if (finalState) {
-                    saveSidebarState(finalState.isClosed);
-                }
-                isTransitioning = false;
-                requestAnimationFrame(() => updateVisibility());
-            }, 320);
-        }
-
-        function createHoopLifeDock() {
-            const oldTrigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (oldTrigger) oldTrigger.remove();
-            
-            const trigger = window.parent.document.createElement('div');
-            trigger.id = 'hooplife-master-trigger';
-            
-            trigger.style.cssText = `
-                position: fixed;
-                top: 20%;
-                left: 0;
-                height: 60px;
-                width: 45px;
-                background: #1a1c24;
-                border: 2px solid #ff4b4b;
-                border-left: none;
-                border-radius: 0 15px 15px 0;
-                z-index: 999999999;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 5px 0 15px rgba(0,0,0,0.4);
-                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-                pointer-events: auto;
-                transform: translateZ(0);
-                will-change: transform, left, top, width, height, background;
-            `;
-            
-            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
-            
-            trigger.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleSidebar();
-            });
-            
-            trigger.addEventListener('mouseenter', () => {
-                if (!isTransitioning && getSidebarState()?.isClosed) {
-                    trigger.style.width = '60px';
-                    trigger.style.background = '#ff4b4b';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
-                }
-            });
-            
-            trigger.addEventListener('mouseleave', () => {
-                if (!isTransitioning && getSidebarState()?.isClosed) {
-                    trigger.style.width = '45px';
-                    trigger.style.background = '#1a1c24';
-                    const icon = trigger.querySelector('#hl-icon');
-                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
-                }
-            });
-            
-            window.parent.document.body.appendChild(trigger);
-        }
-
-        function updateVisibility(instant = false) {
-            if (animationFrame) {
-                cancelAnimationFrame(animationFrame);
-            }
-            
-            const trigger = window.parent.document.getElementById('hooplife-master-trigger');
-            if (!trigger) {
-                createHoopLifeDock();
-                return;
-            }
-            
-            const state = getSidebarState();
-            if (!state) return;
-            
-            const isMobile = window.parent.innerWidth <= 768;
-            
-            // Transition ayarı
-            if (instant) {
-                trigger.style.transition = 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)';
-            } else {
-                trigger.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
-            }
-
-            if (!state.isClosed) {
-                if (isMobile) {
-                    // AÇIK DURUM - MOBİL (Çarpı butonu)
-                    Object.assign(trigger.style, {
-                        position: 'fixed',
-                        top: '15px',
-                        left: 'calc(85vw - 50px)',
-                        background: 'rgba(255, 75, 75, 0.95)',
-                        backdropFilter: 'blur(10px)',
-                        width: '40px',
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 20px rgba(255, 75, 75, 0.4)',
-                        border: '1px solid rgba(255, 255, 255, 0.25)',
-                        cursor: 'pointer',
-                        pointerEvents: 'auto',
-                        borderLeft: '1px solid rgba(255, 255, 255, 0.25)'
-                    });
-
-                    trigger.innerHTML = `
-                        <div style="position: relative; width: 18px; height: 18px;">
-                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(45deg); border-radius: 1px;"></span>
-                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: white; transform: rotate(-45deg); border-radius: 1px;"></span>
-                        </div>
-                    `;
-                } else {
-                    trigger.style.display = 'none';
-                }
-            } else {
-                // KAPALI DURUM (Basketbol butonu)
-                Object.assign(trigger.style, {
-                    display: 'flex',
-                    left: '0',
-                    top: '20%',
-                    width: '45px',
-                    height: '60px',
-                    background: '#1a1c24',
-                    border: '2px solid #ff4b4b',
-                    borderLeft: 'none',
-                    borderRadius: '0 15px 15px 0',
-                    pointerEvents: 'auto',
-                    cursor: 'pointer',
-                    backdropFilter: 'none'
-                });
-                
-                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
-                
-                trigger.onmouseenter = () => {
-                    if (!isTransitioning) {
-                        trigger.style.width = '60px';
-                        trigger.style.background = '#ff4b4b';
-                        const icon = trigger.querySelector('#hl-icon');
-                        if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
-                    }
-                };
-                
-                trigger.onmouseleave = () => {
-                    if (!isTransitioning) {
-                        trigger.style.width = '45px';
-                        trigger.style.background = '#1a1c24';
-                        const icon = trigger.querySelector('#hl-icon');
-                        if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
-                    }
-                };
-            }
-            
-            trigger.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleSidebar();
-            };
-        }
-        
-        function checkAndFixSidebar() {
-            if (isTransitioning) return;
-            
-            const state = getSidebarState();
-            
-            if (isInitialLoad) {
-                isInitialLoad = false;
-                if (wasUserClosed() && state && !state.isClosed) {
-                    setTimeout(() => {
-                        forceSidebarClose();
-                        updateVisibility();
-                    }, 400);
-                    return;
-                }
-            }
-            
-            const shouldBeClosed = getSavedSidebarState();
-            if (shouldBeClosed && state && !state.isClosed) {
-                setTimeout(() => {
-                    forceSidebarClose();
-                    updateVisibility();
-                }, 500);
-            } else if (state) {
-                saveSidebarState(state.isClosed);
-            }
-        }
-        
-        function init() {
-            createHoopLifeDock();
-            
-            setTimeout(() => {
-                checkAndFixSidebar();
-                updateVisibility();
-            }, 800);
-            
-            // RequestAnimationFrame ile smooth updates
-            function smoothUpdate() {
-                if (!isTransitioning) {
-                    updateVisibility();
-                }
-                animationFrame = requestAnimationFrame(smoothUpdate);
-            }
-            smoothUpdate();
-            
-            // Resize listener
-            let resizeTimer;
-            window.parent.addEventListener('resize', () => {
-                clearTimeout(resizeTimer);
-                resizeTimer = setTimeout(() => updateVisibility(true), 100);
-            });
-            
-            // MutationObserver - sidebar değişikliklerini izle
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (sidebar) {
-                const observer = new MutationObserver(() => {
-                    if (!isTransitioning) {
-                        requestAnimationFrame(() => updateVisibility());
-                    }
-                });
-                
-                observer.observe(sidebar, {
-                    attributes: true,
-                    attributeFilter: ['style', 'aria-expanded', 'class']
-                });
-            }
-        }
-        
-        if (window.parent.document.readyState === 'loading') {
-            window.parent.document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
-    })();
-</script>
-""", height=0, width=0)
-
-
-st.markdown("""
-    <div style="display: none;">
-        HoopLife NBA: Günlük NBA oyuncu istatistikleri, fantasy basketbol analizleri, 
-        canlı maç skorları, MVP/LVP sıralamaları ve oyuncu trendleri için en kapsamlı 
-        basketbol analiz platformu.
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17915489918"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'AW-17915489918');
-    </script>
-""", unsafe_allow_html=True)
-
-
-st.markdown("""
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3882980321453628"
-     crossorigin="anonymous"></script>
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-client="ca-pub-3882980321453628"
-     data-ad-slot="REKLAM_ID_BURAYA"
-     data-ad-format="auto"
-     data-full-width-responsive="true"></ins>
-<script>
-     (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-""", unsafe_allow_html=True)
-
-
-
-# --------------------
-# TRIVIA LOGIC (GÜNCELLENMİŞ - COOKIE DESTEKLİ)
-# --------------------
-
-@st.dialog("🏀 Daily NBA Trivia Question", width="small")
-def show_trivia_modal(question, user_id=None, current_streak=0):
-    st.session_state.active_dialog = 'trivia'
-    
-    # --- 1. BAŞARI EKRANI (DOĞRU CEVAP VERİLDİYSE) ---
-    if st.session_state.get('trivia_success_state', False):
-        st.balloons()
-        st.success("✅ Correct Answer!")
-        st.info(f"ℹ️ {question.get('explanation', '')}")
-        
-        # Streak göster
-        if user_id:
-            new_streak = db.get_user_streak(user_id)
-            st.markdown(f"### 🔥 Current Streak: {new_streak} days!")
-        
-        st.caption("See you tomorrow! 👋")
-        
-        if st.button("Close", type="primary", key="close_success"):
-            del st.session_state['trivia_success_state']
-            if 'trivia_force_open' in st.session_state:
-                del st.session_state['trivia_force_open']
-            st.session_state.active_dialog = None
-            st.rerun()
-        return
-        
-    # --- 2. HATA EKRANI (YANLIŞ CEVAP VERİLDİYSE) ---
-    if st.session_state.get('trivia_error_state', False):
-        error_info = st.session_state.get('trivia_error_info', {})
-        st.error(f"❌ Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
-        if error_info.get('explanation'):
-            st.info(f"ℹ️ {error_info.get('explanation')}")
-        
-        if user_id:
-            st.warning("💔 Your streak has been reset.")
-        
-        st.caption("Better luck tomorrow! 👋")
-        
-        if st.button("Close", type="primary", key="close_error"):
-            del st.session_state['trivia_error_state']
-            del st.session_state['trivia_error_info']
-            if 'trivia_force_open' in st.session_state:
-                del st.session_state['trivia_force_open']
-            st.session_state.active_dialog = None
-            st.rerun()
-        return
-
-    # --- 3. HTML BAŞLIK VE KAMPANYA BANNER ---
-    if user_id:
-        badge_style = "background-color: rgba(255, 75, 75, 0.15); border: 1px solid rgba(255, 75, 75, 0.3); color: #ff4b4b;"
-        icon = "🔥"
-        text = f"{current_streak} Day Streak"
-    else:
-        badge_style = "background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0;"
-        icon = "🔒"
-        text = "Login to save your daily streak."
-
-    # Üst Bilgi Satırı
-    header_html = f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <div style="font-weight: 600; font-size: 1rem;">
-            📅 {datetime.now().strftime('%d %B')}
-        </div>
-        <div style="{badge_style} padding: 5px 10px; border-radius: 12px; font-size: 0.85em; display: flex; align-items: center; gap: 5px;">
-            <span>{icon}</span> {text}
-        </div>
-    </div>
-    """
-    st.markdown(header_html, unsafe_allow_html=True)
-
-    # PS5 Kampanya Banner (Buraya eklendi)
-    campaign_html = """
-    <div style="background: linear-gradient(135deg, #FF4B4B 0%, #8B0000 100%); 
-                padding: 12px; border-radius: 10px; margin-bottom: 20px; 
-                border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(255,75,75,0.2);">
-        <div style="color: white; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
-            🎮 PS5 GIVEAWAY!
-        </div>
-        <div style="color: rgba(255,255,255,0.9); font-size: 0.82rem; margin-top: 5px; line-height: 1.4;">
-            Reach a <b>50-day streak</b> to enter the draw for a chance to win a <b>PlayStation 5</b>! 
-            Register now to start your streak. <br>
-            📅 <b>Draw Date: April 13th</b>
-        </div>
-    </div>
-    """
-    st.markdown(campaign_html, unsafe_allow_html=True)
-    
-    # --- 4. SORU VE FORM ---
-    st.markdown(f"#### {question['question']}")
-    
-    with st.form("trivia_form", border=False):
-        options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
-        choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
-        submitted = st.form_submit_button("Answer", use_container_width=True, type="primary")
-        
-    # ... (form submission logic - geri kalan kod aynı kalabilir)
-        
-    if submitted:
-        if not choice:
-            st.warning("Please select an option.")
-            st.stop()
-        
-        is_correct = (choice == question['correct_option'])
-        today_str = str(datetime.now().date())
-        
-        if not user_id:
-            cookie_manager = get_cookie_manager()
-        
-        if is_correct:
-            # Doğru cevap
-            if user_id:
-                db.mark_user_trivia_played(user_id)
-            else:
-                unique_key = f"set_correct_{int(datetime.now().timestamp())}"
-                cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
-                st.session_state[f'trivia_played_{today_str}'] = True
-
-            st.session_state['trivia_success_state'] = True
-            st.session_state['trivia_force_open'] = True
-            st.rerun()
-            
-        else:
-            # Yanlış cevap
-            if user_id:
-                db.mark_user_trivia_played(user_id)
-            else:
-                unique_key = f"set_wrong_{int(datetime.now().timestamp())}"
-                cookie_manager.set('guest_trivia_date', today_str, key=unique_key)
-                st.session_state[f'trivia_played_{today_str}'] = True
-            
-            correct_text = options[question['correct_option']]
-            st.session_state['trivia_error_state'] = True
-            st.session_state['trivia_error_info'] = {
-                'correct_option': question['correct_option'],
-                'correct_text': correct_text,
-                'explanation': question.get('explanation', '')
-            }
-            st.session_state['trivia_force_open'] = True
-            st.rerun()
-
-# app.py içindeki fonksiyon tanımı
-def handle_daily_trivia(all_cookies): # all_cookies dışarıdan geliyor
-    try:
-        active = st.session_state.get('active_dialog')
-        if active is not None and active != 'trivia':
-            return
-    
-    # 1. Soru verisi kontrolü
-        trivia = db.get_daily_trivia()
-        if not trivia:
-            print("ℹ️ No trivia question for today")
-            return
-
-        # 2. Temel Değişkenleri Başlat (Hatanın çözümü burası)
-        today_str = str(datetime.now().date())
-        current_user = st.session_state.get('user')
-        force_open = st.session_state.get('trivia_force_open', False)
-        should_show = False
-        streak = 0
-        u_id = None # u_id burada tanımlandı, artık hata vermez
-        
-        session_played_key = f'trivia_played_{today_str}'
-        session_played = st.session_state.get(session_played_key, False)
-
-        # -------------------------------------------------------
-        # SENARYO A: GİRİŞ YAPMIŞ KULLANICI
-        # -------------------------------------------------------
-        if current_user:
-            u_id = current_user['id']
-            has_played = db.check_user_played_trivia_today(u_id)
-            
-            if force_open: 
-                should_show = True
-                streak = db.get_user_streak(u_id)
-            elif not has_played: 
-                should_show = True
-                streak = db.get_user_streak(u_id)
-            else: 
-                should_show = False
-
-        # -------------------------------------------------------
-        # SENARYO B: MİSAFİR KULLANICI (Çerez Kullanımı)
-        # -------------------------------------------------------
-        else:
-            if session_played:
-                should_show = force_open
-            else:
-                # ÖNEMLİ: cookie_manager.get_all() yerine parametre gelen all_cookies kullanılıyor
-                last_played_cookie = all_cookies.get('guest_trivia_date') if all_cookies else None
-
-                if force_open:
-                    should_show = True
-                elif last_played_cookie == today_str:
-                    st.session_state[session_played_key] = True
-                    should_show = False
-                else:
-                    should_show = True
-                    streak = 0
-
-        # 3. Karar verildiyse Modalı Aç
-        if should_show:
-            show_trivia_modal(trivia, u_id, streak)
-        
-    except Exception as e:
-        print(f"❌ Trivia handler error: {e}")
-        # Hata olsa da app devam etsin
-        return
-
-def render_adsense():
-    try:
-        with open("adsense.html", 'r', encoding='utf-8') as f:
-            source_code = f.read()
-        
-        # Height'i artıralım ki reklam görünsün
-        components.html(source_code, height=300, scrolling=False)
-        
-    except FileNotFoundError:
-        st.error("adsense.html dosyası bulunamadı!")
-
-
-# Authentication kontrolü (opsiyonel)
-from auth import check_authentication_enhanced, logout_enhanced
-
-from components.styles import load_styles
-from components.header import render_header
-from components.sidebar import render_sidebar
-from components.tables import render_tables
-from components.mvp_lvp import render_mvp_lvp_section
-
-from services.espn_api import (
-    get_last_available_game_date,
-    get_cached_boxscore,
-    get_scoreboard
-)
-from services.database import db
-
-try:
-    from services.scoring import calculate_scores
-except ImportError:
-    pass 
-
-def is_embedded():
-    return st.query_params.get("embed") == "true"
-
-# --------------------
-# INIT & STYLES
-# --------------------
-embed_mode = is_embedded()
-
-# Embed modunda ekstra stil ekle
-extra_styles = ""
-if embed_mode:
-    extra_styles = """
-        /* EMBED MODE - Her şeyi gizle */
-        [data-testid="stHeader"] {display: none !important;}
-        [data-testid="stToolbar"] {display: none !important;}
-        header {display: none !important;}
-        #MainMenu {display: none !important;}
-        footer {display: none !important;}
-        .stDeployButton {display: none !important;}
-        
-        /* Üst padding'i kaldır */
-        .main .block-container {
-            padding-top: 0.5rem !important;
-        }
-        
-        /* Streamlit watermark */
-        [data-testid="stStatusWidget"] {display: none !important;}
-        
-        /* ALTTAKI FOOTER KISMI */
-        [data-testid="stBottom"] {display: none !important;}
-        .reportview-container .main footer {display: none !important;}
-    """
-
-# --------------------
-# STYLES & CSS
-# --------------------
-st.markdown(f"""
-    <style>
-        /* 1. TEMEL SAYFA DÜZENİ */
-        .main .block-container {{
-            padding-top: 1.5rem !important;
-        }}
-        
-        /* 2. GEREKSİZ ELEMENTLERİ GİZLE */
-        [data-testid="stHeader"],
-        [data-testid="stToolbar"],
-        [data-testid="stDecoration"] {{
-            display: none !important;
-        }}
-        
-        /* 3. SIDEBAR TOGGLE - Streamlit default gizleme + custom btn */
-        [data-testid="stSidebarCollapsedControl"] {{
-            display: none !important;
-            pointer-events: none !important;
-        }}
-
-        #st-sidebar-toggle-btn {{
-            position: fixed !important;
-            top: 14px !important;
-            left: 10px !important;
-            z-index: 9999999 !important;
-            width: 38px !important;
-            height: 38px !important;
-            background: rgba(14, 17, 23, 0.93) !important;
-            border: 1px solid rgba(255,255,255,0.35) !important;
-            border-radius: 8px !important;
-            color: #fff !important;
-            font-size: 1.2rem !important;
-            line-height: 38px !important;
-            text-align: center !important;
-            cursor: pointer !important;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.4) !important;
-            transition: background 0.2s, border-color 0.2s !important;
-            user-select: none !important;
-            -webkit-user-select: none !important;
-        }}
-        #st-sidebar-toggle-btn:hover {{
-            background: #ff4b4b !important;
-            border-color: #ff4b4b !important;
-        }}
-
-        #sidebar-toggle-btn:hover {{
-            background: #ff4b4b;
-            border-color: #ff4b4b;
-        }}
-                
-        /* 4. FOOTER VE DİĞER ELEMENTLER */
-        [data-testid="stStatusWidget"],
-        footer,
-        [data-testid="stBottom"] {{
-            display: none !important;
-        }}
-        
- /* ============================================
-   SPOILER PROTECTION STYLES - İYİLEŞTİRİLMİŞ
-   ============================================ */
+        [data-testid="stBottom"] {{ display: none !important; }}
 
         .spoiler-score {{
             filter: blur(10px);
             transition: filter 0.4s ease;
             cursor: pointer;
             user-select: none;
-            position: relative;
         }}
-
-        .spoiler-score:hover {{
-            filter: blur(6px);
-        }}
-
-        .spoiler-score.revealed {{
-            filter: blur(0px) !important;
-            cursor: default;
-        }}
-
+        .spoiler-score:hover {{ filter: blur(6px); }}
+        .spoiler-score.revealed {{ filter: blur(0px) !important; cursor: default; }}
         .spoiler-container {{
             position: relative;
             display: inline-block;
@@ -1157,348 +175,376 @@ st.markdown(f"""
             transition: all 0.3s ease;
             cursor: pointer;
         }}
-
-        .spoiler-container:hover {{
-            background: linear-gradient(135deg, rgba(255,75,75,0.15) 0%, rgba(139,0,0,0.15) 100%);
-            border-color: rgba(255,75,75,0.5);
-            transform: scale(1.02);
-        }}
-
         .spoiler-icon {{
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             font-size: 1.8em;
-            opacity: 1;
             pointer-events: none;
             transition: opacity 0.3s ease;
             z-index: 2;
         }}
-
-        .spoiler-icon.hidden {{
-            opacity: 0 !important;
-            display: none !important;
-        }}
-
-        /* Heyecan puanı badge - her zaman görünür */
-        .excitement-badge {{
-            filter: none !important;
-            cursor: default !important;
-        }}
+        .excitement-badge {{ filter: none !important; cursor: default !important; }}
 
         @media (max-width: 768px) {{
-            .spoiler-score {{
-                filter: blur(8px);
-            }}
-            .spoiler-container {{
-                padding: 6px 12px;
-            }}
-            .spoiler-icon {{
-                font-size: 1.5em;
-            }}
-        }}
-            
-        {extra_styles}
-
-
-        /* ============================================================
-           MOBİL RESPONSIVE — @media (max-width: 768px)
-           Desktop'ta hiçbir şey değişmez. Sadece dar ekranlarda aktive olur.
-           ============================================================ */
-
-        /* --- GENEL SAYFA --- */
-        @media (max-width: 768px) {{
-            .main .block-container {{
-                padding-top: 0.75rem !important;
-                padding-left: 0.6rem !important;
-                padding-right: 0.6rem !important;
-            }}
-        }}
-
-        /* --- GAME CARD GRID: 3 sütun → 1 sütun --- */
-        @media (max-width: 768px) {{
-            /* Streamlit st.columns → flex wrap ile 1 sütun yap */
-            .stColumns {{
-                flex-wrap: wrap !important;
-            }}
-            .stColumns > div {{
-                flex: 1 1 100% !important;
-                max-width: 100% !important;
-                min-width: 100% !important;
-            }}
-        }}
-
-        /* --- GAME CARD İÇİ: away / score / home satırı --- */
-        @media (max-width: 768px) {{
-            .game-card-row {{
-                flex-direction: row !important;   /* yine yatay kalsın */
-                align-items: center !important;
-                justify-content: space-between !important;
-            }}
-            .game-card-row > div {{
-                flex: 1 !important;
-            }}
-        }}
-
-        /* --- GAME SCORE BADGE (★ score) --- */
-        @media (max-width: 768px) {{
-            .game-score-badge {{
-                position: relative !important;
-                top: auto !important;
-                right: auto !important;
-                display: inline-block !important;
-                margin-bottom: 4px !important;
-                float: right !important;
-            }}
-        }}
-
-        /* --- SCOREBOARD: team logo + name stacking --- */
-        @media (max-width: 768px) {{
-            .team-block {{
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: center !important;
-            }}
-            .team-block img {{
-                width: 42px !important;
-                height: 42px !important;
-            }}
-            .team-block .team-label {{
-                font-size: 0.78em !important;
-                margin-top: 3px !important;
-                text-align: center !important;
-            }}
-            .score-block {{
-                font-size: 1.25em !important;
-                font-weight: 800 !important;
-                text-align: center !important;
-                white-space: nowrap !important;
-            }}
-        }}
-
-        /* --- BOX SCORE DIALOG: full-width on mobile --- */
-        @media (max-width: 768px) {{
-            /* Streamlit dialog overlay */
-            [data-testid="stDialog"] {{
-                width: 100vw !important;
-                max-width: 100vw !important;
-                margin: 0 !important;
-                border-radius: 12px 12px 0 0 !important;
-                max-height: 90vh !important;
-                overflow-y: auto !important;
-            }}
-        }}
-
-        /* --- GAME HEADER İN DIALOG (away logo - score - home logo) --- */
-        @media (max-width: 768px) {{
-            .game-header-container {{
-                padding: 12px 8px !important;
-                flex-direction: row !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-            }}
-            .game-header-container .team-info {{
-                width: 28% !important;
-            }}
-            .game-header-container .team-info img {{
-                width: 44px !important;
-            }}
-            .game-header-container .team-name {{
-                font-size: 0.78rem !important;
-                margin-top: 4px !important;
-            }}
-            .game-header-container .score-board {{
-                width: 44% !important;
-            }}
-            .game-header-container .main-score {{
-                font-size: 1.7rem !important;
-            }}
-            .game-header-container .game-status {{
-                font-size: 0.7rem !important;
-                padding: 2px 8px !important;
-            }}
-        }}
-
-        /* --- DATAFRAME (boxscore table): horizontal scroll + küçük font --- */
-        @media (max-width: 768px) {{
-            .stDataframe,
-            [data-testid="stDataframe"] {{
-                overflow-x: auto !important;
-                -webkit-overflow-scrolling: touch !important;
-            }}
-            .stDataframe table,
-            [data-testid="stDataframe"] table {{
-                font-size: 0.75rem !important;
-                min-width: 520px !important;
-            }}
-            .stDataframe th,
-            [data-testid="stDataframe"] th {{
-                padding: 4px 6px !important;
-                font-size: 0.72rem !important;
-            }}
-            .stDataframe td,
-            [data-testid="stDataframe"] td {{
-                padding: 4px 6px !important;
-            }}
-        }}
-
-        /* --- SIDEBAR: mobilde daha kompakt --- */
-        @media (max-width: 768px) {{
-            [data-testid="stSidebar"] {{
-                width: 85vw !important;
-                max-width: 320px !important;
-            }}
             [data-testid="stSidebar"] .stButton button {{
                 font-size: 0.85rem !important;
                 padding: 0.4rem 0.6rem !important;
             }}
         }}
 
-        /* --- TRIVIA MODAL: radio label font küçüt --- */
-        @media (max-width: 768px) {{
-            .trivia-modal .stRadio label {{
-                font-size: 0.88rem !important;
-            }}
-            .trivia-modal .stForm button {{
-                font-size: 0.95rem !important;
-            }}
-        }}
-
-        /* --- "Show All / Show Less" BUTTON: tam genişlik --- */
-        @media (max-width: 768px) {{
-            .show-all-btn-row {{
-                flex-direction: column !important;
-            }}
-            .show-all-btn-row > div {{
-                width: 100% !important;
-            }}
-        }}
-
-        /* --- ADSENSE CONTAINER: mobilde height azalt --- */
-        @media (max-width: 768px) {{
-            .adsense-container iframe,
-            .adsense-container {{
-                max-height: 200px !important;
-            }}
-        }}
-
-        /* --- SUBHEADER / DIVIDER SPACING --- */
-        @media (max-width: 768px) {{
-            h2, h3 {{
-                margin-top: 0.6rem !important;
-                margin-bottom: 0.3rem !important;
-            }}
-            hr {{
-                margin: 0.5rem 0 !important;
-            }}
-        }}
-
-        /* --- PRO FEATURE EXPANDER: kompakt --- */
-        @media (max-width: 768px) {{
-            .streamlit-expander {{
-                margin: 0.3rem 0 !important;
-            }}
-            .streamlit-expander .stMarkdown li {{
-                font-size: 0.82rem !important;
-                margin: 0.15rem 0 !important;
-            }}
-        }}
-
-        /* --- QUICK ADD COLUMNS: stack on mobile --- */
-        @media (max-width: 480px) {{
-            .quick-add-row {{
-                flex-direction: column !important;
-            }}
-            .quick-add-row > div {{
-                width: 100% !important;
-                flex: none !important;
-            }}
-        }}
+        {extra_styles}
     </style>
 """, unsafe_allow_html=True)
 
+# ==================== 7. SIDEBAR DOCK (BASKETBOL BUTONU) ====================
+components.html("""
+<script>
+    (function() {
+        'use strict';
+        var isTransitioning = false;
+        var animationFrame = null;
+
+        function saveSidebarState(isClosed) {
+            try { window.parent.localStorage.setItem('hooplife_sidebar_closed', isClosed ? 'true' : 'false'); } catch(e) {}
+        }
+        function getSavedSidebarState() {
+            try { return window.parent.localStorage.getItem('hooplife_sidebar_closed') === 'true'; } catch(e) { return false; }
+        }
+        function getSidebarState() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return null;
+            const rect = sidebar.getBoundingClientRect();
+            const computed = window.parent.getComputedStyle(sidebar);
+            return {
+                element: sidebar,
+                isClosed: rect.width < 50 || computed.display === 'none'
+            };
+        }
+        function toggleSidebar() {
+            if (isTransitioning) return;
+            isTransitioning = true;
+            const state = getSidebarState();
+            if (!state) { isTransitioning = false; return; }
+            const isMobile = window.parent.innerWidth <= 768;
+            const sidebar = state.element;
+            sidebar.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s ease';
+            if (state.isClosed) {
+                sidebar.style.width = isMobile ? '85vw' : '336px';
+                sidebar.style.minWidth = isMobile ? '85vw' : '336px';
+                sidebar.style.transform = 'translateX(0)';
+                sidebar.style.display = 'flex';
+                sidebar.setAttribute('aria-expanded', 'true');
+                saveSidebarState(false);
+            } else {
+                sidebar.style.width = '0'; sidebar.style.minWidth = '0';
+                sidebar.style.transform = 'translateX(-100%)';
+                sidebar.setAttribute('aria-expanded', 'false');
+                saveSidebarState(true);
+                if (isMobile) setTimeout(() => { sidebar.style.display = 'none'; }, 300);
+            }
+            setTimeout(() => { isTransitioning = false; updateVisibility(); }, 320);
+        }
+        function createHoopLifeDock() {
+            const old = window.parent.document.getElementById('hooplife-master-trigger');
+            if (old) old.remove();
+            const trigger = window.parent.document.createElement('div');
+            trigger.id = 'hooplife-master-trigger';
+            trigger.style.cssText = `position:fixed;top:20%;left:0;height:60px;width:45px;
+                background:#1a1c24;border:2px solid #ff4b4b;border-left:none;
+                border-radius:0 15px 15px 0;z-index:999999999;cursor:pointer;
+                display:flex;align-items:center;justify-content:center;
+                box-shadow:5px 0 15px rgba(0,0,0,0.4);
+                transition:all 0.25s cubic-bezier(0.4,0,0.2,1);`;
+            trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;filter:drop-shadow(0 0 5px rgba(255,75,75,0.3));">🏀</div>';
+            trigger.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggleSidebar(); });
+            trigger.addEventListener('mouseenter', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '60px'; trigger.style.background = '#ff4b4b';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(360deg) scale(1.2)';
+                }
+            });
+            trigger.addEventListener('mouseleave', () => {
+                if (!isTransitioning && getSidebarState()?.isClosed) {
+                    trigger.style.width = '45px'; trigger.style.background = '#1a1c24';
+                    const icon = trigger.querySelector('#hl-icon');
+                    if (icon) icon.style.transform = 'rotate(0deg) scale(1)';
+                }
+            });
+            window.parent.document.body.appendChild(trigger);
+        }
+        function updateVisibility() {
+            const trigger = window.parent.document.getElementById('hooplife-master-trigger');
+            if (!trigger) { createHoopLifeDock(); return; }
+            const state = getSidebarState();
+            if (!state) return;
+            const isMobile = window.parent.innerWidth <= 768;
+            if (!state.isClosed) {
+                if (isMobile) {
+                    Object.assign(trigger.style, {
+                        top:'15px', left:'calc(85vw - 50px)',
+                        background:'rgba(255,75,75,0.95)', width:'40px', height:'40px',
+                        borderRadius:'12px', border:'1px solid rgba(255,255,255,0.25)',
+                        borderLeft:'1px solid rgba(255,255,255,0.25)'
+                    });
+                    trigger.innerHTML = '<div style="position:relative;width:18px;height:18px;"><span style="position:absolute;top:50%;left:0;width:100%;height:2px;background:white;transform:rotate(45deg);"></span><span style="position:absolute;top:50%;left:0;width:100%;height:2px;background:white;transform:rotate(-45deg);"></span></div>';
+                } else {
+                    trigger.style.display = 'none';
+                }
+            } else {
+                Object.assign(trigger.style, {
+                    display:'flex', left:'0', top:'20%', width:'45px', height:'60px',
+                    background:'#1a1c24', border:'2px solid #ff4b4b', borderLeft:'none',
+                    borderRadius:'0 15px 15px 0'
+                });
+                trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;">🏀</div>';
+                trigger.onmouseenter = () => { trigger.style.width='60px'; trigger.style.background='#ff4b4b'; };
+                trigger.onmouseleave = () => { trigger.style.width='45px'; trigger.style.background='#1a1c24'; };
+            }
+            trigger.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleSidebar(); };
+        }
+        function init() {
+            createHoopLifeDock();
+            setTimeout(() => {
+                if (getSavedSidebarState()) {
+                    const s = getSidebarState();
+                    if (s && !s.isClosed) {
+                        s.element.style.width = '0'; s.element.style.minWidth = '0';
+                        s.element.style.transform = 'translateX(-100%)';
+                        s.element.setAttribute('aria-expanded','false');
+                    }
+                }
+                updateVisibility();
+            }, 800);
+            function loop() { if (!isTransitioning) updateVisibility(); animationFrame = requestAnimationFrame(loop); }
+            loop();
+            let resizeTimer;
+            window.parent.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => updateVisibility(), 100); });
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                new MutationObserver(() => { if (!isTransitioning) requestAnimationFrame(updateVisibility); })
+                    .observe(sidebar, { attributes: true, attributeFilter: ['style','aria-expanded','class'] });
+            }
+        }
+        if (window.parent.document.readyState === 'loading') {
+            window.parent.document.addEventListener('DOMContentLoaded', init);
+        } else { init(); }
+    })();
+</script>
+""", height=0, width=0)
+
+
+# ==================== 8. DİĞER IMPORTLAR ====================
+from components.styles import load_styles
+from components.header import render_header
+from components.sidebar import render_sidebar
+from components.tables import render_tables
+from components.mvp_lvp import render_mvp_lvp_section
+from services.espn_api import (
+    get_last_available_game_date,
+    get_cached_boxscore,
+    get_scoreboard
+)
+
+try:
+    from services.scoring import calculate_scores
+except ImportError:
+    pass
+
 load_styles()
 
-if "auto_loaded" not in st.session_state:
-    st.session_state.auto_loaded = True
+# ==================== 9. TRIVIA ====================
+@st.dialog("🏀 Daily NBA Trivia Question", width="small")
+def show_trivia_modal(question, user_id=None, current_streak=0):
+    st.session_state.active_dialog = 'trivia'
 
-if "page" not in st.session_state:
-    st.session_state.page = "home"
+    if st.session_state.get('trivia_success_state', False):
+        st.balloons()
+        st.success("✅ Correct Answer!")
+        st.info(f"ℹ️ {question.get('explanation', '')}")
+        if user_id:
+            new_streak = db.get_user_streak(user_id)
+            st.markdown(f"### 🔥 Current Streak: {new_streak} days!")
+        st.caption("See you tomorrow! 👋")
+        if st.button("Close", type="primary", key="close_success"):
+            st.session_state.pop('trivia_success_state', None)
+            st.session_state.pop('trivia_force_open', None)
+            st.session_state.active_dialog = None
+            st.rerun()
+        return
 
-if "show_all_games" not in st.session_state:
-    st.session_state.show_all_games = False
+    if st.session_state.get('trivia_error_state', False):
+        error_info = st.session_state.get('trivia_error_info', {})
+        st.error(f"❌ Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
+        if error_info.get('explanation'):
+            st.info(f"ℹ️ {error_info.get('explanation')}")
+        if user_id:
+            st.warning("💔 Your streak has been reset.")
+        st.caption("Better luck tomorrow! 👋")
+        if st.button("Close", type="primary", key="close_error"):
+            st.session_state.pop('trivia_error_state', None)
+            st.session_state.pop('trivia_error_info', None)
+            st.session_state.pop('trivia_force_open', None)
+            st.session_state.active_dialog = None
+            st.rerun()
+        return
 
-if "slider_index" not in st.session_state:
-    st.session_state.slider_index = 0
+    if user_id:
+        badge_style = "background-color:rgba(255,75,75,0.15);border:1px solid rgba(255,75,75,0.3);color:#ff4b4b;"
+        icon, text = "🔥", f"{current_streak} Day Streak"
+    else:
+        badge_style = "background-color:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);color:#e0e0e0;"
+        icon, text = "🔒", "Login to save your daily streak."
+
+    st.markdown(f"""
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1);">
+        <div style="font-weight:600;">📅 {datetime.now().strftime('%d %B')}</div>
+        <div style="{badge_style} padding:5px 10px;border-radius:12px;font-size:0.85em;">{icon} {text}</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FF4B4B 0%,#8B0000 100%);padding:12px;border-radius:10px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.2);">
+        <div style="color:white;font-weight:700;">🎮 PS5 GIVEAWAY!</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:0.82rem;margin-top:5px;">
+            Reach a <b>50-day streak</b> to enter the draw for a <b>PlayStation 5</b>!<br>
+            📅 <b>Draw Date: April 13th</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"#### {question['question']}")
+
+    with st.form("trivia_form", border=False):
+        options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
+        choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
+        submitted = st.form_submit_button("Answer", use_container_width=True, type="primary")
+
+    if submitted:
+        if not choice:
+            st.warning("Please select an option.")
+            st.stop()
+
+        is_correct = (choice == question['correct_option'])
+        today_str = str(datetime.now().date())
+
+        if is_correct:
+            if user_id:
+                db.mark_user_trivia_played(user_id)
+            else:
+                st.session_state[f'trivia_played_{today_str}'] = True
+            st.session_state['trivia_success_state'] = True
+            st.session_state['trivia_force_open'] = True
+            st.rerun()
+        else:
+            if user_id:
+                db.mark_user_trivia_played(user_id)
+            else:
+                st.session_state[f'trivia_played_{today_str}'] = True
+            st.session_state['trivia_error_state'] = True
+            st.session_state['trivia_error_info'] = {
+                'correct_option': question['correct_option'],
+                'correct_text': options[question['correct_option']],
+                'explanation': question.get('explanation', '')
+            }
+            st.session_state['trivia_force_open'] = True
+            st.rerun()
 
 
-is_authenticated = st.session_state.get('authenticated', False)
-user = st.session_state.get('user', None)
-is_pro = user.get('is_pro', False) if user else False
+def handle_daily_trivia(all_cookies):
+    try:
+        active = st.session_state.get('active_dialog')
+        if active is not None and active != 'trivia':
+            return
+
+        trivia = db.get_daily_trivia()
+        if not trivia:
+            return
+
+        today_str = str(datetime.now().date())
+        current_user = st.session_state.get('user')
+        force_open = st.session_state.get('trivia_force_open', False)
+        should_show = False
+        streak = 0
+        u_id = None
+
+        session_played_key = f'trivia_played_{today_str}'
+        session_played = st.session_state.get(session_played_key, False)
+
+        if current_user:
+            u_id = current_user['id']
+            has_played = db.check_user_played_trivia_today(u_id)
+            if force_open or not has_played:
+                should_show = True
+                streak = db.get_user_streak(u_id)
+        else:
+            if session_played:
+                should_show = force_open
+            else:
+                last_played_cookie = all_cookies.get('guest_trivia_date') if all_cookies else None
+                if force_open:
+                    should_show = True
+                elif last_played_cookie == today_str:
+                    st.session_state[session_played_key] = True
+                else:
+                    should_show = True
+
+        if should_show:
+            show_trivia_modal(trivia, u_id, streak)
+
+    except Exception as e:
+        print(f"❌ Trivia handler error: {e}")
 
 
-st.sidebar.image(
-        "HoopLifeNBA_logo.png",             # Resim yolu veya URL'si
-        use_container_width=True   # Sidebar genişliğine otomatik sığdırır
-    )
+# ==================== 10. ADSENSE ====================
+def render_adsense():
+    try:
+        with open("adsense.html", 'r', encoding='utf-8') as f:
+            source_code = f.read()
+        components.html(source_code, height=300, scrolling=False)
+    except FileNotFoundError:
+        pass
 
-# Sidebar - User Section
+
+# ==================== 11. SIDEBAR ====================
+st.sidebar.image("HoopLifeNBA_logo.png", use_container_width=True)
+
 with st.sidebar:
     st.markdown("---")
-    
+
     if is_authenticated and user:
-        # Logged in user
-# Düzeltilmiş kod:
         st.markdown(f"""
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 1rem; border-radius: 10px; margin-bottom: 1rem;'>
-                <div style='color: white; font-weight: 600; font-size: 1.1rem;'>
-                    👤 {user.get('username', 'User')}
-                </div>
-                <div style='color: rgba(255,255,255,0.8); font-size: 0.85rem;'>
-                    {user.get('email', '')}
-                </div>
+            <div style='background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+                        padding:1rem;border-radius:10px;margin-bottom:1rem;'>
+                <div style='color:white;font-weight:600;font-size:1.1rem;'>👤 {user.get('username','User')}</div>
+                <div style='color:rgba(255,255,255,0.8);font-size:0.85rem;'>{user.get('email','')}</div>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Pro status
+
         if is_pro:
             st.success("⭐ PRO Member")
-            
-            # Watchlist quick access
             watchlist_count = len(db.get_watchlist(user['id']))
-            if st.button(f" My Watchlist ({watchlist_count})", use_container_width=True):
+            if st.button(f"My Watchlist ({watchlist_count})", use_container_width=True):
                 st.session_state.page = "watchlist"
                 st.rerun()
         else:
-            st.info(" Free Account")
+            st.info("Free Account")
             if st.button("⭐ Upgrade to PRO", use_container_width=True):
                 st.info("Contact admin for PRO upgrade")
-        
-        # Logout button
-        if st.button(" Logout", ...):
-            from auth import logout_enhanced
+
+        if st.button("Logout", use_container_width=True):
             logout_enhanced()
     else:
-        # Not logged in - show login/register option
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                        padding: 1rem; border-radius: 10px; margin-bottom: 1rem; text-align: center;'>
-                <div style='color: white; font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;'>
-                    🎯 Get More Features
-                </div>
-                <div style='color: rgba(255,255,255,0.9); font-size: 0.85rem;'>
-                    Login to unlock PRO features
-                </div>
+            <div style='background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);
+                        padding:1rem;border-radius:10px;margin-bottom:1rem;text-align:center;'>
+                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>🎯 Get More Features</div>
+                <div style='color:rgba(255,255,255,0.9);font-size:0.85rem;'>Login to unlock PRO features</div>
             </div>
         """, unsafe_allow_html=True)
-        
+
         if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
             st.session_state.page = "login"
             st.rerun()
-        
-        # Quick feature preview
+
         with st.expander("⭐ PRO Features"):
             st.markdown("""
                 - 📋 Player Watchlists
@@ -1509,8 +555,7 @@ with st.sidebar:
                 - 📥 Export Data
             """)
 
-# Sayfa yönlendirmesi
-# app.py içinde login yönlendirmesi kısmı:
+# ==================== 12. SAYFA YÖNLENDİRMELERİ ====================
 if st.session_state.page == "login":
     from auth import render_auth_page_enhanced
     render_auth_page_enhanced()
@@ -1524,11 +569,9 @@ if st.session_state.page == "injury":
         st.rerun()
     st.stop()
 
-
 if st.session_state.page == "trends":
-    # PRO kontrolü
     if not is_pro:
-        st.warning("⭐ This is a PRO feature. Login and upgrade to access player trends.")
+        st.warning("⭐ This is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
@@ -1539,20 +582,18 @@ if st.session_state.page == "trends":
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
-    
     from pages.player_trends import render_player_trends_page
     render_player_trends_page()
     st.stop()
-    
+
 if st.session_state.page == "fantasy_league":
     from pages.fantasy_league import render_fantasy_league_page
     render_fantasy_league_page()
     st.stop()
 
 if st.session_state.page == "watchlist":
-    # PRO kontrolü
     if not is_pro:
-        st.warning("⭐ Watchlist is a PRO feature. Login and upgrade to access.")
+        st.warning("⭐ Watchlist is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
@@ -1563,108 +604,50 @@ if st.session_state.page == "watchlist":
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
-    
     from pages.watchlist import render_watchlist_page
     render_watchlist_page()
     st.stop()
 
-# Custom CSS for the Modal/Dialog
+if st.session_state.page == "trade_analyzer":
+    from pages.trade_analyzer import render_trade_analyzer_page
+    render_trade_analyzer_page()
+    st.stop()
+
+# ==================== 13. BOX SCORE DIALOG ====================
 st.markdown("""
     <style>
     .game-header-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background-color: #f8f9fa;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-        border: 1px solid #e0e0e0;
-        color: #000;
+        display:flex;justify-content:space-between;align-items:center;
+        background-color:#f8f9fa;border-radius:12px;padding:20px;
+        margin-bottom:20px;border:1px solid #e0e0e0;color:#000;
     }
-    .team-info {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 30%;
-    }
-    .team-name {
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin-top: 8px;
-        text-align: center;
-    }
-    .score-board {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 40%;
-    }
-    .main-score {
-        font-size: 2.5rem;
-        font-weight: 800;
-        font-family: 'Arial', sans-serif;
-        color: #333;
-    }
-    .game-status {
-        background-color: #e3f2fd;
-        color: #1565c0;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-top: 5px;
-    }
-    .watchlist-btn {
-        background-color: #fbbf24;
-        color: #000;
-        border: none;
-        padding: 0.3rem 0.6rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        font-weight: 600;
-    }
-    .watchlist-btn:hover {
-        background-color: #f59e0b;
-    }
-    .pro-feature-badge {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 0.2rem 0.6rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-block;
-    }
+    .team-info { display:flex;flex-direction:column;align-items:center;width:30%; }
+    .team-name { font-weight:700;font-size:1.1rem;margin-top:8px;text-align:center; }
+    .score-board { display:flex;flex-direction:column;align-items:center;width:40%; }
+    .main-score { font-size:2.5rem;font-weight:800;color:#333; }
+    .game-status { background-color:#e3f2fd;color:#1565c0;padding:4px 12px;border-radius:16px;font-size:0.8rem;font-weight:600;margin-top:5px; }
     @media (prefers-color-scheme: dark) {
-        .game-header-container { background-color: #262730; border-color: #444; color: #fff; }
-        .main-score { color: #fff; }
-        .game-status { background-color: #333; color: #90caf9; }
+        .game-header-container { background-color:#262730;border-color:#444;color:#fff; }
+        .main-score { color:#fff; }
+        .game-status { background-color:#333;color:#90caf9; }
     }
     </style>
 """, unsafe_allow_html=True)
 
 
-# --------------------
-# POP-UP (DIALOG) FUNCTION WITH WATCHLIST
-# --------------------
 @st.dialog("Game Details", width="large")
 def show_boxscore_dialog(game_info):
     st.session_state.active_dialog = 'boxscore'
     game_id = game_info['game_id']
-    
-    # 1. Header
-    html_header = f"""
+
+    st.markdown(f"""
     <div class="game-header-container">
         <div class="team-info">
             <img src="{game_info.get('away_logo')}" width="60">
             <div class="team-name">{game_info.get('away_team')}</div>
         </div>
         <div class="score-board">
-            <div class="main-score">
-                {game_info.get('away_score')} - {game_info.get('home_score')}
-            </div>
+            <div class="main-score">{game_info.get('away_score')} - {game_info.get('home_score')}</div>
             <div class="game-status">{game_info.get('status')}</div>
         </div>
         <div class="team-info">
@@ -1672,119 +655,69 @@ def show_boxscore_dialog(game_info):
             <div class="team-name">{game_info.get('home_team')}</div>
         </div>
     </div>
-    """
-    st.markdown(html_header, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    # 2. Data Loading
     with st.spinner("Loading stats..."):
         players = get_cached_boxscore(game_id)
-    
+
     if not players:
         st.warning("Box score details are not available yet.")
         return
 
-    # 3. Data Processing
     df = pd.DataFrame(players)
-    
     numeric_cols = ["PTS", "REB", "AST", "STL", "BLK", "TO", "FGM", "FGA", "3Pts", "3PTA", "FTM", "FTA"]
     for c in numeric_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-        else:
-            df[c] = 0
+        df[c] = pd.to_numeric(df.get(c, 0), errors="coerce").fillna(0)
 
     df["FG"] = df.apply(lambda x: f"{int(x['FGM'])}-{int(x['FGA'])}", axis=1)
     df["3PT"] = df.apply(lambda x: f"{int(x['3Pts'])}-{int(x['3PTA'])}", axis=1)
     df["FT"] = df.apply(lambda x: f"{int(x['FTM'])}-{int(x['FTA'])}", axis=1)
-
     if "MIN" not in df.columns:
         df["MIN"] = "--"
 
     display_cols = ["PLAYER", "MIN", "FG", "3PT", "FT", "PTS", "REB", "AST", "STL", "BLK", "TO"]
     final_cols = [c for c in display_cols if c in df.columns]
 
-    # 4. PRO FEATURE: Add to Watchlist
     if is_pro and user:
         st.markdown("#### ⭐ Quick Add to Watchlist")
-        
-        # Get existing watchlist
         watchlist = db.get_watchlist(user['id'])
         watchlist_names = [w['player_name'] for w in watchlist]
-        
-        # Select players to add
-        available_players = df['PLAYER'].unique().tolist()
-        players_to_add = [p for p in available_players if p not in watchlist_names]
-        
+        players_to_add = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
         if players_to_add:
             col1, col2 = st.columns([3, 1])
             with col1:
-                selected_players = st.multiselect(
-                    "Select players to add",
-                    players_to_add,
-                    help="Players already in your watchlist are not shown"
-                )
+                selected_players = st.multiselect("Select players to add", players_to_add)
             with col2:
                 st.write("")
                 st.write("")
                 if st.button("➕ Add Selected", disabled=not selected_players):
-                    added_count = 0
-                    for player in selected_players:
-                        if db.add_to_watchlist(user['id'], player, f"Added from {game_info.get('away_team')} vs {game_info.get('home_team')}"):
-                            added_count += 1
-                    
-                    if added_count > 0:
-                        st.success(f"✅ Added {added_count} player(s) to watchlist!")
+                    added = sum(1 for p in selected_players if db.add_to_watchlist(user['id'], p, f"Added from {game_info.get('away_team')} vs {game_info.get('home_team')}"))
+                    if added:
+                        st.success(f"✅ Added {added} player(s)!")
                         st.balloons()
         else:
-            st.info("All players from this game are already in your watchlist!")
-        
+            st.info("All players already in your watchlist!")
         st.markdown("---")
     elif not is_pro:
-        # Show PRO teaser
-        st.info("⭐ Login with a PRO account to add players to your watchlist directly from here!")
+        st.info("⭐ Login with a PRO account to add players to your watchlist!")
 
-    # 5. Tabs & Tables
     if "TEAM" in df.columns:
         teams = df["TEAM"].unique()
-        
         tab1, tab2 = st.tabs([f"Away: {game_info.get('away_team')}", f"Home: {game_info.get('home_team')}"])
-        
+
         def render_team_table(container, team_name):
             with container:
                 team_df = df[df["TEAM"].astype(str).str.contains(team_name, case=False, na=False)].copy()
-                
                 if not team_df.empty:
-                    if "MIN" in team_df.columns:
-                        team_df = team_df.sort_values(
-                            by="MIN", 
-                            ascending=False,
-                            key=lambda x: pd.to_numeric(x, errors='coerce').fillna(0)
-                        )
-                    
-                    # Add watchlist indicators for PRO users
+                    team_df = team_df.sort_values("MIN", ascending=False, key=lambda x: pd.to_numeric(x, errors='coerce').fillna(0))
                     if is_pro and user:
-                        watchlist = db.get_watchlist(user['id'])
-                        watchlist_names = [w['player_name'] for w in watchlist]
-                        team_df['⭐'] = team_df['PLAYER'].apply(lambda x: '⭐' if x in watchlist_names else '')
-                        display_cols_with_star = ['⭐'] + final_cols
+                        wl = db.get_watchlist(user['id'])
+                        wl_names = [w['player_name'] for w in wl]
+                        team_df['⭐'] = team_df['PLAYER'].apply(lambda x: '⭐' if x in wl_names else '')
+                        cols_show = ['⭐'] + final_cols
                     else:
-                        display_cols_with_star = final_cols
-                    
-                    st.dataframe(
-                        team_df[display_cols_with_star],
-                        use_container_width=True,
-                        hide_index=True,
-                        height=400,
-                        column_config={
-                            "⭐": st.column_config.TextColumn("", width="small"),
-                            "PTS": st.column_config.NumberColumn("PTS", format="%d"),
-                            "MIN": st.column_config.TextColumn("MIN", width="small"),
-                            "FG": st.column_config.TextColumn("FG (M-A)", width="small"),
-                            "3PT": st.column_config.TextColumn("3PT (M-A)", width="small"),
-                            "FT": st.column_config.TextColumn("FT (M-A)", width="small"),
-                            "PLAYER": st.column_config.TextColumn("Player", width="medium"),
-                        }
-                    )
+                        cols_show = final_cols
+                    st.dataframe(team_df[cols_show], use_container_width=True, hide_index=True, height=400)
                 else:
                     st.info(f"No stats available for {team_name}")
 
@@ -1798,41 +731,32 @@ def show_boxscore_dialog(game_info):
         st.dataframe(df[final_cols], use_container_width=True)
 
 
-# --------------------
-# MAIN PAGE
-# --------------------
-
+# ==================== 14. ANA SAYFA ====================
 def home_page():
     if 'active_dialog' not in st.session_state:
         st.session_state.active_dialog = None
-    
-    # Only show trivia if no other dialog is active
+
     if st.session_state.active_dialog is None or st.session_state.active_dialog == 'trivia':
         handle_daily_trivia(None)
+
     render_header()
-    
-    # Load user preferences if logged in
-    score_display_mode = 'full'  # Default
+
+    score_display_mode = 'full'
     if user:
         user_id = user['id']
         prefs = db.get_user_preferences(user_id)
         score_display_mode = db.get_score_display_preference(user_id)
     else:
         prefs = None
+        user_id = None
 
     if not is_pro:
         st.markdown("---")
         render_adsense()
-        st.markdown("---")    
-    
-    # Sidebar'dan weights'i de alıyoruz
+        st.markdown("---")
+
     date, weights, run = render_sidebar()
     st.session_state['last_weights'] = weights
-    
-    # Override with saved preferences if available
-    if prefs and prefs.get('default_weights'):
-        import json
-        saved_weights = json.loads(prefs['default_weights']) if isinstance(prefs['default_weights'], str) else prefs['default_weights']
 
     if st.session_state.auto_loaded:
         run = True
@@ -1841,7 +765,6 @@ def home_page():
         st.info("Select parameters and click Run.")
         return
 
-    # 1. LOAD GAMES
     resolved_date, game_ids = get_last_available_game_date(date)
     if not game_ids:
         st.warning("No NBA games found.")
@@ -1850,25 +773,11 @@ def home_page():
     games = get_scoreboard(resolved_date)
     st.caption(f"Games from {resolved_date.strftime('%B %d, %Y')}")
 
-    # 2. SCOREBOARD GRID HEADER
     col_header1, col_header2 = st.columns([3, 1])
     with col_header1:
         st.subheader("Games")
     with col_header2:
         if user:
-            # Spoiler Protection JavaScript
-            st.markdown("""
-                <script>
-                    function revealSpoiler(elementId) {
-                        const element = document.getElementById(elementId);
-                        if (element) {
-                            element.classList.add('revealed');
-                        }
-                    }
-                </script>
-            """, unsafe_allow_html=True)
-            
-            # Kullanıcı giriş yapmışsa tercih seçeneği göster
             new_mode = st.selectbox(
                 "",
                 options=['full', 'spoiler_protected'],
@@ -1877,158 +786,78 @@ def home_page():
                 key="score_display_selector",
                 label_visibility="collapsed"
             )
-            
-            # Tercih değiştiyse kaydet
             if new_mode != score_display_mode:
                 if db.update_score_display_preference(user_id, new_mode):
                     score_display_mode = new_mode
                     st.rerun()
-    
+
     games_to_show = 3
     total_games = len(games)
-
-    if st.session_state.page == "trade_analyzer":
-        from pages.trade_analyzer import render_trade_analyzer_page
-        render_trade_analyzer_page()
-        st.stop()
-    
-    if st.session_state.show_all_games:
-        visible_games = games
-    else:
-        visible_games = games[:games_to_show]
-
+    visible_games = games if st.session_state.show_all_games else games[:games_to_show]
     num_visible = len(visible_games)
-    
-    if num_visible == 0:
-         st.info("No games to display.")
-    else:
-        # Mobile column fix script
-        st.markdown("""
-            <script>
-                (function() {
-                    function fixColumns() {
-                        if (window.innerWidth <= 768) {
-                            document.querySelectorAll('.stColumns').forEach(function(row) {
-                                row.style.flexWrap = 'wrap';
-                                row.querySelectorAll(':scope > div').forEach(function(col) {
-                                    col.style.flex = '1 1 100%';
-                                    col.style.maxWidth = '100%';
-                                    col.style.minWidth = '100%';
-                                });
-                            });
-                        }
-                    }
-                    fixColumns();
-                    window.addEventListener('resize', fixColumns);
-                    new MutationObserver(fixColumns).observe(document.body, {childList: true, subtree: true});
-                })();
-            </script>
-        """, unsafe_allow_html=True)
 
+    if num_visible == 0:
+        st.info("No games to display.")
+    else:
         for row_start in range(0, num_visible, 3):
             row_games = visible_games[row_start:row_start + 3]
             cols = st.columns(len(row_games))
-            
+
             for i, g in enumerate(row_games):
                 with cols[i]:
                     with st.container(border=True):
                         game_id = g.get('game_id', f'game_{i}')
-                        
-                        # --- HEYECAN PUANI - HER ZAMAN GÖRÜNÜR ---
                         game_score = calculate_game_score(g.get('home_score'), g.get('away_score'), g.get('status'))
-                        
+
                         if game_score:
                             score_color = get_score_color(game_score)
-                            # excitement-badge class'ı ile blur'dan muaf
                             st.markdown(f"""
-                                <div style="
-                                    display: flex; 
-                                    justify-content: flex-end; 
-                                    margin-bottom: 2px;
-                                ">
-                                    <span class="excitement-badge" style="
-                                        background-color: {score_color}; 
-                                        color: white; 
-                                        padding: 2px 8px; 
-                                        border-radius: 10px; 
-                                        font-weight: bold; 
-                                        font-size: 0.78em; 
-                                        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                                        display: inline-block;
-                                    ">
+                                <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">
+                                    <span class="excitement-badge" style="background-color:{score_color};color:white;
+                                        padding:2px 8px;border-radius:10px;font-weight:bold;font-size:0.78em;">
                                         ★ {game_score}
                                     </span>
                                 </div>
                             """, unsafe_allow_html=True)
 
-                        # Status
-                        st.markdown(f"<div style='text-align:center; color:grey; font-size:0.8em; margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
-                        
-                        # --- SKORLAR ---
+                        st.markdown(f"<div style='text-align:center;color:grey;font-size:0.8em;margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
+
                         c_away, c_score, c_home = st.columns([1, 1.2, 1])
-                        
                         with c_away:
                             st.markdown(f"""
-                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                <img src="{g.get('away_logo')}" style="width: 46px; height: 46px; object-fit: contain;">
-                                <div style="font-size:0.78em; font-weight:bold; margin-top: 4px; text-align:center; line-height:1.2;">{g.get('away_team')}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
+                            <div style="display:flex;flex-direction:column;align-items:center;">
+                                <img src="{g.get('away_logo')}" style="width:46px;height:46px;object-fit:contain;">
+                                <div style="font-size:0.78em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('away_team')}</div>
+                            </div>""", unsafe_allow_html=True)
+
                         with c_score:
                             if score_display_mode == 'spoiler_protected':
-                                spoiler_id = f"spoiler_{game_id}"
-                                icon_id = f"icon_{game_id}"
-                                
                                 st.markdown(f"""
                                     <div style="text-align:center;">
-                                        <div class="spoiler-container" data-game-id="{game_id}">
-                                            <div class="spoiler-score" id="{spoiler_id}" style='font-size:1.25em; font-weight:800; line-height: 2; white-space: nowrap;'>
+                                        <div class="spoiler-container">
+                                            <div class="spoiler-score" id="spoiler_{game_id}"
+                                                style='font-size:1.25em;font-weight:800;line-height:2;white-space:nowrap;'>
                                                 {g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}
                                             </div>
-                                            <div class="spoiler-icon" id="{icon_id}">🔒</div>
+                                            <div class="spoiler-icon" id="icon_{game_id}">🔒</div>
                                         </div>
-                                    </div>
-                                """, unsafe_allow_html=True)
+                                    </div>""", unsafe_allow_html=True)
                             else:
-                                # FULL VIEW - Normal skor
-                                st.markdown(f"<div style='font-size:1.25em; font-weight:800; text-align:center; line-height: 3; white-space: nowrap;'>{g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
-                        
-                        # ← BU KISIM EKSİKTİ!
+                                st.markdown(f"<div style='font-size:1.25em;font-weight:800;text-align:center;line-height:3;white-space:nowrap;'>{g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}</div>", unsafe_allow_html=True)
+
                         with c_home:
                             st.markdown(f"""
-                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                <img src="{g.get('home_logo')}" style="width: 46px; height: 46px; object-fit: contain;">
-                                <div style="font-size:0.78em; font-weight:bold; margin-top: 4px; text-align:center; line-height:1.2;">{g.get('home_team')}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
-                        st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
-                        
-                        if st.button(" Box Score", key=f"btn_{game_id}", use_container_width=True):
+                            <div style="display:flex;flex-direction:column;align-items:center;">
+                                <img src="{g.get('home_logo')}" style="width:46px;height:46px;object-fit:contain;">
+                                <div style="font-size:0.78em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('home_team')}</div>
+                            </div>""", unsafe_allow_html=True)
+
+                        st.markdown("<hr style='margin:8px 0;'>", unsafe_allow_html=True)
+
+                        if st.button("Box Score", key=f"btn_{game_id}", use_container_width=True):
                             st.session_state.active_dialog = None
-                            show_boxscore_dialog(g)     
-    
+                            show_boxscore_dialog(g)
 
-
-    st.markdown("""
-        <script>
-            function handleReveal(gameId) {
-                const scoreElement = document.getElementById('spoiler_' + gameId);
-                const iconElement = document.getElementById('icon_' + gameId);
-                
-                if (scoreElement) {
-                    scoreElement.classList.add('revealed');
-                }
-                if (iconElement) {
-                    iconElement.style.display = 'none';
-                }
-            }
-        </script>
-    """, unsafe_allow_html=True)
-
-
-    # Show All / Show Less
     if total_games > games_to_show:
         if st.session_state.show_all_games:
             if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
@@ -2036,47 +865,37 @@ def home_page():
                 st.rerun()
         else:
             remaining = total_games - games_to_show
-            if st.button(f" Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
+            if st.button(f"Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
                 st.session_state.show_all_games = True
                 st.rerun()
 
     st.divider()
-
-    # 3. FANTASY TABLE (All Players) WITH WATCHLIST ACTIONS
     st.subheader("Daily Fantasy Stats")
-    
+
     all_players = []
     for gid in game_ids:
         box = get_cached_boxscore(gid)
-        if box: all_players.extend(box)
+        if box:
+            all_players.extend(box)
 
     if all_players:
         df = pd.DataFrame(all_players)
-        
         num_cols = ["PTS", "REB", "AST", "STL", "BLK", "TO", "FGA", "FGM", "FTA", "FTM", "3Pts"]
         for c in num_cols:
-            if c not in df.columns: df[c] = 0
+            if c not in df.columns:
+                df[c] = 0
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         st.session_state["period_df"] = df.copy()
-            
 
-        # PRO FEATURE: Quick add from main table
         if is_pro and user:
             with st.expander("⭐ Add Players to Watchlist", expanded=False):
                 watchlist = db.get_watchlist(user['id'])
                 watchlist_names = [w['player_name'] for w in watchlist]
-                
                 available_players = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
-                
                 if available_players:
-                    # Mobilde stack, desktopda yan yana
                     col1, col2 = st.columns([4, 1])
                     with col1:
-                        quick_add_players = st.multiselect(
-                            "Select players",
-                            available_players,
-                            key="quick_add_main"
-                        )
+                        quick_add_players = st.multiselect("Select players", available_players, key="quick_add_main")
                     with col2:
                         st.write("")
                         st.write("")
@@ -2088,21 +907,17 @@ def home_page():
                 else:
                     st.info("All players are already in your watchlist!")
         elif not is_pro:
-            st.info("⭐ **PRO Feature:** Login with a PRO account to add players to your watchlist and track their performance!")
+            st.info("⭐ **PRO Feature:** Login with a PRO account to add players to your watchlist!")
 
-        render_tables(df, weights=weights) 
+        render_tables(df, weights=weights)
     else:
         st.info("No stats available for the selected date.")
 
     current_period = st.session_state.get("stats_period", "Today")
-    
-    # Only show MVP/LVP for periods longer than "Today"
     if current_period != "Today":
         from components.tables import get_date_range
         date_range = get_date_range(current_period)
         render_mvp_lvp_section(date_range, weights, current_period)
-    
+
 
 home_page()
-
-

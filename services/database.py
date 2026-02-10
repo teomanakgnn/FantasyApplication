@@ -11,7 +11,6 @@ class Database:
         self.conn = None
         
     def get_connection(self):
-        """PostgreSQL bağlantısı oluştur"""
         if self.conn is None or self.conn.closed:
             try:
                 self.conn = psycopg2.connect(
@@ -28,15 +27,12 @@ class Database:
         return self.conn
     
     def execute_query(self, query, params=None, fetch=False):
-        """Generic query execution helper"""
         conn = self.get_connection()
         if not conn:
             return None
-        
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute(query, params or ())
-            
             if fetch:
                 result = cursor.fetchall()
                 cursor.close()
@@ -51,41 +47,30 @@ class Database:
             return None
     
     def close(self):
-        """Bağlantıyı kapat"""
         if self.conn and not self.conn.closed:
             self.conn.close()
     
     # ==================== USER AUTHENTICATION ====================
     
     def create_user(self, username, email, password):
-        """Yeni kullanıcı oluştur"""
         conn = self.get_connection()
         if not conn:
             return False, "Database connection failed"
-        
         try:
             cursor = conn.cursor()
-            
-            # Password hash
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
             cursor.execute(
-                """INSERT INTO users (username, email, password_hash) 
-                   VALUES (%s, %s, %s) RETURNING id""",
+                "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id",
                 (username, email, password_hash)
             )
             user_id = cursor.fetchone()[0]
             conn.commit()
-            
-            # Create default preferences
             cursor.execute(
-                """INSERT INTO user_preferences (user_id, default_weights) 
-                   VALUES (%s, %s)""",
+                "INSERT INTO user_preferences (user_id, default_weights) VALUES (%s, %s)",
                 (user_id, '{"pts": 1, "reb": 1.2, "ast": 1.5, "stl": 3, "blk": 3, "to": -1}')
             )
             conn.commit()
             cursor.close()
-            
             return True, "User created successfully"
         except psycopg2.IntegrityError as e:
             conn.rollback()
@@ -99,27 +84,17 @@ class Database:
             return False, f"Error: {str(e)}"
     
     def verify_user(self, username, password):
-        """Kullanıcı doğrulama"""
         conn = self.get_connection()
         if not conn:
             return None
-        
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute(
-                "SELECT * FROM users WHERE username = %s",
-                (username,)
-            )
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
             user = cursor.fetchone()
             cursor.close()
-            
             if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
-                # Update last login
                 cursor = conn.cursor()
-                cursor.execute(
-                    "UPDATE users SET last_login = %s WHERE id = %s",
-                    (datetime.now(), user['id'])
-                )
+                cursor.execute("UPDATE users SET last_login = %s WHERE id = %s", (datetime.now(), user['id']))
                 conn.commit()
                 cursor.close()
                 return dict(user)
@@ -129,21 +104,15 @@ class Database:
             return None
     
     def create_session(self, user_id, browser_id=None, ip_address=None, user_agent=None):
-        """Yeni session oluştur (browser_id ile) ve dictionary döndür"""
         conn = self.get_connection()
         if not conn:
             print("❌ Database connection failed")
             return None
-        
         try:
-            # Token ve Session ID oluştur
             session_token = secrets.token_urlsafe(32)
-            session_id = str(uuid.uuid4()) # Benzersiz Session ID
+            session_id = str(uuid.uuid4())
             expires_at = datetime.now() + timedelta(days=30)
-            
             cursor = conn.cursor()
-            
-            # session_id sütununu da INSERT işlemine ekliyoruz
             cursor.execute(
                 """INSERT INTO sessions (user_id, session_token, session_id, browser_id, ip_address, user_agent, expires_at)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -152,123 +121,199 @@ class Database:
             )
             result = cursor.fetchone()
             conn.commit()
-            
             if result:
-                # Last login güncelle
-                cursor.execute(
-                    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s",
-                    (user_id,)
-                )
+                cursor.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s", (user_id,))
                 conn.commit()
                 cursor.close()
-                
                 print(f"✅ Session created for user_id: {user_id}")
-                
-                # ARTIK SÖZLÜK DÖNDÜRÜYORUZ (Hatanın çözümü)
-                return {
-                    'token': session_token,
-                    'session_id': session_id
-                }
-            
+                return {'token': session_token, 'session_id': session_id}
             cursor.close()
             return None
-            
         except Exception as e:
             conn.rollback()
             print(f"❌ Session create error: {e}")
             return None
     
-    def validate_session(self, session_token, browser_id=None):
-        """Session token'ı doğrula (browser_id ile)"""
-        conn = self.get_connection()
-        if not conn:
-            return None
-        
-        try:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            
-            # Browser ID kontrolü ile
-            if browser_id:
-                cursor.execute(
-                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
-                              CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
-                       FROM users u
-                       JOIN sessions s ON u.id = s.user_id
-                       WHERE s.session_token = %s 
-                       AND s.browser_id = %s
-                       AND s.expires_at > CURRENT_TIMESTAMP""",
-                    (session_token, browser_id)
-                )
-            else:
-                # Fallback (eski sistem uyumluluğu için)
-                cursor.execute(
-                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
-                              CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
-                       FROM users u
-                       JOIN sessions s ON u.id = s.user_id
-                       WHERE s.session_token = %s 
-                       AND s.expires_at > CURRENT_TIMESTAMP""",
-                    (session_token,)
-                )
-            
-            result = cursor.fetchone()
-            cursor.close()
-            
-            if result:
-                return dict(result)
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Session validation error: {e}")
-            return None
-    
-    def logout_session(self, session_token, browser_id=None):
-        """Session'ı sonlandır"""
+    def update_session_fingerprint(self, session_token, fingerprint_hash):
+        """Update a session with device fingerprint"""
         conn = self.get_connection()
         if not conn:
             return False
-        
         try:
             cursor = conn.cursor()
-            
+            cursor.execute(
+                "UPDATE sessions SET device_fingerprint = %s WHERE session_token = %s",
+                (fingerprint_hash, session_token)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Update fingerprint error: {e}")
+            return False
+        
+    def validate_session_by_fingerprint(self, fingerprint):
+        """Cihaz parmak izi ile aktif ve süresi dolmamış oturumu bulur"""
+        conn = self.get_connection()
+        if not conn: 
+            return None
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT u.*, 
+                    CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                FROM users u
+                JOIN sessions s ON u.id = s.user_id
+                WHERE s.device_fingerprint = %s 
+                AND s.expires_at > CURRENT_TIMESTAMP
+                ORDER BY s.created_at DESC LIMIT 1
+            """, (fingerprint,))
+            result = cursor.fetchone()
+            cursor.close()
+            return dict(result) if result else None
+        except Exception as e:
+            print(f"Fingerprint Validation Error: {e}")
+            return None
+
+    # ==================== SESSION VALIDATION ====================
+
+    def validate_session_by_token(self, token):
+        conn = self.get_connection()
+        if not conn: 
+            return None
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("""
+                SELECT u.*, 
+                CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                FROM users u
+                JOIN sessions s ON u.id = s.user_id
+                WHERE s.session_token = %s 
+                AND s.expires_at > CURRENT_TIMESTAMP
+            """, (token,))
+            result = cursor.fetchone()
+            cursor.close()
+            return dict(result) if result else None
+        except Exception as e:
+            print(f"Token Validation Error: {e}")
+            return None
+
+    def validate_session(self, session_token, browser_id=None):
+        """session_token ile doğrula (isteğe bağlı browser_id)"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             if browser_id:
-                # Sadece bu browser'ın session'ını sil
+                cursor.execute("""
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_token = %s AND s.browser_id = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """, (session_token, browser_id))
+            else:
+                cursor.execute("""
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_token = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """, (session_token,))
+            result = cursor.fetchone()
+            cursor.close()
+            return dict(result) if result else None
+        except Exception as e:
+            print(f"❌ Session validation error: {e}")
+            return None
+
+    def validate_session_by_id(self, session_id, browser_id=None):
+        conn = self.get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            if browser_id:
+                cursor.execute("""
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_id = %s AND s.browser_id = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """, (session_id, browser_id))
+            else:
+                cursor.execute("""
+                    SELECT u.id, u.username, u.email, u.created_at, u.last_login,
+                        CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
+                    FROM users u
+                    JOIN sessions s ON u.id = s.user_id
+                    WHERE s.session_id = %s
+                    AND s.expires_at > CURRENT_TIMESTAMP
+                """, (session_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            return dict(result) if result else None
+        except Exception as e:
+            print(f"❌ Session ID validation error: {e}")
+            return None
+
+    def logout_session(self, session_token, browser_id=None):
+        conn = self.get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            if browser_id:
                 cursor.execute(
                     "DELETE FROM sessions WHERE session_token = %s AND browser_id = %s",
                     (session_token, browser_id)
                 )
             else:
-                # Token'a ait tüm session'ları sil
-                cursor.execute(
-                    "DELETE FROM sessions WHERE session_token = %s",
-                    (session_token,)
-                )
-            
+                cursor.execute("DELETE FROM sessions WHERE session_token = %s", (session_token,))
             conn.commit()
             cursor.close()
-            print(f"✅ Session logged out")
+            print("✅ Session logged out")
             return True
-            
         except Exception as e:
             conn.rollback()
             print(f"❌ Logout error: {e}")
             return False
-    
+
+    def logout_session_by_id(self, session_id, browser_id=None):
+        conn = self.get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            if browser_id:
+                cursor.execute(
+                    "DELETE FROM sessions WHERE session_id = %s AND browser_id = %s",
+                    (session_id, browser_id)
+                )
+            else:
+                cursor.execute("DELETE FROM sessions WHERE session_id = %s", (session_id,))
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Logout error: {e}")
+            return False
+
     # ==================== USER PREFERENCES ====================
     
     def get_user_preferences(self, user_id):
-        """Kullanıcı tercihlerini getir"""
         conn = self.get_connection()
         if not conn:
             return None
-        
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute(
-                "SELECT * FROM user_preferences WHERE user_id = %s",
-                (user_id,)
-            )
+            cursor.execute("SELECT * FROM user_preferences WHERE user_id = %s", (user_id,))
             prefs = cursor.fetchone()
             cursor.close()
             return dict(prefs) if prefs else None
@@ -276,16 +321,13 @@ class Database:
             return None
     
     def update_preferences(self, user_id, favorite_teams=None, favorite_players=None, weights=None):
-        """Tercihleri güncelle"""
         conn = self.get_connection()
         if not conn:
             return False
-        
         try:
             cursor = conn.cursor()
             updates = []
             params = []
-            
             if favorite_teams is not None:
                 updates.append("favorite_teams = %s")
                 params.append(favorite_teams)
@@ -295,283 +337,68 @@ class Database:
             if weights is not None:
                 updates.append("default_weights = %s")
                 params.append(weights)
-            
             if updates:
                 updates.append("updated_at = %s")
                 params.append(datetime.now())
                 params.append(user_id)
-                
-                query = f"UPDATE user_preferences SET {', '.join(updates)} WHERE user_id = %s"
-                cursor.execute(query, params)
+                cursor.execute(f"UPDATE user_preferences SET {', '.join(updates)} WHERE user_id = %s", params)
                 conn.commit()
-            
             cursor.close()
             return True
         except Exception as e:
             conn.rollback()
             return False
-    
- # DATABASE HELPER METHODS
-# services/database.py dosyanıza bu metodları ekleyin
 
-    def validate_session_by_token(self, token):
-        """
-        Token ile session'ı doğrula
-        Returns: user dict or None
-        """
+    def get_score_display_preference(self, user_id):
+        conn = self.get_connection()
+        if not conn:
+            return 'full'
         try:
-            c = self.conn.cursor()
-            
-            # Session tablosundan token'ı bul
-            c.execute('''
-                SELECT s.user_id, s.expires_at, u.username, u.email, u.is_pro
-                FROM sessions s
-                JOIN users u ON s.user_id = u.id
-                WHERE s.token = ? AND s.is_active = 1
-            ''', (token,))
-            
-            result = c.fetchone()
-            
-            if not result:
-                return None
-            
-            user_id, expires_at, username, email, is_pro = result
-            
-            # Süre kontrolü
-            from datetime import datetime
-            expiry = datetime.fromisoformat(expires_at)
-            
-            if datetime.now() > expiry:
-                # Session süresi dolmuş
-                c.execute('UPDATE sessions SET is_active = 0 WHERE token = ?', (token,))
-                self.conn.commit()
-                return None
-            
-            return {
-                'id': user_id,
-                'username': username,
-                'email': email,
-                'is_pro': bool(is_pro)
-            }
-            
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT score_display_mode FROM user_preferences WHERE user_id = %s", (user_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            if result and result.get('score_display_mode'):
+                return result['score_display_mode']
+            return 'full'
         except Exception as e:
-            print(f"❌ validate_session_by_token error: {e}")
-            return None
+            return 'full'
 
-
-    def get_user_by_id(self, user_id):
-        """
-        User ID ile kullanıcı bilgilerini getir
-        Returns: user dict or None
-        """
-        try:
-            c = self.conn.cursor()
-            
-            c.execute('''
-                SELECT id, username, email, is_pro, created_at
-                FROM users
-                WHERE id = ?
-            ''', (user_id,))
-            
-            result = c.fetchone()
-            
-            if not result:
-                return None
-            
-            user_id, username, email, is_pro, created_at = result
-            
-            return {
-                'id': user_id,
-                'username': username,
-                'email': email,
-                'is_pro': bool(is_pro),
-                'created_at': created_at
-            }
-            
-        except Exception as e:
-            print(f"❌ get_user_by_id error: {e}")
-            return None
-
-
-    def cleanup_expired_sessions(self):
-        """
-        Süresi dolmuş session'ları temizle
-        Cron job ile günlük çalıştırılmalı
-        """
-        try:
-            c = self.conn.cursor()
-            
-            from datetime import datetime
-            now = datetime.now().isoformat()
-            
-            # Süresi dolmuş session'ları pasif yap
-            c.execute('''
-                UPDATE sessions
-                SET is_active = 0
-                WHERE expires_at < ? AND is_active = 1
-            ''', (now,))
-            
-            deleted_count = c.rowcount
-            self.conn.commit()
-            
-            print(f"🧹 Cleaned up {deleted_count} expired sessions")
-            return deleted_count
-            
-        except Exception as e:
-            print(f"❌ cleanup_expired_sessions error: {e}")
-            return 0
-
-
-    def get_user_active_sessions(self, user_id):
-        """
-        Kullanıcının aktif session'larını listele
-        Multi-device kullanımı için
-        """
-        try:
-            c = self.conn.cursor()
-            
-            c.execute('''
-                SELECT token, created_at, expires_at, browser_id, ip_address, user_agent
-                FROM sessions
-                WHERE user_id = ? AND is_active = 1
-                ORDER BY created_at DESC
-            ''', (user_id,))
-            
-            results = c.fetchall()
-            
-            sessions = []
-            for row in results:
-                sessions.append({
-                    'token': row[0],
-                    'created_at': row[1],
-                    'expires_at': row[2],
-                    'browser_id': row[3],
-                    'ip_address': row[4],
-                    'user_agent': row[5]
-                })
-            
-            return sessions
-            
-        except Exception as e:
-            print(f"❌ get_user_active_sessions error: {e}")
-            return []
-
-
-    def revoke_session(self, token):
-        """
-        Belirli bir session'ı iptal et
-        Güvenlik için (örn: cihaz kaybı)
-        """
-        try:
-            c = self.conn.cursor()
-            
-            c.execute('''
-                UPDATE sessions
-                SET is_active = 0
-                WHERE token = ?
-            ''', (token,))
-            
-            self.conn.commit()
-            
-            if c.rowcount > 0:
-                print(f"✅ Session revoked: {token[:10]}...")
-                return True
-            else:
-                print(f"⚠️ Session not found: {token[:10]}...")
-                return False
-                
-        except Exception as e:
-            print(f"❌ revoke_session error: {e}")
-            return False
-
-
-    def revoke_all_user_sessions(self, user_id, except_token=None):
-        """
-        Kullanıcının tüm session'larını iptal et
-        Güvenlik için (örn: şifre değişimi sonrası)
-        
-        except_token: Bu token hariç tüm session'ları iptal et (mevcut session korunsun)
-        """
-        try:
-            c = self.conn.cursor()
-            
-            if except_token:
-                c.execute('''
-                    UPDATE sessions
-                    SET is_active = 0
-                    WHERE user_id = ? AND token != ? AND is_active = 1
-                ''', (user_id, except_token))
-            else:
-                c.execute('''
-                    UPDATE sessions
-                    SET is_active = 0
-                    WHERE user_id = ? AND is_active = 1
-                ''', (user_id,))
-            
-            revoked_count = c.rowcount
-            self.conn.commit()
-            
-            print(f"🔒 Revoked {revoked_count} sessions for user {user_id}")
-            return revoked_count
-            
-        except Exception as e:
-            print(f"❌ revoke_all_user_sessions error: {e}")
-            return 0
-
-
-    # BONUS: Session Statistics
-    def get_session_stats(self):
-        """
-        Genel session istatistikleri
-        Admin dashboard için
-        """
-        try:
-            c = self.conn.cursor()
-            
-            # Toplam aktif session
-            c.execute('SELECT COUNT(*) FROM sessions WHERE is_active = 1')
-            active_sessions = c.fetchone()[0]
-            
-            # Benzersiz aktif kullanıcı
-            c.execute('SELECT COUNT(DISTINCT user_id) FROM sessions WHERE is_active = 1')
-            active_users = c.fetchone()[0]
-            
-            # Bugün oluşturulan session
-            from datetime import datetime, timedelta
-            today_start = datetime.now().replace(hour=0, minute=0, second=0).isoformat()
-            
-            c.execute('SELECT COUNT(*) FROM sessions WHERE created_at >= ?', (today_start,))
-            today_sessions = c.fetchone()[0]
-            
-            # Süresi dolmuş session (henüz temizlenmemiş)
-            now = datetime.now().isoformat()
-            c.execute('SELECT COUNT(*) FROM sessions WHERE expires_at < ? AND is_active = 1', (now,))
-            expired_sessions = c.fetchone()[0]
-            
-            return {
-                'active_sessions': active_sessions,
-                'active_users': active_users,
-                'today_sessions': today_sessions,
-                'expired_sessions': expired_sessions
-            }
-            
-        except Exception as e:
-            print(f"❌ get_session_stats error: {e}")
-            return None
- 
-    # ==================== WATCHLIST (PRO FEATURE) ====================
-    
-    def add_to_watchlist(self, user_id, player_name, notes=""):
-        """Watchlist'e oyuncu ekle"""
+    def update_score_display_preference(self, user_id, mode):
         conn = self.get_connection()
         if not conn:
             return False
-        
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM user_preferences WHERE user_id = %s", (user_id,))
+            exists = cursor.fetchone()
+            if exists:
+                cursor.execute(
+                    "UPDATE user_preferences SET score_display_mode = %s, updated_at = %s WHERE user_id = %s",
+                    (mode, datetime.now(), user_id)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO user_preferences (user_id, score_display_mode) VALUES (%s, %s)",
+                    (user_id, mode)
+                )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            conn.rollback()
+            return False
+
+    # ==================== WATCHLIST ====================
+    
+    def add_to_watchlist(self, user_id, player_name, notes=""):
+        conn = self.get_connection()
+        if not conn:
+            return False
         try:
             cursor = conn.cursor()
             cursor.execute(
-                """INSERT INTO watchlists (user_id, player_name, notes)
-                   VALUES (%s, %s, %s)""",
+                "INSERT INTO watchlists (user_id, player_name, notes) VALUES (%s, %s, %s)",
                 (user_id, player_name, notes)
             )
             conn.commit()
@@ -582,11 +409,9 @@ class Database:
             return False
     
     def get_watchlist(self, user_id):
-        """Kullanıcının watchlist'ini getir"""
         conn = self.get_connection()
         if not conn:
             return []
-        
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute(
@@ -598,224 +423,11 @@ class Database:
             return [dict(item) for item in watchlist]
         except Exception as e:
             return []
-        
-    # ==================== DAILY TRIVIA ====================
-    
-    def get_daily_trivia(self):
-        """Günlük trivia sorusunu getir - transaction safe"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            today = datetime.now().date()
-            
-            cursor.execute("""
-                SELECT id, question, option_a, option_b, option_c, option_d, 
-                    correct_option, explanation
-                FROM trivia_questions
-                WHERE date = %s
-                LIMIT 1
-            """, (today,))
-            
-            row = cursor.fetchone()
-            cursor.close()
-            conn.commit()  # ← ÖNEMLİ: Commit ekle
-            
-            if row:
-                return {
-                    'id': row[0],
-                    'question': row[1],
-                    'option_a': row[2],
-                    'option_b': row[3],
-                    'option_c': row[4],
-                    'option_d': row[5],
-                    'correct_option': row[6],
-                    'explanation': row[7]
-                }
-            return None
-            
-        except Exception as e:
-            print(f"❌ Trivia fetch error: {e}")
-            if conn:
-                conn.rollback()  # ← ÖNEMLİ: Rollback ekle
-            return None
 
-    def get_user_streak(self, user_id):
-        """Kullanıcının streak'ini getir - transaction safe"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT streak FROM user_trivia_streak
-                WHERE user_id = %s
-            """, (user_id,))
-            
-            row = cursor.fetchone()
-            cursor.close()
-            conn.commit()  # ← Ekle
-            
-            return row[0] if row else 0
-            
-        except Exception as e:
-            print(f"❌ Get streak error: {e}")
-            if conn:
-                conn.rollback()  # ← Ekle
-            return 0
-
-    def mark_user_trivia_played(self, user_id):
-        """Trivia cevabını kaydet - transaction safe"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            today = datetime.now().date()
-            
-            cursor.execute("""
-                INSERT INTO user_trivia_history (user_id, played_date)
-                VALUES (%s, %s)
-                ON CONFLICT (user_id, played_date) DO NOTHING
-            """, (user_id, today))
-            
-            conn.commit()  # ← Ekle
-            cursor.close()
-            return True
-            
-        except Exception as e:
-            print(f"❌ Mark trivia error: {e}")
-            if conn:
-                conn.rollback()  # ← Ekle
-            return False
-            
-            
-    def validate_session_by_token(self, token):
-        """Token ile session doğrula ve kullanıcıyı getir"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT u.id, u.username, u.email, u.is_pro, s.expires_at
-                FROM users u
-                JOIN user_sessions s ON u.id = s.user_id
-                WHERE s.token = %s AND s.is_active = true
-            """, (token,))
-            
-            row = cursor.fetchone()
-            cursor.close()
-            conn.commit()
-            
-            if row:
-                # Expiry kontrolü
-                expires_at = row[4]
-                if datetime.now() < expires_at:
-                    return {
-                        'id': row[0],
-                        'username': row[1],
-                        'email': row[2],
-                        'is_pro': row[3]
-                    }
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Token validation error: {e}")
-            if conn:
-                conn.rollback()
-            return None            
-            
-    def check_user_played_trivia_today(self, user_id):
-        """Kullanıcı bugün trivia oynadı mı - transaction safe"""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            today = datetime.now().date()
-            
-            cursor.execute("""
-                SELECT COUNT(*) FROM user_trivia_history
-                WHERE user_id = %s AND played_date = %s
-            """, (user_id, today))
-            
-            count = cursor.fetchone()[0]
-            cursor.close()
-            conn.commit()  # ← Ekle
-            
-            return count > 0
-            
-        except Exception as e:
-            print(f"❌ Check trivia error: {e}")
-            if conn:
-                conn.rollback()  # ← Ekle
-            return False  # Hata durumunda False dön
-
-        
-    def get_score_display_preference(self, user_id):
-        """Kullanıcının skor gösterim tercihini getir"""
-        conn = self.get_connection()
-        if not conn:
-            return 'full'
-        
-        try:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute(
-                "SELECT score_display_mode FROM user_preferences WHERE user_id = %s",
-                (user_id,)
-            )
-            result = cursor.fetchone()
-            cursor.close()
-            
-            if result and result.get('score_display_mode'):
-                return result['score_display_mode']
-            return 'full'  # Default
-        except Exception as e:
-            print(f"Error getting score display preference: {e}")
-            return 'full'
-
-    def update_score_display_preference(self, user_id, mode):
-        """Kullanıcının skor gösterim tercihini güncelle"""
-        conn = self.get_connection()
-        if not conn:
-            return False
-        
-        try:
-            cursor = conn.cursor()
-            
-            # Önce user_preferences kaydı var mı kontrol et
-            cursor.execute(
-                "SELECT id FROM user_preferences WHERE user_id = %s",
-                (user_id,)
-            )
-            exists = cursor.fetchone()
-            
-            if exists:
-                # Güncelle
-                cursor.execute(
-                    "UPDATE user_preferences SET score_display_mode = %s, updated_at = %s WHERE user_id = %s",
-                    (mode, datetime.now(), user_id)
-                )
-            else:
-                # Yeni kayıt oluştur
-                cursor.execute(
-                    """INSERT INTO user_preferences (user_id, score_display_mode) 
-                    VALUES (%s, %s)""",
-                    (user_id, mode)
-                )
-            
-            conn.commit()
-            cursor.close()
-            return True
-        except Exception as e:
-            conn.rollback()
-            print(f"Error updating score display preference: {e}")
-            return False
-    
     def remove_from_watchlist(self, watchlist_id):
-        """Watchlist'ten oyuncu sil"""
         conn = self.get_connection()
         if not conn:
             return False
-        
         try:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM watchlists WHERE id = %s", (watchlist_id,))
@@ -827,95 +439,124 @@ class Database:
             return False
     
     def update_watchlist_notes(self, watchlist_id, notes):
-        """Watchlist notlarını güncelle"""
         conn = self.get_connection()
         if not conn:
             return False
-        
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE watchlists SET notes = %s WHERE id = %s",
-                (notes, watchlist_id)
-            )
+            cursor.execute("UPDATE watchlists SET notes = %s WHERE id = %s", (notes, watchlist_id))
             conn.commit()
             cursor.close()
             return True
         except Exception as e:
             conn.rollback()
             return False
-        
-    def validate_session_by_id(self, session_id, browser_id=None):
+
+    # ==================== DAILY TRIVIA ====================
+    
+    def get_daily_trivia(self):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            today = datetime.now().date()
+            cursor.execute("""
+                SELECT id, question, option_a, option_b, option_c, option_d,
+                    correct_option, explanation
+                FROM trivia_questions WHERE date = %s LIMIT 1
+            """, (today,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.commit()
+            if row:
+                return {
+                    'id': row[0], 'question': row[1],
+                    'option_a': row[2], 'option_b': row[3],
+                    'option_c': row[4], 'option_d': row[5],
+                    'correct_option': row[6], 'explanation': row[7]
+                }
+            return None
+        except Exception as e:
+            print(f"❌ Trivia fetch error: {e}")
+            try: 
+                conn.rollback()
+            except: 
+                pass
+            return None
+
+    def get_user_streak(self, user_id):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT streak FROM user_trivia_streak WHERE user_id = %s", (user_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.commit()
+            return row[0] if row else 0
+        except Exception as e:
+            print(f"❌ Get streak error: {e}")
+            return 0
+
+    def mark_user_trivia_played(self, user_id):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            today = datetime.now().date()
+            cursor.execute("""
+                INSERT INTO user_trivia_history (user_id, played_date)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, played_date) DO NOTHING
+            """, (user_id, today))
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            print(f"❌ Mark trivia error: {e}")
+            try: 
+                conn.rollback()
+            except: 
+                pass
+            return False
+
+    def check_user_played_trivia_today(self, user_id):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            today = datetime.now().date()
+            cursor.execute("""
+                SELECT COUNT(*) FROM user_trivia_history
+                WHERE user_id = %s AND played_date = %s
+            """, (user_id, today))
+            count = cursor.fetchone()[0]
+            cursor.close()
+            conn.commit()
+            return count > 0
+        except Exception as e:
+            print(f"❌ Check trivia error: {e}")
+            return False
+
+    # ==================== USER ====================
+
+    def get_user_by_id(self, user_id):
         conn = self.get_connection()
         if not conn:
             return None
-        
         try:
             cursor = conn.cursor(cursor_factory=RealDictCursor)
-            
-            if browser_id:
-                cursor.execute(
-                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
-                            CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
-                    FROM users u
-                    JOIN sessions s ON u.id = s.user_id
-                    WHERE s.session_id = %s 
-                    AND s.browser_id = %s
-                    AND s.expires_at > CURRENT_TIMESTAMP""",
-                    (session_id, browser_id)
-                )
-            else:
-                cursor.execute(
-                    """SELECT u.id, u.username, u.email, u.created_at, u.last_login,
-                            CASE WHEN u.username = 'admin' THEN true ELSE false END as is_pro
-                    FROM users u
-                    JOIN sessions s ON u.id = s.user_id
-                    WHERE s.session_id = %s 
-                    AND s.expires_at > CURRENT_TIMESTAMP""",
-                    (session_id,)
-                )
-            
+            cursor.execute(
+                "SELECT id, username, email, created_at FROM users WHERE id = %s",
+                (user_id,)
+            )
             result = cursor.fetchone()
             cursor.close()
-            
             if result:
-                return dict(result)
-            
+                user = dict(result)
+                user['is_pro'] = (user.get('username') == 'admin')
+                return user
             return None
-            
         except Exception as e:
-            print(f"❌ Session ID validation error: {e}")
-            return None    
+            print(f"❌ get_user_by_id error: {e}")
+            return None
 
 
-    def logout_session_by_id(self, session_id, browser_id=None):
-        """Session ID ile session'ı sonlandır"""
-        conn = self.get_connection()
-        if not conn:
-            return False
-        
-        try:
-            cursor = conn.cursor()
-            
-            if browser_id:
-                cursor.execute(
-                    "DELETE FROM sessions WHERE session_id = %s AND browser_id = %s",
-                    (session_id, browser_id)
-                )
-            else:
-                cursor.execute(
-                    "DELETE FROM sessions WHERE session_id = %s",
-                    (session_id,)
-                )
-            
-            conn.commit()
-            cursor.close()
-            print(f"✅ Session logged out by ID")
-            return True
-            
-        except Exception as e:
-            conn.rollback()
-            print(f"❌ Logout error: {e}")
-            return False
 # Singleton instance
 db = Database()
