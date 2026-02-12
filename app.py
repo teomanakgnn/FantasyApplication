@@ -89,11 +89,16 @@ def is_mobile_app():
     except Exception:
         return False
 
+def is_native_app():
+    """Capacitor URL'sindeki ?app=true parametresini kontrol et."""
+    return st.query_params.get("app") == "true"
+
 embed_mode = is_embedded()
 mobile_app_mode = is_mobile_app()
+native_app_mode = is_native_app()
 
 extra_styles = ""
-if embed_mode or mobile_app_mode:
+if embed_mode or mobile_app_mode or native_app_mode:
     extra_styles = """
         /* --- Streamlit UI Chrome Gizle --- */
         [data-testid="stHeader"] {display: none !important;}
@@ -119,7 +124,7 @@ if embed_mode or mobile_app_mode:
 
 # Mobil uygulama için ek native-hissiyat CSS'i
 mobile_native_styles = ""
-if mobile_app_mode:
+if mobile_app_mode or native_app_mode:
     mobile_native_styles = """
         /* --- Native App Hissiyatı --- */
         html, body {
@@ -254,7 +259,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Mobil uygulama için native davranış JavaScript'i
-if mobile_app_mode:
+if mobile_app_mode or native_app_mode:
     components.html("""
     <script>
         (function() {
