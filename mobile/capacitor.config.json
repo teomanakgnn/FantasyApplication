@@ -1,0 +1,41 @@
+{
+    "appId": "com.hooplifenba.app",
+    "appName": "HoopLife NBA",
+    "webDir": "www",
+    "server": {
+        "url": "https://fantasyapplication.streamlit.app",
+        "cleartext": false,
+        "androidScheme": "https",
+        "allowNavigation": [
+            "*.streamlit.app",
+            "*.streamlit.io"
+        ]
+    },
+    "plugins": {
+        "SplashScreen": {
+            "launchShowDuration": 2500,
+            "launchAutoHide": true,
+            "launchFadeOutDuration": 500,
+            "backgroundColor": "#0E1117",
+            "showSpinner": true,
+            "spinnerColor": "#FF4B4B",
+            "androidSpinnerStyle": "large",
+            "splashFullScreen": true,
+            "splashImmersive": true
+        },
+        "StatusBar": {
+            "style": "DARK",
+            "backgroundColor": "#0E1117"
+        },
+        "Keyboard": {
+            "resize": "body",
+            "resizeOnFullScreen": true
+        }
+    },
+    "android": {
+        "allowMixedContent": false,
+        "backgroundColor": "#0E1117",
+        "webContentsDebuggingEnabled": false,
+        "appendUserAgent": "HoopLifeNBA/1.0 Android"
+    }
+}
