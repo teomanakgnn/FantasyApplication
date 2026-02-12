@@ -44,6 +44,7 @@ def get_nba_teams_dynamic():
         print(f"Takım listesi çekilemedi: {e}")
         return {}
 
+@st.cache_data(ttl=3600)
 def get_game_ids(date):
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
@@ -103,7 +104,7 @@ def get_scoreboard(date):
             continue
     return games
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=86400)
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
 
