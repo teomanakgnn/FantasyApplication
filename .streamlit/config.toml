@@ -9,8 +9,8 @@ gatherUsageStats = false
 serverAddress = "0.0.0.0"
 
 [ui]
-hideTopBar = false
-hideSidebarNav = false
+hideTopBar = true
+hideSidebarNav = true
 
 [theme]
 base = "dark"
