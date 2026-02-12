@@ -975,7 +975,7 @@ def render_player_trends_page():
     # Cache key: her saat yenilenir
     cache_hour_key = datetime.now().strftime("%Y%m%d_%H")
     
-    with st.spinner(f"🚀 Loading {'full season' if max_days >= 999 else f'last {max_days} days'} data... (İlk yüklemede biraz sürebilir, sonraki açılışlarda anında gelir)"):
+    with st.spinner(f"🚀 Loading {'full season' if max_days >= 999 else f'last {max_days} days'} data... (It might take a little while to load, but it's instant on subsequent refreshes.)"):
         df = fetch_season_data(max_days, _cache_key=cache_hour_key)
     
     if df is None or df.empty:
