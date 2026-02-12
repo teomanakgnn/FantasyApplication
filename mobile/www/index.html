@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0E1117">
+    <title>HoopLife NBA</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Loading screen (Capacitor server URL modu aktif iken 
+         bu sayfa kısa süre görünür, sonra Streamlit yüklenir) -->
+    <div id="loading-screen">
+        <div class="loading-container">
+            <div class="logo-wrapper">
+                <div class="basketball-icon">🏀</div>
+                <h1 class="app-title">HoopLife<span class="nba-text">NBA</span></h1>
+            </div>
+            <div class="loading-bar-container">
+                <div class="loading-bar"></div>
+            </div>
+            <p class="loading-text">Loading your fantasy dashboard...</p>
+        </div>
+    </div>
+
+    <script>
+        // Capacitor yüklendikten sonra server URL'ye yönlendirilir
+        // Bu sayfa sadece fallback olarak kullanılır
+        window.addEventListener('load', function() {
+            // Eğer 10 saniye içinde Streamlit yüklenmediyse bilgi ver
+            setTimeout(function() {
+                var loadingText = document.querySelector('.loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Connecting to server...';
+                }
+            }, 5000);
+            
+            setTimeout(function() {
+                var loadingText = document.querySelector('.loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Please check your internet connection.';
+                }
+            }, 15000);
+        });
+    </script>
+</body>
+</html>

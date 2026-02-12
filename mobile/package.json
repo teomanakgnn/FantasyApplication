@@ -1,0 +1,25 @@
+{
+    "name": "hooplife-nba",
+    "version": "1.0.0",
+    "description": "HoopLife NBA - Fantasy Basketball App",
+    "main": "index.js",
+    "scripts": {
+        "build": "echo 'Static project - no build needed'",
+        "cap:add": "npx cap add android",
+        "cap:sync": "npx cap sync",
+        "cap:open": "npx cap open android",
+        "cap:build": "npx cap sync && npx cap open android"
+    },
+    "dependencies": {
+        "@capacitor/android": "^6.0.0",
+        "@capacitor/core": "^6.0.0",
+        "@capacitor/splash-screen": "^6.0.0",
+        "@capacitor/status-bar": "^6.0.0",
+        "@capacitor/keyboard": "^6.0.0"
+    },
+    "devDependencies": {
+        "@capacitor/cli": "^6.0.0"
+    },
+    "author": "HoopLife NBA",
+    "license": "MIT"
+}

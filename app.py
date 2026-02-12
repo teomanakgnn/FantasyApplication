@@ -76,25 +76,80 @@ is_authenticated = check_authentication_enhanced()
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
 
-# ==================== 5. EMBED MOD KONTROLÜ ====================
+# ==================== 5. MOBİL UYGULAMA & EMBED KONTROLÜ ====================
 def is_embedded():
     return st.query_params.get("embed") == "true"
 
+def is_mobile_app():
+    """Capacitor WebView'den gelen istekleri User-Agent ile algıla."""
+    try:
+        headers = st.context.headers
+        ua = headers.get("User-Agent", "") or headers.get("user-agent", "")
+        return "HoopLifeNBA" in ua
+    except Exception:
+        return False
+
 embed_mode = is_embedded()
+mobile_app_mode = is_mobile_app()
 
 extra_styles = ""
-if embed_mode:
+if embed_mode or mobile_app_mode:
     extra_styles = """
+        /* --- Streamlit UI Chrome Gizle --- */
         [data-testid="stHeader"] {display: none !important;}
         [data-testid="stToolbar"] {display: none !important;}
+        [data-testid="stDecoration"] {display: none !important;}
+        [data-testid="stStatusWidget"] {display: none !important;}
+        [data-testid="stBottom"] {display: none !important;}
         header {display: none !important;}
         #MainMenu {display: none !important;}
         footer {display: none !important;}
         .stDeployButton {display: none !important;}
-        .main .block-container { padding-top: 0.5rem !important; }
-        [data-testid="stStatusWidget"] {display: none !important;}
-        [data-testid="stBottom"] {display: none !important;}
         .reportview-container .main footer {display: none !important;}
+        [data-testid="manage-app-button"] {display: none !important;}
+        .viewerBadge_container__r5tak {display: none !important;}
+        .stActionButton {display: none !important;}
+        .viewerBadge_link__1S137 {display: none !important;}
+        .viewerBadge_container__1QSob {display: none !important;}
+        [data-testid="stFooter"] {display: none !important;}
+        a[href*="github.com/streamlit"] {display: none !important;}
+        .stApp > header {display: none !important;}
+        div[class*="viewerBadge"] {display: none !important;}
+    """
+
+# Mobil uygulama için ek native-hissiyat CSS'i
+mobile_native_styles = ""
+if mobile_app_mode:
+    mobile_native_styles = """
+        /* --- Native App Hissiyatı --- */
+        html, body {
+            overscroll-behavior: none !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+
+        /* Safe area (notch'lu telefonlar) */
+        .main .block-container {
+            padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+            padding-left: max(0.6rem, env(safe-area-inset-left)) !important;
+            padding-right: max(0.6rem, env(safe-area-inset-right)) !important;
+        }
+
+        /* Seçim ve highlight'ı engelle (native hissi) */
+        * {
+            -webkit-tap-highlight-color: transparent !important;
+        }
+
+        /* Scrollbar gizle (native hissi) */
+        ::-webkit-scrollbar {
+            width: 0px !important;
+            background: transparent !important;
+        }
+
+        /* Daha küçük üst boşluk */
+        .main .block-container {
+            padding-top: 0.5rem !important;
+        }
     """
 
 # ==================== 6. GLOBAL CSS ====================
@@ -194,8 +249,102 @@ st.markdown(f"""
         }}
 
         {extra_styles}
+        {mobile_native_styles}
     </style>
 """, unsafe_allow_html=True)
+
+# Mobil uygulama için native davranış JavaScript'i
+if mobile_app_mode:
+    components.html("""
+    <script>
+        (function() {
+            'use strict';
+            var parentDoc = window.parent.document;
+
+            // Pull-to-refresh engelle
+            var lastTouchY = 0;
+            parentDoc.addEventListener('touchstart', function(e) {
+                lastTouchY = e.touches[0].clientY;
+            }, {passive: true});
+            parentDoc.addEventListener('touchmove', function(e) {
+                var touchY = e.touches[0].clientY;
+                var scrollTop = parentDoc.documentElement.scrollTop || parentDoc.body.scrollTop;
+                if (scrollTop <= 0 && touchY > lastTouchY) {
+                    e.preventDefault();
+                }
+            }, {passive: false});
+
+            // Long-press context menu engelle
+            parentDoc.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                return false;
+            });
+
+            // Çift tıklama zoom engelle
+            var lastTap = 0;
+            parentDoc.addEventListener('touchend', function(e) {
+                var now = Date.now();
+                if (now - lastTap < 300) {
+                    e.preventDefault();
+                }
+                lastTap = now;
+            }, {passive: false});
+
+            // Streamlit elementlerini sürekli kontrol et ve gizle
+            function hideStreamlitChrome() {
+                var selectors = [
+                    '[data-testid="stHeader"]',
+                    '[data-testid="stToolbar"]',
+                    '[data-testid="stDecoration"]',
+                    '[data-testid="stStatusWidget"]',
+                    '[data-testid="stBottom"]',
+                    '#MainMenu',
+                    'footer',
+                    '.stDeployButton',
+                    '[data-testid="manage-app-button"]',
+                    '.viewerBadge_container__r5tak',
+                    '.stActionButton',
+                    '.viewerBadge_link__1S137',
+                    '.viewerBadge_container__1QSob',
+                    '[data-testid="stFooter"]',
+                    'a[href*="github.com/streamlit"]',
+                    '.stApp > header',
+                    'div[class*="viewerBadge"]'
+                ];
+                selectors.forEach(function(sel) {
+                    var els = parentDoc.querySelectorAll(sel);
+                    els.forEach(function(el) {
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                        el.style.height = '0';
+                    });
+                });
+
+                // Metin içeriğine göre "Hosted by Streamlit" vb. yakala (Class değişirse diye)
+                var allFooters = parentDoc.querySelectorAll('footer, div, span, a');
+                allFooters.forEach(function(el) {
+                    if (el.innerText && (el.innerText.includes("Hosted by Streamlit") || el.innerText.includes("Made with Streamlit"))) {
+                        // Sadece kısa metinleri gizle (kullanıcı içeriği olmasın)
+                        if (el.innerText.length < 100) {
+                            el.style.display = 'none';
+                            el.style.visibility = 'hidden';
+                        }
+                    }
+                });
+            }
+
+            // İlk çalıştırma + periyodik kontrol
+            hideStreamlitChrome();
+            setInterval(hideStreamlitChrome, 2000);
+
+            // MutationObserver ile yeni eklenen elementleri de yakala
+            var observer = new MutationObserver(function() {
+                hideStreamlitChrome();
+            });
+            observer.observe(parentDoc.body, {childList: true, subtree: true});
+        })();
+    </script>
+    """, height=0, width=0)
 
 # ==================== 7. SIDEBAR DOCK (BASKETBOL BUTONU) ====================
 components.html("""
