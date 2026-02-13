@@ -133,15 +133,25 @@ mobile_native_styles = ""
 if mobile_app_mode or native_app_mode:
     mobile_native_styles = """
         /* ========================================
-           NATIVE APP — TEMEL DAVRANIŞ
+           NATIVE APP — TEMEL DAVRANIŞ & SMOOTH
            ======================================== */
         html, body {
             overscroll-behavior: none !important;
             -webkit-overflow-scrolling: touch !important;
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+            text-rendering: optimizeLegibility !important;
         }
 
         * {
             -webkit-tap-highlight-color: transparent !important;
+        }
+
+        /* Tüm etkileşimli elemanlar smooth geçiş */
+        button, a, input, select, details, summary,
+        [data-baseweb="tab"],
+        .stButton > button {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
 
         ::-webkit-scrollbar {
@@ -161,10 +171,10 @@ if mobile_app_mode or native_app_mode:
             max-width: 100% !important;
         }
 
-        /* Daha sıkı padding ama border'ı koru */
         section.main > div {
             padding: 14px 10px !important;
-            margin: 8px 6px !important;
+            margin: 8px 4px !important;
+            border-radius: 12px !important;
         }
 
         [data-testid="stAppViewContainer"] {
@@ -179,12 +189,14 @@ if mobile_app_mode or native_app_mode:
             font-size: 1.3rem !important;
             margin-bottom: 4px !important;
             margin-top: 6px !important;
+            letter-spacing: -0.3px !important;
         }
 
         h2 {
             font-size: 1.1rem !important;
             margin-top: 10px !important;
             margin-bottom: 6px !important;
+            letter-spacing: -0.2px !important;
         }
 
         h3 {
@@ -196,6 +208,7 @@ if mobile_app_mode or native_app_mode:
         hr {
             margin-top: 8px !important;
             margin-bottom: 8px !important;
+            border-color: rgba(255,255,255,0.06) !important;
         }
 
         /* ========================================
@@ -208,6 +221,12 @@ if mobile_app_mode or native_app_mode:
             font-weight: 600 !important;
             border-radius: 10px !important;
             padding: 8px 14px !important;
+            transform: translateZ(0) !important;
+        }
+
+        .stButton > button:active {
+            transform: scale(0.97) translateZ(0) !important;
+            opacity: 0.85 !important;
         }
 
         button[kind="primary"] {
@@ -216,11 +235,21 @@ if mobile_app_mode or native_app_mode:
         }
 
         /* ========================================
+           NATIVE APP — KARTLAR (border=True)
+           ======================================== */
+
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 12px !important;
+            transition: box-shadow 0.2s ease !important;
+        }
+
+        /* ========================================
            NATIVE APP — TABLOLAR
            ======================================== */
 
         [data-testid="stDataFrame"] {
-            border-radius: 8px !important;
+            border-radius: 10px !important;
+            overflow: hidden !important;
         }
 
         /* ========================================
@@ -234,6 +263,7 @@ if mobile_app_mode or native_app_mode:
         [data-testid="stTabs"] [data-baseweb="tab"] {
             font-size: 13px !important;
             padding: 8px 12px !important;
+            border-radius: 6px 6px 0 0 !important;
         }
 
         /* ========================================
@@ -243,11 +273,12 @@ if mobile_app_mode or native_app_mode:
         [data-testid="stAlert"] {
             padding: 10px 12px !important;
             font-size: 13px !important;
-            border-radius: 8px !important;
+            border-radius: 10px !important;
         }
 
         details {
-            border-radius: 8px !important;
+            border-radius: 10px !important;
+            transition: all 0.2s ease !important;
         }
 
         summary {
@@ -259,6 +290,10 @@ if mobile_app_mode or native_app_mode:
         /* ========================================
            NATIVE APP — SIDEBAR
            ======================================== */
+
+        section[data-testid="stSidebar"] {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
 
         section[data-testid="stSidebar"] > div {
             padding: 10px 12px !important;
@@ -296,7 +331,18 @@ if mobile_app_mode or native_app_mode:
         /* Dialog/modal */
         [data-testid="stModal"] > div {
             padding: 14px !important;
-            border-radius: 12px !important;
+            border-radius: 14px !important;
+        }
+
+        /* Form elemanları smooth */
+        input, select, [data-baseweb="select"] {
+            border-radius: 8px !important;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+        }
+
+        /* Spinner/loading daha smooth */
+        .stSpinner > div {
+            border-radius: 10px !important;
         }
     """
 
@@ -874,14 +920,7 @@ def handle_daily_trivia(all_cookies):
         print(f"❌ Trivia handler error: {e}")
 
 
-# ==================== 10. ADSENSE ====================
-def render_adsense():
-    try:
-        with open("adsense.html", 'r', encoding='utf-8') as f:
-            source_code = f.read()
-        components.html(source_code, height=300, scrolling=False)
-    except FileNotFoundError:
-        pass
+
 
 
 # ==================== 11. SIDEBAR ====================
@@ -1130,10 +1169,7 @@ def home_page():
         prefs = None
         user_id = None
 
-    if not is_pro:
-        st.markdown("---")
-        render_adsense()
-        st.markdown("---")
+
 
     date, weights, run = render_sidebar()
     st.session_state['last_weights'] = weights
