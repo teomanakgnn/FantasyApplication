@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0E1117">
     <title>HoopLife NBA</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <!-- Loading screen (Capacitor server URL modu aktif iken 
          bu sayfa kısa süre görünür, sonra Streamlit yüklenir) -->
@@ -28,22 +31,61 @@
     <script>
         // Capacitor yüklendikten sonra server URL'ye yönlendirilir
         // Bu sayfa sadece fallback olarak kullanılır
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             // Eğer 10 saniye içinde Streamlit yüklenmediyse bilgi ver
-            setTimeout(function() {
+            setTimeout(function () {
                 var loadingText = document.querySelector('.loading-text');
                 if (loadingText) {
                     loadingText.textContent = 'Connecting to server...';
                 }
             }, 5000);
-            
-            setTimeout(function() {
+
+            setTimeout(function () {
                 var loadingText = document.querySelector('.loading-text');
                 if (loadingText) {
                     loadingText.textContent = 'Please check your internet connection.';
                 }
             }, 15000);
+
+            // ====== EARLY STREAMLIT CHROME HIDING ======
+            // Streamlit yüklenmeden önce CSS enjekte et
+            function injectHideCSS(doc) {
+                if (doc && doc.head && !doc.getElementById('hooplife-early-hide')) {
+                    var style = doc.createElement('style');
+                    style.id = 'hooplife-early-hide';
+                    style.textContent = [
+                        '[data-testid="stHeader"],',
+                        '[data-testid="stToolbar"],',
+                        '[data-testid="stDecoration"],',
+                        '[data-testid="stStatusWidget"],',
+                        '[data-testid="stBottom"],',
+                        '[data-testid="stFooter"],',
+                        '[data-testid="stMainMenu"],',
+                        '[data-testid="stRunningMan"],',
+                        '[data-testid="stAppRunningIndicator"],',
+                        '[data-testid="manage-app-button"],',
+                        'header, footer, #MainMenu,',
+                        '.stDeployButton, .stActionButton,',
+                        '.stApp > header,',
+                        'div[class*="viewerBadge"],',
+                        'a[href*="streamlit.io"],',
+                        'a[href*="github.com/streamlit"] {',
+                        '  display: none !important;',
+                        '  visibility: hidden !important;',
+                        '  height: 0 !important;',
+                        '  overflow: hidden !important;',
+                        '  opacity: 0 !important;',
+                        '}'
+                    ].join('\n');
+                    doc.head.appendChild(style);
+                }
+            }
+
+            // Top-level document'a da enjekte et
+            try { injectHideCSS(document); } catch (e) { }
+            try { injectHideCSS(window.top.document); } catch (e) { }
         });
     </script>
 </body>
+
 </html>

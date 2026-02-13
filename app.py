@@ -104,56 +104,411 @@ if embed_mode or mobile_app_mode or native_app_mode:
         [data-testid="stHeader"] {display: none !important;}
         [data-testid="stToolbar"] {display: none !important;}
         [data-testid="stDecoration"] {display: none !important;}
-        [data-testid="stStatusWidget"] {display: none !important;}
-        [data-testid="stBottom"] {display: none !important;}
+        [data-testid="stStatusWidget"] {display: none !important; visibility: hidden !important;}
+        [data-testid="stBottom"] {display: none !important; height: 0 !important; overflow: hidden !important;}
+        [data-testid="stBottom"] > div {display: none !important;}
+        [data-testid="stBottom"] a {display: none !important;}
+        [data-testid="stFooter"] {display: none !important;}
+        [data-testid="stMainMenu"] {display: none !important;}
+        [data-testid="stRunningMan"] {display: none !important;}
+        [data-testid="stAppRunningIndicator"] {display: none !important;}
+        [data-testid="stNotification"] {display: none !important;}
         header {display: none !important;}
         #MainMenu {display: none !important;}
         footer {display: none !important;}
         .stDeployButton {display: none !important;}
         .reportview-container .main footer {display: none !important;}
         [data-testid="manage-app-button"] {display: none !important;}
-        .viewerBadge_container__r5tak {display: none !important;}
         .stActionButton {display: none !important;}
-        .viewerBadge_link__1S137 {display: none !important;}
-        .viewerBadge_container__1QSob {display: none !important;}
-        [data-testid="stFooter"] {display: none !important;}
-        a[href*="github.com/streamlit"] {display: none !important;}
         .stApp > header {display: none !important;}
         div[class*="viewerBadge"] {display: none !important;}
+        a[class*="viewerBadge"] {display: none !important;}
+        span[class*="viewerBadge"] {display: none !important;}
+        a[href*="streamlit.io"] {display: none !important;}
+        a[href*="github.com/streamlit"] {display: none !important;}
     """
 
 # Mobil uygulama için ek native-hissiyat CSS'i
 mobile_native_styles = ""
 if mobile_app_mode or native_app_mode:
     mobile_native_styles = """
-        /* --- Native App Hissiyatı --- */
+        /* ========================================
+           NATIVE APP — TEMEL DAVRANIŞ
+           ======================================== */
         html, body {
             overscroll-behavior: none !important;
             -webkit-overflow-scrolling: touch !important;
         }
 
-        /* Safe area (notch'lu telefonlar) */
-        .main .block-container {
-            padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
-            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
-            padding-left: max(0.6rem, env(safe-area-inset-left)) !important;
-            padding-right: max(0.6rem, env(safe-area-inset-right)) !important;
-        }
-
-        /* Seçim ve highlight'ı engelle (native hissi) */
+        /* Seçim ve highlight'ı engelle */
         * {
             -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
         }
 
-        /* Scrollbar gizle (native hissi) */
+        /* Scrollbar gizle */
         ::-webkit-scrollbar {
             width: 0px !important;
             background: transparent !important;
         }
 
-        /* Daha küçük üst boşluk */
+        /* ========================================
+           NATIVE APP — ANA KONTEYNER SPACING
+           ======================================== */
+
+        /* Ana container: sıkı padding, kenardan kenara hissi */
         .main .block-container {
-            padding-top: 0.5rem !important;
+            padding-top: max(0.4rem, env(safe-area-inset-top)) !important;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+            padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+            padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
+            max-width: 100% !important;
+        }
+
+        /* styles.py'deki section.main > div padding/margin override */
+        section.main > div {
+            padding: 10px 8px !important;
+            margin: 4px 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+        }
+
+        /* stAppViewContainer tam genişlik */
+        [data-testid="stAppViewContainer"] {
+            padding-top: 0 !important;
+        }
+
+        /* ========================================
+           NATIVE APP — BAŞLIK & BÖLÜM AYARLARI
+           ======================================== */
+
+        /* Daha kompakt başlıklar */
+        h1 {
+            font-size: 17px !important;
+            margin-bottom: 2px !important;
+            margin-top: 4px !important;
+        }
+
+        h2 {
+            font-size: 14px !important;
+            margin-top: 12px !important;
+            margin-bottom: 4px !important;
+            padding-bottom: 4px !important;
+        }
+
+        h3 {
+            font-size: 13px !important;
+            margin-top: 8px !important;
+            margin-bottom: 2px !important;
+        }
+
+        /* Subheader daha kompakt */
+        [data-testid="stSubheader"] {
+            font-size: 14px !important;
+            margin-top: 6px !important;
+            padding-top: 4px !important;
+        }
+
+        /* Caption daha küçük */
+        [data-testid="stCaption"],
+        .stCaption {
+            font-size: 11px !important;
+            margin-bottom: 4px !important;
+        }
+
+        /* Divider/separator daha sıkı */
+        hr {
+            margin-top: 6px !important;
+            margin-bottom: 6px !important;
+        }
+        [data-testid="stDivider"] {
+            margin-top: 4px !important;
+            margin-bottom: 4px !important;
+        }
+
+        /* Markdown paragraflar arası boşluk azalt */
+        [data-testid="stMarkdown"] p {
+            margin-bottom: 0.3rem !important;
+        }
+
+        /* ========================================
+           NATIVE APP — OYUN KARTLARI (GAME CARDS)
+           ======================================== */
+
+        /* Kart container'ları daha kompakt */
+        [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] {
+            gap: 4px !important;
+        }
+
+        /* Her kart (st.container border=True) */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 10px !important;
+            overflow: hidden !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] > div {
+            padding: 6px 4px !important;
+        }
+
+        /* Kart içi column'lar daha sıkı */
+        [data-testid="stHorizontalBlock"] {
+            gap: 2px !important;
+        }
+        [data-testid="stColumn"] {
+            padding: 0 2px !important;
+        }
+
+        /* Takım logoları mobilde biraz küçük */
+        [data-testid="stVerticalBlockBorderWrapper"] img {
+            width: 38px !important;
+            height: 38px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — BUTONLAR (BUTTONS)
+           ======================================== */
+
+        /* Tüm butonlar: daha iyi touch target, mobil estetik */
+        .stButton > button {
+            min-height: 42px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            padding: 8px 12px !important;
+            letter-spacing: 0.2px !important;
+        }
+
+        /* Primary butonlar */
+        button[kind="primary"] {
+            min-height: 42px !important;
+            border-radius: 10px !important;
+        }
+
+        /* "Box Score" ve benzeri kartlardaki butonlar */
+        [data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
+            min-height: 36px !important;
+            font-size: 12px !important;
+            padding: 6px 8px !important;
+            border-radius: 8px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — TABLO / DATAFRAME
+           ======================================== */
+
+        /* Daha kompakt tablolar */
+        [data-testid="stDataFrame"] {
+            font-size: 12px !important;
+            border-radius: 8px !important;
+        }
+
+        [data-testid="stDataFrame"] table {
+            font-size: 11px !important;
+        }
+
+        [data-testid="stDataFrame"] th {
+            font-size: 10px !important;
+            padding: 4px 6px !important;
+            white-space: nowrap !important;
+        }
+
+        [data-testid="stDataFrame"] td {
+            padding: 3px 6px !important;
+            font-size: 11px !important;
+        }
+
+        /* Glide data grid (Streamlit'in yeni table bileşeni) */
+        [data-testid="stDataFrameGlideDataEditor"],
+        [data-testid="stDataFrame"] > div {
+            border-radius: 8px !important;
+            overflow: hidden !important;
+        }
+
+        /* ========================================
+           NATIVE APP — FORM ELEMANLARI
+           ======================================== */
+
+        /* Input, select, multiselect daha kompakt */
+        input, select {
+            height: 38px !important;
+            font-size: 13px !important;
+            border-radius: 8px !important;
+        }
+
+        /* Selectbox */
+        [data-testid="stSelectbox"] {
+            margin-bottom: 6px !important;
+        }
+        [data-testid="stSelectbox"] > div > div {
+            min-height: 38px !important;
+            font-size: 13px !important;
+        }
+
+        /* Multiselect */
+        [data-testid="stMultiSelect"] > div > div {
+            min-height: 38px !important;
+            font-size: 12px !important;
+        }
+
+        /* Radio butonları */
+        [data-testid="stRadio"] label {
+            font-size: 13px !important;
+            padding: 6px 0 !important;
+        }
+
+        /* Slider */
+        [data-testid="stSlider"] {
+            padding-top: 4px !important;
+            padding-bottom: 8px !important;
+        }
+        [data-testid="stSlider"] label {
+            font-size: 12px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — TABS
+           ======================================== */
+
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {
+            gap: 0 !important;
+        }
+
+        [data-testid="stTabs"] [data-baseweb="tab"] {
+            font-size: 12px !important;
+            padding: 6px 10px !important;
+            min-height: 36px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — EXPANDER
+           ======================================== */
+
+        details {
+            border-radius: 8px !important;
+            margin-bottom: 6px !important;
+        }
+
+        summary {
+            font-size: 12px !important;
+            padding: 8px 10px !important;
+            min-height: 40px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        /* ========================================
+           NATIVE APP — ALERT / INFO / WARNING BOX
+           ======================================== */
+
+        [data-testid="stAlert"] {
+            padding: 8px 10px !important;
+            font-size: 12px !important;
+            border-radius: 8px !important;
+            margin-bottom: 6px !important;
+        }
+
+        /* Spinner */
+        .stSpinner {
+            font-size: 12px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — SIDEBAR İYİLEŞTİRMELERİ
+           ======================================== */
+
+        /* Sidebar iç padding */
+        section[data-testid="stSidebar"] > div {
+            padding: 8px 10px !important;
+        }
+
+        /* Sidebar logo daha küçük */
+        section[data-testid="stSidebar"] [data-testid="stImage"] {
+            max-width: 180px !important;
+            margin: 0 auto 4px auto !important;
+        }
+
+        /* Sidebar heading */
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {
+            font-size: 11px !important;
+        }
+
+        /* Sidebar butonları */
+        section[data-testid="stSidebar"] .stButton > button {
+            min-height: 40px !important;
+            font-size: 13px !important;
+            border-radius: 10px !important;
+            margin-bottom: 4px !important;
+        }
+
+        /* Sidebar divider */
+        section[data-testid="stSidebar"] hr {
+            margin: 6px 0 !important;
+        }
+
+        /* ========================================
+           NATIVE APP — METRIC İYİLEŞTİRMELERİ
+           ======================================== */
+
+        [data-testid="stMetric"] {
+            padding: 4px 0 !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 11px !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important;
+        }
+        [data-testid="stMetricDelta"] {
+            font-size: 11px !important;
+        }
+
+        /* ========================================
+           NATIVE APP — DİĞER AYARLAR
+           ======================================== */
+
+        /* Column gap azalt */
+        [data-testid="stColumns"] {
+            gap: 4px !important;
+        }
+
+        /* Container/block boşlukları sıkıştır */
+        [data-testid="stVerticalBlock"] > div {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        /* İç blok gap'leri düşür */
+        [data-testid="stVerticalBlock"] {
+            gap: 0.35rem !important;
+        }
+
+        /* Spoiler/excitement badge kompakt */
+        .excitement-badge {
+            font-size: 0.7em !important;
+            padding: 1px 6px !important;
+        }
+
+        /* Image container padding azalt */
+        [data-testid="stImage"] {
+            margin-bottom: 4px !important;
+        }
+
+        /* Progress bar */
+        [data-testid="stProgressBar"] {
+            margin-bottom: 6px !important;
+        }
+
+        /* Toast/notification */
+        [data-testid="stToast"] {
+            font-size: 12px !important;
+            border-radius: 10px !important;
+        }
+
+        /* Dialog/modal */
+        [data-testid="stModal"] > div {
+            padding: 12px !important;
+            border-radius: 14px !important;
         }
     """
 
@@ -266,6 +621,69 @@ if mobile_app_mode or native_app_mode:
             'use strict';
             var parentDoc = window.parent.document;
 
+            // ====== 1. KALICI CSS ENJEKSİYONU (Rerun'larda bile kalır) ======
+            var STYLE_ID = 'hooplife-hide-streamlit-chrome';
+            if (!parentDoc.getElementById(STYLE_ID)) {
+                var style = parentDoc.createElement('style');
+                style.id = STYLE_ID;
+                style.textContent = [
+                    '/* === HoopLife: Streamlit Chrome Gizle (Mobil) === */',
+                    '[data-testid="stHeader"],',
+                    '[data-testid="stToolbar"],',
+                    '[data-testid="stDecoration"],',
+                    '[data-testid="stStatusWidget"],',
+                    '[data-testid="stBottom"],',
+                    '[data-testid="stFooter"],',
+                    '[data-testid="stMainMenu"],',
+                    '[data-testid="manage-app-button"],',
+                    '[data-testid="stRunningMan"],',
+                    '[data-testid="stAppRunningIndicator"],',
+                    '[data-testid="stNotification"],',
+                    'header[data-testid="stHeader"],',
+                    '.stApp > header,',
+                    '#MainMenu,',
+                    'footer,',
+                    '.stDeployButton,',
+                    '.stActionButton,',
+                    '.reportview-container .main footer,',
+                    'div[class*="viewerBadge"],',
+                    'a[class*="viewerBadge"],',
+                    'span[class*="viewerBadge"],',
+                    'a[href*="streamlit.io"],',
+                    'a[href*="github.com/streamlit"],',
+                    '[data-testid="stBottom"] > div,',
+                    '[data-testid="stBottom"] a {',
+                    '  display: none !important;',
+                    '  visibility: hidden !important;',
+                    '  height: 0 !important;',
+                    '  max-height: 0 !important;',
+                    '  overflow: hidden !important;',
+                    '  padding: 0 !important;',
+                    '  margin: 0 !important;',
+                    '  border: none !important;',
+                    '  opacity: 0 !important;',
+                    '  pointer-events: none !important;',
+                    '  position: absolute !important;',
+                    '  z-index: -9999 !important;',
+                    '}',
+                    '',
+                    '/* Running/Rerunning durumunu gizle */',
+                    '[data-testid="stStatusWidget"] {',
+                    '  display: none !important;',
+                    '  visibility: hidden !important;',
+                    '}',
+                    '',
+                    '/* Streamlit bottom bar tamamen kaldır */',
+                    '[data-testid="stBottom"] {',
+                    '  display: none !important;',
+                    '  height: 0 !important;',
+                    '  overflow: hidden !important;',
+                    '}',
+                ].join('\\n');
+                parentDoc.head.appendChild(style);
+            }
+
+            // ====== 2. NATIVE DAVRANIŞLAR ======
             // Pull-to-refresh engelle
             var lastTouchY = 0;
             parentDoc.addEventListener('touchstart', function(e) {
@@ -295,7 +713,7 @@ if mobile_app_mode or native_app_mode:
                 lastTap = now;
             }, {passive: false});
 
-            // Streamlit elementlerini sürekli kontrol et ve gizle
+            // ====== 3. JAVASCRIPT İLE EK GİZLEME (CSS'in yakalayamadıkları için) ======
             function hideStreamlitChrome() {
                 var selectors = [
                     '[data-testid="stHeader"]',
@@ -303,47 +721,67 @@ if mobile_app_mode or native_app_mode:
                     '[data-testid="stDecoration"]',
                     '[data-testid="stStatusWidget"]',
                     '[data-testid="stBottom"]',
+                    '[data-testid="stFooter"]',
+                    '[data-testid="stMainMenu"]',
+                    '[data-testid="stRunningMan"]',
+                    '[data-testid="stAppRunningIndicator"]',
                     '#MainMenu',
                     'footer',
                     '.stDeployButton',
                     '[data-testid="manage-app-button"]',
-                    '.viewerBadge_container__r5tak',
                     '.stActionButton',
-                    '.viewerBadge_link__1S137',
-                    '.viewerBadge_container__1QSob',
-                    '[data-testid="stFooter"]',
-                    'a[href*="github.com/streamlit"]',
                     '.stApp > header',
-                    'div[class*="viewerBadge"]'
+                    'div[class*="viewerBadge"]',
+                    'a[class*="viewerBadge"]'
                 ];
                 selectors.forEach(function(sel) {
-                    var els = parentDoc.querySelectorAll(sel);
-                    els.forEach(function(el) {
-                        el.style.display = 'none';
-                        el.style.visibility = 'hidden';
-                        el.style.height = '0';
-                    });
+                    try {
+                        var els = parentDoc.querySelectorAll(sel);
+                        els.forEach(function(el) {
+                            el.style.setProperty('display', 'none', 'important');
+                            el.style.setProperty('visibility', 'hidden', 'important');
+                            el.style.setProperty('height', '0', 'important');
+                            el.style.setProperty('overflow', 'hidden', 'important');
+                            el.style.setProperty('opacity', '0', 'important');
+                        });
+                    } catch(e) {}
                 });
 
-                // Metin içeriğine göre "Hosted by Streamlit" vb. yakala (Class değişirse diye)
-                var allFooters = parentDoc.querySelectorAll('footer, div, span, a');
-                allFooters.forEach(function(el) {
-                    if (el.innerText && (el.innerText.includes("Hosted by Streamlit") || el.innerText.includes("Made with Streamlit"))) {
-                        // Sadece kısa metinleri gizle (kullanıcı içeriği olmasın)
-                        if (el.innerText.length < 100) {
-                            el.style.display = 'none';
-                            el.style.visibility = 'hidden';
+                // Metin içeriğine göre "Hosted/Made with Streamlit" vb. yakala
+                try {
+                    var allFooters = parentDoc.querySelectorAll('footer, div, span, a');
+                    allFooters.forEach(function(el) {
+                        var txt = el.innerText || '';
+                        if (txt && (txt.includes('Hosted by Streamlit') || txt.includes('Made with Streamlit') || txt.includes('Streamlit Community'))) {
+                            if (txt.length < 100) {
+                                el.style.setProperty('display', 'none', 'important');
+                                el.style.setProperty('visibility', 'hidden', 'important');
+                            }
                         }
-                    }
-                });
+                    });
+                } catch(e) {}
+
+                // Kalıcı CSS hâlâ yerinde mi kontrol et (Streamlit bazen DOM'u sıfırlar)
+                if (!parentDoc.getElementById('hooplife-hide-streamlit-chrome')) {
+                    var s = parentDoc.createElement('style');
+                    s.id = 'hooplife-hide-streamlit-chrome';
+                    s.textContent = parentDoc._hooplifeChromeCSS || '';
+                    parentDoc.head.appendChild(s);
+                }
+            }
+
+            // CSS içeriğini yedekle (DOM sıfırlanırsa tekrar enjekte etmek için)
+            var existingStyle = parentDoc.getElementById(STYLE_ID);
+            if (existingStyle) {
+                parentDoc._hooplifeChromeCSS = existingStyle.textContent;
             }
 
             // İlk çalıştırma + periyodik kontrol
             hideStreamlitChrome();
-            setInterval(hideStreamlitChrome, 2000);
+            setInterval(hideStreamlitChrome, 1500);
 
             // MutationObserver ile yeni eklenen elementleri de yakala
-            var observer = new MutationObserver(function() {
+            var observer = new MutationObserver(function(mutations) {
                 hideStreamlitChrome();
             });
             observer.observe(parentDoc.body, {childList: true, subtree: true});
