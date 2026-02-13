@@ -140,228 +140,87 @@ if mobile_app_mode or native_app_mode:
             -webkit-overflow-scrolling: touch !important;
         }
 
-        /* Seçim ve highlight'ı engelle */
         * {
             -webkit-tap-highlight-color: transparent !important;
-            -webkit-touch-callout: none !important;
         }
 
-        /* Scrollbar gizle */
         ::-webkit-scrollbar {
             width: 0px !important;
             background: transparent !important;
         }
 
         /* ========================================
-           NATIVE APP — ANA KONTEYNER SPACING
+           NATIVE APP — KONTEYNER SPACING
            ======================================== */
 
-        /* Ana container: sıkı padding, kenardan kenara hissi */
         .main .block-container {
-            padding-top: max(0.4rem, env(safe-area-inset-top)) !important;
+            padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
             padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
             padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
             padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
             max-width: 100% !important;
         }
 
-        /* styles.py'deki section.main > div padding/margin override */
+        /* Daha sıkı padding ama border'ı koru */
         section.main > div {
-            padding: 10px 8px !important;
-            margin: 4px 0 !important;
-            border: none !important;
-            border-radius: 0 !important;
+            padding: 14px 10px !important;
+            margin: 8px 6px !important;
         }
 
-        /* stAppViewContainer tam genişlik */
         [data-testid="stAppViewContainer"] {
             padding-top: 0 !important;
         }
 
         /* ========================================
-           NATIVE APP — BAŞLIK & BÖLÜM AYARLARI
+           NATIVE APP — BAŞLIKLAR
            ======================================== */
 
-        /* Daha kompakt başlıklar */
         h1 {
-            font-size: 17px !important;
-            margin-bottom: 2px !important;
-            margin-top: 4px !important;
+            font-size: 1.3rem !important;
+            margin-bottom: 4px !important;
+            margin-top: 6px !important;
         }
 
         h2 {
-            font-size: 14px !important;
-            margin-top: 12px !important;
-            margin-bottom: 4px !important;
-            padding-bottom: 4px !important;
+            font-size: 1.1rem !important;
+            margin-top: 10px !important;
+            margin-bottom: 6px !important;
         }
 
         h3 {
-            font-size: 13px !important;
+            font-size: 1rem !important;
             margin-top: 8px !important;
-            margin-bottom: 2px !important;
-        }
-
-        /* Subheader daha kompakt */
-        [data-testid="stSubheader"] {
-            font-size: 14px !important;
-            margin-top: 6px !important;
-            padding-top: 4px !important;
-        }
-
-        /* Caption daha küçük */
-        [data-testid="stCaption"],
-        .stCaption {
-            font-size: 11px !important;
             margin-bottom: 4px !important;
         }
 
-        /* Divider/separator daha sıkı */
         hr {
-            margin-top: 6px !important;
-            margin-bottom: 6px !important;
-        }
-        [data-testid="stDivider"] {
-            margin-top: 4px !important;
-            margin-bottom: 4px !important;
-        }
-
-        /* Markdown paragraflar arası boşluk azalt */
-        [data-testid="stMarkdown"] p {
-            margin-bottom: 0.3rem !important;
+            margin-top: 8px !important;
+            margin-bottom: 8px !important;
         }
 
         /* ========================================
-           NATIVE APP — OYUN KARTLARI (GAME CARDS)
+           NATIVE APP — BUTONLAR
            ======================================== */
 
-        /* Kart container'ları daha kompakt */
-        [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] {
-            gap: 4px !important;
-        }
-
-        /* Her kart (st.container border=True) */
-        [data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 10px !important;
-            overflow: hidden !important;
-        }
-        [data-testid="stVerticalBlockBorderWrapper"] > div {
-            padding: 6px 4px !important;
-        }
-
-        /* Kart içi column'lar daha sıkı */
-        [data-testid="stHorizontalBlock"] {
-            gap: 2px !important;
-        }
-        [data-testid="stColumn"] {
-            padding: 0 2px !important;
-        }
-
-        /* Takım logoları mobilde biraz küçük */
-        [data-testid="stVerticalBlockBorderWrapper"] img {
-            width: 38px !important;
-            height: 38px !important;
-        }
-
-        /* ========================================
-           NATIVE APP — BUTONLAR (BUTTONS)
-           ======================================== */
-
-        /* Tüm butonlar: daha iyi touch target, mobil estetik */
         .stButton > button {
             min-height: 42px !important;
             font-size: 13px !important;
             font-weight: 600 !important;
             border-radius: 10px !important;
-            padding: 8px 12px !important;
-            letter-spacing: 0.2px !important;
+            padding: 8px 14px !important;
         }
 
-        /* Primary butonlar */
         button[kind="primary"] {
             min-height: 42px !important;
             border-radius: 10px !important;
         }
 
-        /* "Box Score" ve benzeri kartlardaki butonlar */
-        [data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
-            min-height: 36px !important;
-            font-size: 12px !important;
-            padding: 6px 8px !important;
-            border-radius: 8px !important;
-        }
-
         /* ========================================
-           NATIVE APP — TABLO / DATAFRAME
+           NATIVE APP — TABLOLAR
            ======================================== */
 
-        /* Daha kompakt tablolar */
         [data-testid="stDataFrame"] {
-            font-size: 12px !important;
             border-radius: 8px !important;
-        }
-
-        [data-testid="stDataFrame"] table {
-            font-size: 11px !important;
-        }
-
-        [data-testid="stDataFrame"] th {
-            font-size: 10px !important;
-            padding: 4px 6px !important;
-            white-space: nowrap !important;
-        }
-
-        [data-testid="stDataFrame"] td {
-            padding: 3px 6px !important;
-            font-size: 11px !important;
-        }
-
-        /* Glide data grid (Streamlit'in yeni table bileşeni) */
-        [data-testid="stDataFrameGlideDataEditor"],
-        [data-testid="stDataFrame"] > div {
-            border-radius: 8px !important;
-            overflow: hidden !important;
-        }
-
-        /* ========================================
-           NATIVE APP — FORM ELEMANLARI
-           ======================================== */
-
-        /* Input, select, multiselect daha kompakt */
-        input, select {
-            height: 38px !important;
-            font-size: 13px !important;
-            border-radius: 8px !important;
-        }
-
-        /* Selectbox */
-        [data-testid="stSelectbox"] {
-            margin-bottom: 6px !important;
-        }
-        [data-testid="stSelectbox"] > div > div {
-            min-height: 38px !important;
-            font-size: 13px !important;
-        }
-
-        /* Multiselect */
-        [data-testid="stMultiSelect"] > div > div {
-            min-height: 38px !important;
-            font-size: 12px !important;
-        }
-
-        /* Radio butonları */
-        [data-testid="stRadio"] label {
-            font-size: 13px !important;
-            padding: 6px 0 !important;
-        }
-
-        /* Slider */
-        [data-testid="stSlider"] {
-            padding-top: 4px !important;
-            padding-bottom: 8px !important;
-        }
-        [data-testid="stSlider"] label {
-            font-size: 12px !important;
         }
 
         /* ========================================
@@ -373,142 +232,71 @@ if mobile_app_mode or native_app_mode:
         }
 
         [data-testid="stTabs"] [data-baseweb="tab"] {
-            font-size: 12px !important;
-            padding: 6px 10px !important;
-            min-height: 36px !important;
+            font-size: 13px !important;
+            padding: 8px 12px !important;
         }
 
         /* ========================================
-           NATIVE APP — EXPANDER
-           ======================================== */
-
-        details {
-            border-radius: 8px !important;
-            margin-bottom: 6px !important;
-        }
-
-        summary {
-            font-size: 12px !important;
-            padding: 8px 10px !important;
-            min-height: 40px !important;
-            display: flex !important;
-            align-items: center !important;
-        }
-
-        /* ========================================
-           NATIVE APP — ALERT / INFO / WARNING BOX
+           NATIVE APP — ALERT / EXPANDER
            ======================================== */
 
         [data-testid="stAlert"] {
-            padding: 8px 10px !important;
-            font-size: 12px !important;
+            padding: 10px 12px !important;
+            font-size: 13px !important;
             border-radius: 8px !important;
-            margin-bottom: 6px !important;
         }
 
-        /* Spinner */
-        .stSpinner {
-            font-size: 12px !important;
+        details {
+            border-radius: 8px !important;
+        }
+
+        summary {
+            font-size: 13px !important;
+            padding: 8px 12px !important;
+            min-height: 40px !important;
         }
 
         /* ========================================
-           NATIVE APP — SIDEBAR İYİLEŞTİRMELERİ
+           NATIVE APP — SIDEBAR
            ======================================== */
 
-        /* Sidebar iç padding */
         section[data-testid="stSidebar"] > div {
-            padding: 8px 10px !important;
+            padding: 10px 12px !important;
         }
 
-        /* Sidebar logo daha küçük */
-        section[data-testid="stSidebar"] [data-testid="stImage"] {
-            max-width: 180px !important;
-            margin: 0 auto 4px auto !important;
-        }
-
-        /* Sidebar heading */
-        section[data-testid="stSidebar"] h1,
-        section[data-testid="stSidebar"] h2,
-        section[data-testid="stSidebar"] h3 {
-            font-size: 11px !important;
-        }
-
-        /* Sidebar butonları */
         section[data-testid="stSidebar"] .stButton > button {
             min-height: 40px !important;
             font-size: 13px !important;
             border-radius: 10px !important;
-            margin-bottom: 4px !important;
         }
 
-        /* Sidebar divider */
         section[data-testid="stSidebar"] hr {
-            margin: 6px 0 !important;
+            margin: 8px 0 !important;
         }
 
         /* ========================================
-           NATIVE APP — METRIC İYİLEŞTİRMELERİ
+           NATIVE APP — METRIC
            ======================================== */
 
         [data-testid="stMetric"] {
             padding: 4px 0 !important;
         }
-        [data-testid="stMetricLabel"] {
-            font-size: 11px !important;
-        }
         [data-testid="stMetricValue"] {
-            font-size: 18px !important;
-        }
-        [data-testid="stMetricDelta"] {
-            font-size: 11px !important;
+            font-size: 20px !important;
         }
 
         /* ========================================
-           NATIVE APP — DİĞER AYARLAR
+           NATIVE APP — DİĞER
            ======================================== */
 
-        /* Column gap azalt */
-        [data-testid="stColumns"] {
-            gap: 4px !important;
-        }
-
-        /* Container/block boşlukları sıkıştır */
-        [data-testid="stVerticalBlock"] > div {
-            margin-bottom: 0 !important;
-            padding-bottom: 0 !important;
-        }
-
-        /* İç blok gap'leri düşür */
-        [data-testid="stVerticalBlock"] {
-            gap: 0.35rem !important;
-        }
-
-        /* Spoiler/excitement badge kompakt */
-        .excitement-badge {
-            font-size: 0.7em !important;
-            padding: 1px 6px !important;
-        }
-
-        /* Image container padding azalt */
         [data-testid="stImage"] {
             margin-bottom: 4px !important;
         }
 
-        /* Progress bar */
-        [data-testid="stProgressBar"] {
-            margin-bottom: 6px !important;
-        }
-
-        /* Toast/notification */
-        [data-testid="stToast"] {
-            font-size: 12px !important;
-            border-radius: 10px !important;
-        }
-
         /* Dialog/modal */
         [data-testid="stModal"] > div {
-            padding: 12px !important;
-            border-radius: 14px !important;
+            padding: 14px !important;
+            border-radius: 12px !important;
         }
     """
 
