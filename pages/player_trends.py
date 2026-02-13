@@ -519,7 +519,7 @@ DEFAULT_WEIGHTS = {
     "FGA": -0.7, "FGM": 0.5, "FTA": -0.4, "FTM": 0.6, "3Pts": 0.3,
 }
 
-# ✅ MOCK DATA FOR TRADE RUMORS (since network is disabled)
+# MOCK DATA FOR TRADE RUMORS (since network is disabled)
 def get_mock_trade_rumors() -> List[Dict]:
     """Returns mock trade rumors when network access is unavailable"""
     return [
@@ -893,25 +893,22 @@ def render_player_trends_page():
             .stApp {background-image: none !important;}
             .block-container {padding-top: 2rem !important; padding-bottom: 2rem !important;}
             div[data-testid="stMetric"] {
-                background-color: #f8f9fa; border-radius: 8px; padding: 10px;
-                border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }
-            @media (prefers-color-scheme: dark) {
-                div[data-testid="stMetric"] {background-color: #262730; border-color: #444;}
+                background-color: #1a1c23; border-radius: 8px; padding: 10px;
+                border: 1px solid #333; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             }
         </style>
     """, unsafe_allow_html=True)
     
-    st.title("🏀 Player Form & Trends")
+    st.title("Player Form & Trends")
     
     try:
         from services.espn_api import get_game_ids, get_cached_boxscore
     except ImportError as e:
-        st.error(f"❌ Import Error: {e}")
+        st.error(f"Import Error: {e}")
         st.info("Make sure `services/espn_api.py` exists with required functions.")
         return
 
-    st.sidebar.header("🔍 Trend Settings")
+    st.sidebar.header("Trend Settings")
     st.sidebar.markdown("### Period Comparison")
     
     period_options = {
@@ -936,7 +933,7 @@ def render_player_trends_page():
     max_avg_score = st.sidebar.number_input(f"Max Avg Score", min_value=0, max_value=150, value=100, step=5)
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🎨 Background Settings")
+    st.sidebar.markdown("### Background Settings")
     background_url = "https://wallpapercave.com/wp/wp15388438.jpg"
     
     if background_url:
@@ -963,28 +960,28 @@ def render_player_trends_page():
         """, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
-    if st.sidebar.button("⬅️ Back to Home", use_container_width=True):
+    if st.sidebar.button("Back to Home", use_container_width=True):
         st.session_state.page = "home"
         st.rerun()
 
     st.caption(f"Comparing **{period1_label}** vs **{period2_label}** (Score Range: {min_avg_score}-{max_avg_score})")
 
-    # ⚡ DATA LOADING - Cached approach (ilk yüklemede spinner, sonra cache'ten anında gelir)
+    # DATA LOADING
     max_days = max(period1_days, period2_days)
     
     # Cache key: her saat yenilenir
     cache_hour_key = datetime.now().strftime("%Y%m%d_%H")
     
-    with st.spinner(f"🚀 Loading {'full season' if max_days >= 999 else f'last {max_days} days'} data... (It might take a little while to load, but it's instant on subsequent refreshes.)"):
+    with st.spinner(f"Loading {'full season' if max_days >= 999 else f'last {max_days} days'} data... (It might take a little while to load, but it's instant on subsequent refreshes.)"):
         df = fetch_season_data(max_days, _cache_key=cache_hour_key)
     
     if df is None or df.empty:
-        st.warning("⚠️ No data found for the selected period.")
+        st.warning("No data found for the selected period.")
         return
     
-    st.success(f"✅ Loaded {len(df):,} player performances ({'Full Season' if max_days >= 999 else f'Last {max_days} Days'})")
+    st.success(f"Loaded {len(df):,} player performances ({'Full Season' if max_days >= 999 else f'Last {max_days} Days'})")
 
-    # 🔢 DATA PROCESSING
+    # DATA PROCESSING
     numeric_cols = ["PTS", "REB", "AST", "STL", "BLK", "TO", "FGM", "FGA", "FTM", "FTA", "3Pts"]
     for c in numeric_cols:
         if c in df.columns:
@@ -1050,8 +1047,8 @@ def render_player_trends_page():
     risers = analysis_df.sort_values("diff", ascending=False).head(5)
     fallers = analysis_df.sort_values("diff", ascending=True).head(5)
 
-    # 📊 DISPLAY RESULTS
-    st.subheader(f"🔥 Top 5 Risers ({period1_label} vs {period2_label})")
+    # DISPLAY RESULTS
+    st.subheader(f"Top 5 Risers ({period1_label} vs {period2_label})")
     if risers.empty:
         st.info("No players match the criteria.")
     else:
@@ -1065,7 +1062,7 @@ def render_player_trends_page():
                     help=f"{period2_label} Avg: {row['avg_p2']:.1f} | Games: {int(row['games_p1'])}/{int(row['games_p2'])}"
                 )
 
-    st.subheader(f"❄️ Top 5 Fallers ({period1_label} vs {period2_label})")
+    st.subheader(f"Top 5 Fallers ({period1_label} vs {period2_label})")
     if fallers.empty:
         st.info("No players match the criteria.")
     else:
@@ -1081,7 +1078,7 @@ def render_player_trends_page():
             
     st.divider()
 
-    st.subheader(f"📊 Comparison Table ({len(analysis_df)} Players)")
+    st.subheader(f"Comparison Table ({len(analysis_df)} Players)")
     
     display_df = analysis_df.reset_index().sort_values("diff", ascending=False)
     
@@ -1106,10 +1103,10 @@ def render_player_trends_page():
     
     st.divider()
     
-    # 📰 TRADE RUMORS SECTION
+    # TRADE RUMORS SECTION
     st.markdown('<div class="trade-rumors-section">', unsafe_allow_html=True)
     
-    st.subheader("📰 Latest NBA Trade Rumors")
+    st.subheader("Latest NBA Trade Rumors")
     st.caption("Updates from ESPN, HoopsHype, Bleacher Report, CBS Sports, and Reddit")
 
     with st.spinner("Fetching latest trade news..."):
@@ -1167,7 +1164,7 @@ def render_player_trends_page():
                 info_col1, info_col2 = st.columns(2)
                 
                 with info_col1:
-                    st.caption(f"📡 **{rumor['source']}**")
+                    st.caption(f"**{rumor['source']}**")
                 
                 with info_col2:
                     st.caption(f"{time_badge}")
@@ -1175,8 +1172,8 @@ def render_player_trends_page():
                 st.markdown(f"> {rumor['content']}")
                 
                 if rumor['teams']:
-                    teams_display = " • ".join([f"**{team}**" for team in rumor['teams'][:5]])
-                    st.markdown(f"🏀 {teams_display}")
+                    teams_display = " \u2022 ".join([f"**{team}**" for team in rumor['teams'][:5]])
+                    st.markdown(f"{teams_display}")
                 
                 st.divider()
         
@@ -1185,7 +1182,7 @@ def render_player_trends_page():
                 st.session_state.show_all_rumors = False
             
             if not st.session_state.show_all_rumors:
-                if st.button("📖 Read More", use_container_width=True, type="primary"):
+                if st.button("Read More", use_container_width=True, type="primary"):
                     st.session_state.show_all_rumors = True
                     st.rerun()
             else:
@@ -1222,7 +1219,7 @@ def render_player_trends_page():
                         info_col1, info_col2 = st.columns(2)
                         
                         with info_col1:
-                            st.caption(f"📡 **{rumor['source']}**")
+                            st.caption(f"**{rumor['source']}**")
                         
                         with info_col2:
                             st.caption(f"{time_badge}")
@@ -1230,12 +1227,12 @@ def render_player_trends_page():
                         st.markdown(f"> {rumor['content']}")
                         
                         if rumor['teams']:
-                            teams_display = " • ".join([f"**{team}**" for team in rumor['teams'][:5]])
-                            st.markdown(f"🏀 {teams_display}")
+                            teams_display = " \u2022 ".join([f"**{team}**" for team in rumor['teams'][:5]])
+                            st.markdown(f"{teams_display}")
                         
                         st.divider()
                 
-                if st.button("📕 Show Less", use_container_width=True):
+                if st.button("Show Less", use_container_width=True):
                     st.session_state.show_all_rumors = False
                     st.rerun()
     

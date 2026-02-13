@@ -518,18 +518,6 @@ if mobile_app_mode or native_app_mode:
             }
 
             // ====== 2. NATIVE DAVRANIŞLAR ======
-            // Pull-to-refresh engelle
-            var lastTouchY = 0;
-            parentDoc.addEventListener('touchstart', function(e) {
-                lastTouchY = e.touches[0].clientY;
-            }, {passive: true});
-            parentDoc.addEventListener('touchmove', function(e) {
-                var touchY = e.touches[0].clientY;
-                var scrollTop = parentDoc.documentElement.scrollTop || parentDoc.body.scrollTop;
-                if (scrollTop <= 0 && touchY > lastTouchY) {
-                    e.preventDefault();
-                }
-            }, {passive: false});
 
             // Long-press context menu engelle
             parentDoc.addEventListener('contextmenu', function(e) {
@@ -781,17 +769,17 @@ except ImportError:
 load_styles()
 
 # ==================== 9. TRIVIA ====================
-@st.dialog("🏀 Daily NBA Trivia Question", width="small")
+@st.dialog("Daily NBA Trivia", width="small")
 def show_trivia_modal(question, user_id=None, current_streak=0):
     st.session_state.active_dialog = 'trivia'
 
     if st.session_state.get('trivia_success_state', False):
         st.balloons()
-        st.success("✅ Correct Answer!")
-        st.info(f"ℹ️ {question.get('explanation', '')}")
+        st.success("Correct Answer!")
+        st.info(f"{question.get('explanation', '')}")
         if user_id:
             new_streak = db.get_user_streak(user_id)
-            st.markdown(f"### 🔥 Current Streak: {new_streak} days!")
+            st.markdown(f"### Current Streak: {new_streak} days!")
         st.caption("See you tomorrow! 👋")
         if st.button("Close", type="primary", key="close_success"):
             st.session_state.pop('trivia_success_state', None)
@@ -802,9 +790,9 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
 
     if st.session_state.get('trivia_error_state', False):
         error_info = st.session_state.get('trivia_error_info', {})
-        st.error(f"❌ Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
+        st.error(f"Wrong. Correct Answer: {error_info.get('correct_option')}) {error_info.get('correct_text')}")
         if error_info.get('explanation'):
-            st.info(f"ℹ️ {error_info.get('explanation')}")
+            st.info(f"{error_info.get('explanation')}")
         if user_id:
             st.warning("💔 Your streak has been reset.")
         st.caption("Better luck tomorrow! 👋")
@@ -818,21 +806,21 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
 
     if user_id:
         badge_style = "background-color:rgba(255,75,75,0.15);border:1px solid rgba(255,75,75,0.3);color:#ff4b4b;"
-        icon, text = "🔥", f"{current_streak} Day Streak"
+        icon, text = "", f"{current_streak} Day Streak"
     else:
         badge_style = "background-color:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1);color:#e0e0e0;"
-        icon, text = "🔒", "Login to save your daily streak."
+        icon, text = "", "Login to save your daily streak."
 
     st.markdown(f"""
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.1);">
-        <div style="font-weight:600;">📅 {datetime.now().strftime('%d %B')}</div>
+        <div style="font-weight:600;">{datetime.now().strftime('%d %B')}</div>
         <div style="{badge_style} padding:5px 10px;border-radius:12px;font-size:0.85em;">{icon} {text}</div>
     </div>
     <div style="background:linear-gradient(135deg,#FF4B4B 0%,#8B0000 100%);padding:12px;border-radius:10px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.2);">
-        <div style="color:white;font-weight:700;">🎮 PS5 GIVEAWAY!</div>
+        <div style="color:white;font-weight:700;">PS5 GIVEAWAY!</div>
         <div style="color:rgba(255,255,255,0.9);font-size:0.82rem;margin-top:5px;">
             Reach a <b>50-day streak</b> to enter the draw for a <b>PlayStation 5</b>!<br>
-            📅 <b>Draw Date: April 13th</b>
+            <b>Draw Date: April 13th</b>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -917,7 +905,7 @@ def handle_daily_trivia(all_cookies):
             show_trivia_modal(trivia, u_id, streak)
 
     except Exception as e:
-        print(f"❌ Trivia handler error: {e}")
+        print(f"Trivia handler error: {e}")
 
 
 
@@ -933,20 +921,20 @@ with st.sidebar:
         st.markdown(f"""
             <div style='background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
                         padding:1rem;border-radius:10px;margin-bottom:1rem;'>
-                <div style='color:white;font-weight:600;font-size:1.1rem;'>👤 {user.get('username','User')}</div>
+                <div style='color:white;font-weight:600;font-size:1.1rem;'>{user.get('username','User')}</div>
                 <div style='color:rgba(255,255,255,0.8);font-size:0.85rem;'>{user.get('email','')}</div>
             </div>
         """, unsafe_allow_html=True)
 
         if is_pro:
-            st.success("⭐ PRO Member")
+            st.success("PRO Member")
             watchlist_count = len(db.get_watchlist(user['id']))
             if st.button(f"My Watchlist ({watchlist_count})", use_container_width=True):
                 st.session_state.page = "watchlist"
                 st.rerun()
         else:
             st.info("Free Account")
-            if st.button("⭐ Upgrade to PRO", use_container_width=True):
+            if st.button("Upgrade to PRO", use_container_width=True):
                 st.info("Contact admin for PRO upgrade")
 
         if st.button("Logout", use_container_width=True):
@@ -955,23 +943,23 @@ with st.sidebar:
         st.markdown("""
             <div style='background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);
                         padding:1rem;border-radius:10px;margin-bottom:1rem;text-align:center;'>
-                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>🎯 Get More Features</div>
+                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>Get More Features</div>
                 <div style='color:rgba(255,255,255,0.9);font-size:0.85rem;'>Login to unlock PRO features</div>
             </div>
         """, unsafe_allow_html=True)
 
-        if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
+        if st.button("Login / Register", use_container_width=True, type="primary"):
             st.session_state.page = "login"
             st.rerun()
 
-        with st.expander("⭐ PRO Features"):
+        with st.expander("PRO Features"):
             st.markdown("""
-                - 📋 Player Watchlists
-                - 📊 Advanced Analytics
-                - 📈 Player Trends
-                - 🔔 Custom Alerts
-                - 💾 Save Preferences
-                - 📥 Export Data
+                - Player Watchlists
+                - Advanced Analytics
+                - Player Trends
+                - Custom Alerts
+                - Save Preferences
+                - Export Data
             """)
 
 # ==================== 12. SAYFA YÖNLENDİRMELERİ ====================
@@ -983,21 +971,21 @@ if st.session_state.page == "login":
 if st.session_state.page == "injury":
     from pages.injury_report import render_injury_page
     render_injury_page()
-    if st.sidebar.button("⬅️ Back to Home", use_container_width=True):
+    if st.sidebar.button("Back to Home", use_container_width=True):
         st.session_state.page = "home"
         st.rerun()
     st.stop()
 
 if st.session_state.page == "trends":
     if not is_pro:
-        st.warning("⭐ This is a PRO feature.")
+        st.warning("This is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
+            if st.button("Login / Register", use_container_width=True, type="primary"):
                 st.session_state.page = "login"
                 st.rerun()
         with col2:
-            if st.button("⬅️ Back to Home", use_container_width=True):
+            if st.button("Back to Home", use_container_width=True):
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
@@ -1012,10 +1000,10 @@ if st.session_state.page == "fantasy_league":
 
 if st.session_state.page == "watchlist":
     if not is_pro:
-        st.warning("⭐ Watchlist is a PRO feature.")
+        st.warning("Watchlist is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔐 Login / Register", use_container_width=True, type="primary"):
+            if st.button("Login / Register", use_container_width=True, type="primary"):
                 st.session_state.page = "login"
                 st.rerun()
         with col2:
@@ -1098,7 +1086,7 @@ def show_boxscore_dialog(game_info):
     final_cols = [c for c in display_cols if c in df.columns]
 
     if is_pro and user:
-        st.markdown("#### ⭐ Quick Add to Watchlist")
+        st.markdown("#### Quick Add to Watchlist")
         watchlist = db.get_watchlist(user['id'])
         watchlist_names = [w['player_name'] for w in watchlist]
         players_to_add = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
@@ -1112,13 +1100,13 @@ def show_boxscore_dialog(game_info):
                 if st.button("➕ Add Selected", disabled=not selected_players):
                     added = sum(1 for p in selected_players if db.add_to_watchlist(user['id'], p, f"Added from {game_info.get('away_team')} vs {game_info.get('home_team')}"))
                     if added:
-                        st.success(f"✅ Added {added} player(s)!")
+                        st.success(f"Added {added} player(s)!")
                         st.balloons()
         else:
             st.info("All players already in your watchlist!")
         st.markdown("---")
     elif not is_pro:
-        st.info("⭐ Login with a PRO account to add players to your watchlist!")
+        st.info("Login with a PRO account to add players to your watchlist!")
 
     if "TEAM" in df.columns:
         teams = df["TEAM"].unique()
@@ -1276,7 +1264,7 @@ def home_page():
 
     if total_games > games_to_show:
         if st.session_state.show_all_games:
-            if st.button("⬆️ Show Less", use_container_width=True, type="secondary"):
+            if st.button("Show Less", use_container_width=True, type="secondary"):
                 st.session_state.show_all_games = False
                 st.rerun()
         else:
@@ -1304,7 +1292,7 @@ def home_page():
         st.session_state["period_df"] = df.copy()
 
         if is_pro and user:
-            with st.expander("⭐ Add Players to Watchlist", expanded=False):
+            with st.expander("Add Players to Watchlist", expanded=False):
                 watchlist = db.get_watchlist(user['id'])
                 watchlist_names = [w['player_name'] for w in watchlist]
                 available_players = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
@@ -1318,12 +1306,12 @@ def home_page():
                         if st.button("➕ Add", disabled=not quick_add_players, key="quick_add_btn"):
                             for player in quick_add_players:
                                 db.add_to_watchlist(user['id'], player, f"Added from Daily Stats - {resolved_date.strftime('%Y-%m-%d')}")
-                            st.success(f"✅ Added {len(quick_add_players)} player(s)!")
+                            st.success(f"Added {len(quick_add_players)} player(s)!")
                             st.rerun()
                 else:
                     st.info("All players are already in your watchlist!")
         elif not is_pro:
-            st.info("⭐ **PRO Feature:** Login with a PRO account to add players to your watchlist!")
+            st.info("**PRO Feature:** Login with a PRO account to add players to your watchlist!")
 
         render_tables(df, weights=weights)
     else:
