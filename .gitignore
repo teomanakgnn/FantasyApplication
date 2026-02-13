@@ -2,3 +2,15 @@ __pycache__/
 *.pyc
 .env
 
+# Mobile/Capacitor
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/.idea/
+mobile/android/local.properties
+mobile/android/app/release/
+
+# Jekyll (GitHub Pages gereksiz build engelle)
+_site/
+.jekyll-cache/
