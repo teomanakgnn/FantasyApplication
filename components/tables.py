@@ -1131,7 +1131,7 @@ def render_tables(today_df, weights, default_period="Today"):
     # --- 2. LOWEST 10 PERFORMANCES ---
     st.markdown(f"## Lowest 10 Performances ({current_period})")
     
-    min_minutes = 20 if not is_today else 15
+    min_minutes = 20 if not is_today else 20
     if "MIN_INT" in active_df.columns:
         filtered_low = active_df[active_df["MIN_INT"] >= min_minutes]
         if len(filtered_low) < 5: 
