@@ -833,7 +833,7 @@ def render_injury_sidebar(df):
     if 'selected_injury_team' not in st.session_state:
         st.session_state.selected_injury_team = "ALL TEAMS"
     
-    if st.sidebar.button("All Teams", key="all_teams_btn", use_container_width=True, 
+    if st.sidebar.button("All Teams", key="all_teams_btn", width='stretch', 
                          type="primary" if st.session_state.selected_injury_team == "ALL TEAMS" else "secondary"):
         st.session_state.selected_injury_team = "ALL TEAMS"
         st.rerun()
@@ -859,7 +859,7 @@ def render_injury_sidebar(df):
         
         button_type = "primary" if st.session_state.selected_injury_team == team_abbr else "secondary"
         if st.sidebar.button(f"View {team_abbr}", key=f"team_{team_abbr}", 
-                             use_container_width=True, type=button_type):
+                             width='stretch', type=button_type):
             st.session_state.selected_injury_team = team_abbr
             st.rerun()
     
@@ -940,7 +940,7 @@ def render_injury_page():
     top_col1, top_col2 = st.columns([3, 1])
     
     with top_col2:
-        if st.button("🔄 UPDATE DATA", use_container_width=True):
+        if st.button("🔄 UPDATE DATA", width='stretch'):
             st.cache_data.clear()
             st.rerun()
 

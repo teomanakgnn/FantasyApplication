@@ -557,6 +557,104 @@ class Database:
             print(f"❌ get_user_by_id error: {e}")
             return None
 
+    # ==================== MOCK DRAFTS ====================
+
+    def ensure_draft_table(self):
+        """
+        mock_drafts tablosunu (yoksa) oluşturur.
+        Draft sayfası ilk açıldığında bir kez çağrılır.
+        """
+        return self.execute_query("""
+            CREATE TABLE IF NOT EXISTS mock_drafts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(120) NOT NULL,
+                format VARCHAR(20) NOT NULL,
+                team_count INTEGER NOT NULL,
+                rounds INTEGER NOT NULL,
+                user_slot INTEGER NOT NULL,
+                complete BOOLEAN NOT NULL DEFAULT FALSE,
+                grade VARCHAR(4),
+                state JSONB NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    def save_mock_draft(self, user_id, name, state_blob, grade=None, draft_id=None):
+        """
+        Draftı kaydeder veya var olanı günceller.
+
+        Returns:
+            int - kaydın id'si, hata durumunda None
+        """
+        import json as _json
+
+        conn = self.get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor()
+            payload = _json.dumps(state_blob)
+            if draft_id:
+                cursor.execute("""
+                    UPDATE mock_drafts
+                       SET name = %s, format = %s, team_count = %s, rounds = %s,
+                           user_slot = %s, complete = %s, grade = %s, state = %s,
+                           updated_at = CURRENT_TIMESTAMP
+                     WHERE id = %s AND user_id = %s
+                 RETURNING id
+                """, (name, state_blob.get('format'), state_blob.get('team_count'),
+                      state_blob.get('rounds'), state_blob.get('user_slot'),
+                      bool(state_blob.get('complete')), grade, payload,
+                      draft_id, user_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO mock_drafts
+                        (user_id, name, format, team_count, rounds, user_slot,
+                         complete, grade, state)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 RETURNING id
+                """, (user_id, name, state_blob.get('format'),
+                      state_blob.get('team_count'), state_blob.get('rounds'),
+                      state_blob.get('user_slot'), bool(state_blob.get('complete')),
+                      grade, payload))
+
+            row = cursor.fetchone()
+            conn.commit()
+            cursor.close()
+            return row[0] if row else None
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ save_mock_draft error: {e}")
+            return None
+
+    def list_mock_drafts(self, user_id, limit=25):
+        """Kullanıcının kayıtlı draftlarını (state hariç) listeler."""
+        return self.execute_query("""
+            SELECT id, name, format, team_count, rounds, user_slot,
+                   complete, grade, created_at, updated_at
+              FROM mock_drafts
+             WHERE user_id = %s
+             ORDER BY updated_at DESC
+             LIMIT %s
+        """, (user_id, limit), fetch=True) or []
+
+    def load_mock_draft(self, user_id, draft_id):
+        """Kayıtlı bir draftın tam durumunu getirir."""
+        rows = self.execute_query(
+            "SELECT id, name, state, grade FROM mock_drafts WHERE id = %s AND user_id = %s",
+            (draft_id, user_id), fetch=True
+        )
+        return rows[0] if rows else None
+
+    def delete_mock_draft(self, user_id, draft_id):
+        """Kayıtlı draftı siler."""
+        return bool(self.execute_query(
+            "DELETE FROM mock_drafts WHERE id = %s AND user_id = %s",
+            (draft_id, user_id)
+        ))
+
 
 # Singleton instance
 db = Database()

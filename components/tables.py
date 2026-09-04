@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from utils.helpers import parse_minutes
-from services.espn_api import get_historical_boxscores, get_injuries, get_current_team_rosters, get_nba_season_stats_official 
+from services.espn_api import get_historical_boxscores, get_injuries, get_current_team_rosters, get_nba_season_stats_official
+from services.nba_season import get_season_label, get_season_start_date
 
 # =================================================================
 # TEAM MAPPING (KISALTMALAR -> TAM İSİMLER)
@@ -55,10 +56,10 @@ def get_date_range(period):
         start = today.replace(day=1)
         return start.date(), today.date()
     elif period == "Season":
-        if today.month >= 10:
-            season_start = today.replace(month=10, day=22)
-        else:
-            season_start = today.replace(year=today.year - 1, month=10, day=22)
+        season_start = get_season_start_date()
+        if season_start > today:
+            # Sezon henüz başlamadı - önceki sezonu göster.
+            season_start = get_season_start_date(season_start.year)
         return season_start.date(), today.date()
     return today.date(), today.date()
 
@@ -873,7 +874,7 @@ def render_tables(today_df, weights, default_period="Today"):
     
     for i, p in enumerate(periods):
         style = "primary" if st.session_state.stats_period == p else "secondary"
-        if cols[i].button(p, key=f"btn_{p}", type=style, use_container_width=True):
+        if cols[i].button(p, key=f"btn_{p}", type=style, width='stretch'):
             st.session_state.stats_period = p
             st.rerun()
             
@@ -887,9 +888,9 @@ def render_tables(today_df, weights, default_period="Today"):
     # --- CASE 1: SEASON (Official API - Single Request) ---
     if current_period == "Season":
         with st.spinner("Fetching official NBA Season Leaders..."):
-            # 2026 Season (2025-26)
-            season_df = get_nba_season_stats_official(season_year=2026)
-            
+            # Sezon ESPN takviminden gelir; veri yoksa önceki sezona düşer.
+            season_df = get_nba_season_stats_official()
+
             if not season_df.empty:
                 # Calculate Fantasy Score
                 season_df["USER_SCORE"] = season_df.apply(lambda x: calculate_fantasy_score(x, weights), axis=1)
@@ -959,7 +960,9 @@ def render_tables(today_df, weights, default_period="Today"):
                     season_df['PLAYER_ID'] = None # Pass empty on error
                 
                 # Add DATE column for MVP/LVP
-                season_start = datetime(2025, 10, 22)
+                season_start = get_season_start_date()
+                if season_start > datetime.now():
+                    season_start = get_season_start_date(season_start.year)
                 season_df["DATE"] = season_start
                 
                 active_df = season_df.copy()
@@ -1115,7 +1118,7 @@ def render_tables(today_df, weights, default_period="Today"):
     
     event_top = st.dataframe(
         top_df[available_cols],
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config=col_config,
         height=380,
@@ -1143,7 +1146,7 @@ def render_tables(today_df, weights, default_period="Today"):
     
     event_low = st.dataframe(
         low_df[available_cols],
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config=col_config,
         height=380,
@@ -1166,7 +1169,7 @@ def render_tables(today_df, weights, default_period="Today"):
 
         st.dataframe(
             full_sorted_df[cols_with_rank], 
-            use_container_width=True, 
+            width='stretch', 
             hide_index=True, 
             column_config=full_col_config
         )

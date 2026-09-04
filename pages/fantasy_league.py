@@ -923,7 +923,7 @@ def render_fantasy_league_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔴 ESPN", use_container_width=True, 
+            if st.button("🔴 ESPN", width='stretch', 
                         type="primary" if st.session_state.get('selected_platform') == 'ESPN' else "secondary"):
                 st.session_state.selected_platform = 'ESPN'
                 st.session_state.pop('df_standings', None)
@@ -931,7 +931,7 @@ def render_fantasy_league_page():
                 st.rerun()
         
         with col2:
-            if st.button("🟣 YAHOO", use_container_width=True,
+            if st.button("🟣 YAHOO", width='stretch',
                         type="primary" if st.session_state.get('selected_platform') == 'YAHOO' else "secondary"):
                 st.session_state.selected_platform = 'YAHOO'
                 st.session_state.pop('df_standings', None)
@@ -972,7 +972,7 @@ def render_fantasy_league_page():
             
             st.markdown("---")
             
-            if st.button("⚡ LOAD ESPN DATA", type="primary", use_container_width=True):
+            if st.button("⚡ LOAD ESPN DATA", type="primary", width='stretch'):
                 with st.spinner("CONNECTING TO ESPN SERVERS..."):
                     df_standings, matchups, error = load_espn_data(league_id, time_filter)
                     
@@ -994,7 +994,7 @@ def render_fantasy_league_page():
             if not is_authenticated:
                 st.warning("🔐 Authentication Required")
                 
-                if st.button("🔗 Get Authorization URL", use_container_width=True):
+                if st.button("🔗 Get Authorization URL", width='stretch'):
                     auth_url = st.session_state.yahoo_service.get_authorization_url()
                     st.session_state.auth_url = auth_url
                 
@@ -1005,7 +1005,7 @@ def render_fantasy_league_page():
                     
                     auth_code = st.text_input("Authorization Code", type="password", key="yahoo_auth_code")
                     
-                    if st.button("✅ Complete Auth", use_container_width=True) and auth_code:
+                    if st.button("✅ Complete Auth", width='stretch') and auth_code:
                         try:
                             from services.yahoo_api import save_yahoo_token
                             token = st.session_state.yahoo_service.fetch_token(auth_code)
@@ -1019,7 +1019,7 @@ def render_fantasy_league_page():
                 st.success("✅ Authenticated")
                 
                 # League listesi yükle
-                if st.button("🔄 Load My Leagues", use_container_width=True):
+                if st.button("🔄 Load My Leagues", width='stretch'):
                     with st.spinner("Fetching leagues..."):
                         try:
                             leagues = st.session_state.yahoo_service.get_user_leagues('nba')
@@ -1042,7 +1042,7 @@ def render_fantasy_league_page():
                 st.markdown("---")
                 
                 # 1. LOAD DATA BUTONU
-                if st.button("⚡ LOAD YAHOO DATA", type="primary", use_container_width=True):
+                if st.button("⚡ LOAD YAHOO DATA", type="primary", width='stretch'):
                     if league_key:
                         with st.spinner("CONNECTING TO YAHOO SERVERS..."):
                             df_standings, matchups, error = load_yahoo_data(league_key, week_number)
@@ -1057,7 +1057,7 @@ def render_fantasy_league_page():
                                 st.rerun()
 
                 # 2. LOAD ROSTERS BUTONU (YENİ EKLENEN KISIM)
-                if st.button("👥 Load Rosters (For Trade)", use_container_width=True):
+                if st.button("👥 Load Rosters (For Trade)", width='stretch'):
                     if league_key:
                         with st.spinner("Fetching all rosters..."):
                             try:
@@ -1072,7 +1072,7 @@ def render_fantasy_league_page():
 
                 st.markdown("---")
                 
-                if st.button("Logout Yahoo", use_container_width=True):
+                if st.button("Logout Yahoo", width='stretch'):
                     st.session_state.yahoo_authenticated = False
                     st.session_state.pop('yahoo_service', None)
                     st.rerun()
@@ -1113,7 +1113,7 @@ def render_fantasy_league_page():
             """, unsafe_allow_html=True)
             
             # Aksiyon Butonu
-            if st.button("SELECT ESPN", use_container_width=True, type="primary"):
+            if st.button("SELECT ESPN", width='stretch', type="primary"):
                 st.session_state.selected_platform = 'ESPN'
                 st.session_state.pop('df_standings', None)
                 st.session_state.pop('matchups', None)
@@ -1135,7 +1135,7 @@ def render_fantasy_league_page():
             """, unsafe_allow_html=True)
             
             # Aksiyon Butonu
-            if st.button("SELECT YAHOO", use_container_width=True, type="primary"):
+            if st.button("SELECT YAHOO", width='stretch', type="primary"):
                 st.session_state.selected_platform = 'YAHOO'
                 st.session_state.pop('df_standings', None)
                 st.session_state.pop('matchups', None)
@@ -1170,7 +1170,7 @@ def render_fantasy_league_page():
     # TAB 1: STANDINGS
     with tab1:
         if df_standings is not None and not df_standings.empty:
-            st.dataframe(df_standings, use_container_width=True, hide_index=True)
+            st.dataframe(df_standings, width='stretch', hide_index=True)
         else:
             st.info("NO STANDINGS DATA AVAILABLE")
     
@@ -1249,7 +1249,7 @@ def render_fantasy_league_page():
             
             summary_df = pd.DataFrame(sim_data)[['team', 'total_wins', 'total_losses', 'win_pct']]
             summary_df.columns = ["Team", "Cat Wins", "Cat Losses", "Win %"]
-            st.dataframe(summary_df.style.background_gradient(subset=['Win %'], cmap="Blues"), use_container_width=True, hide_index=True)
+            st.dataframe(summary_df.style.background_gradient(subset=['Win %'], cmap="Blues"), width='stretch', hide_index=True)
             
             st.divider()
             
@@ -1320,7 +1320,7 @@ def render_fantasy_league_page():
                     if col in raw_df_display.columns:
                         raw_df_display[col] = raw_df_display[col].astype(float).astype(int)
                 
-                st.dataframe(raw_df_display.style.format(format_dict), use_container_width=True, hide_index=True)
+                st.dataframe(raw_df_display.style.format(format_dict), width='stretch', hide_index=True)
                 
                 st.divider()
                 st.markdown("#### SCORING TABLE (POINTS 1-10)")
@@ -1330,7 +1330,7 @@ def render_fantasy_league_page():
                     points_df_display.style
                     .background_gradient(subset=['Total Score'], cmap="Greens")
                     .format("{:.0f}", subset=points_df_display.columns.drop('Team')),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
         else:
@@ -1375,7 +1375,7 @@ def render_fantasy_league_page():
             st.markdown("---")
             
             # Analyze Butonu
-            if st.button("🚀 Analyze Trade Impact", type="primary", use_container_width=True):
+            if st.button("🚀 Analyze Trade Impact", type="primary", width='stretch'):
                 if not trade_p_a and not trade_p_b:
                     st.warning("Please select at least one player to trade.")
                 else:

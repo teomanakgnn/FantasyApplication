@@ -18,7 +18,7 @@ def render_boxscore_modal():
     st.title(" Box Score")
     
     # Close button
-    if st.button("⬅️ Back to Games", type="primary", use_container_width=True):
+    if st.button("⬅️ Back to Games", type="primary", width='stretch'):
         st.session_state.open_game_id = None
         st.rerun()
     
@@ -79,14 +79,14 @@ def render_boxscore_modal():
                     team_df = df_display[df_display["TEAM"] == team].drop(columns=["TEAM"])
                     st.dataframe(
                         team_df,
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                         height=600
                     )
         else:
             st.dataframe(
                 df_display,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 height=600
             )

@@ -2,9 +2,19 @@ import requests
 from datetime import datetime, timedelta
 import streamlit as st
 from functools import lru_cache
-import concurrent.futures 
+import concurrent.futures
 from typing import Dict, List, Optional, Union
 import pandas as pd
+
+from services.nba_season import (
+    SEASON_TYPE_REGULAR,
+    espn_get,
+    get_current_season_year,
+    get_season_label,
+    get_season_start_date,
+    get_session,
+    season_candidates,
+)
 
 
 # =================================================================
@@ -22,7 +32,7 @@ def get_nba_teams_dynamic():
     """
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams?limit=100"
     try:
-        data = requests.get(url, timeout=10).json()
+        data = espn_get(url, timeout=10).json()
         teams_map = {} # {id: abbreviation} örn: {'13': 'LAL'}
         
         # JSON yolu: sports -> leagues -> teams -> team
@@ -49,18 +59,43 @@ def get_game_ids(date):
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
     try:
-        data = requests.get(url, timeout=10).json()
+        data = espn_get(url, timeout=10).json()
         return [e["id"] for e in data.get("events", [])]
     except Exception as e:
         print(f"Hata (get_game_ids): {e}")
         return []
 
-def get_last_available_game_date(date):
-    for _ in range(7):
-        ids = get_game_ids(date)
-        if ids:
-            return date, ids
-        date -= timedelta(days=1)
+def get_last_available_game_date(date, lookback_days=210, lookahead_days=90):
+    """
+    Verilen tarihe en yakın maç gününü bulur.
+
+    Önce geriye doğru (o güne kadar oynanmış son maç günü), bulunamazsa
+    ileriye doğru (sıradaki maç günü) bakar. Sezon arasında geriye 7 gün
+    bakmak yetmiyordu ve ana sayfa tamamen boş kalıyordu; bu yüzden
+    aralık bir sezonu kapsayacak kadar geniş tutuldu.
+
+    Returns:
+        (tarih, [maç_id]) - hiçbir şey bulunamazsa (None, [])
+    """
+    # Hızlı yol: tam o günde maç var mı?
+    ids = get_game_ids(date)
+    if ids:
+        return date, ids
+
+    day = date.date() if isinstance(date, datetime) else date
+
+    # 1) Geriye doğru en son oynanan maç günü
+    past = get_game_ids_in_range(day - timedelta(days=lookback_days), day)
+    if past:
+        latest = max(past)
+        return latest, past[latest]
+
+    # 2) İleriye doğru sıradaki maç günü (sezon öncesi dönem)
+    future = get_game_ids_in_range(day, day + timedelta(days=lookahead_days))
+    if future:
+        soonest = min(future)
+        return soonest, future[soonest]
+
     return None, []
 
 def get_scoreboard(date):
@@ -68,7 +103,7 @@ def get_scoreboard(date):
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
     try:
-        data = requests.get(url, timeout=10).json()
+        data = espn_get(url, timeout=10).json()
     except Exception:
         return []
 
@@ -111,7 +146,7 @@ def get_cached_boxscore(game_id):
 def get_boxscore(game_id):
     url = f"{SUMMARY_URL}?event={game_id}"
     try:
-        data = requests.get(url, timeout=10).json()
+        data = espn_get(url, timeout=10).json()
     except Exception:
         return []
 
@@ -121,19 +156,27 @@ def get_boxscore(game_id):
         return []
 
     for team in data["boxscore"]["players"]:
+        team_abbr = (team.get("team") or {}).get("abbreviation", "UNK")
+
         for group in team.get("statistics", []):
             if "athletes" not in group:
                 continue
-            
-            labels = group["labels"]
+
+            labels = group.get("labels") or []
 
             for athlete in group["athletes"]:
-                raw_stats = athlete["stats"]
+                # Bazı kayıtlarda oyuncu adı veya istatistik bloğu eksik
+                # geliyor; tek bozuk satır yüzünden tüm maç kaybedilmesin.
+                player_name = ((athlete.get("athlete") or {}).get("displayName")
+                               or (athlete.get("athlete") or {}).get("fullName"))
+                raw_stats = athlete.get("stats")
+                if not player_name or not raw_stats:
+                    continue
+
                 stats = dict(zip(labels, raw_stats))
-                
-                stats["PLAYER"] = athlete["athlete"]["displayName"]
-                stats["TEAM"] = team["team"]["abbreviation"]
-                
+                stats["PLAYER"] = player_name
+                stats["TEAM"] = team_abbr
+
                 stats["FGM"] = 0; stats["FGA"] = 0
                 stats["3Pts"] = 0; stats["3PTA"] = 0
                 stats["FTM"] = 0; stats["FTA"] = 0
@@ -173,7 +216,7 @@ def get_boxscore(game_id):
 def get_injuries():
     """TÜM TAKIM SAKATLIKLARI"""
     try:
-        response = requests.get(INJURIES_URL, timeout=10)
+        response = espn_get(INJURIES_URL, timeout=10)
         data = response.json()
         
         if "injuries" not in data:
@@ -238,321 +281,191 @@ def get_injuries():
 
 # services/espn_api.py
 
-def get_nba_season_stats_official(season_year=2026):
+# byathlete yanıtındaki istatistik adlarını uygulama sütunlarına eşler.
+# API artık oyuncu kaydı içinde 'names' göndermiyor ama yanıtın kökündeki
+# 'categories' bloğunda tam şemayı veriyor; index tahmini yerine o kullanılır.
+_STAT_NAME_TO_COLUMN = {
+    "gamesPlayed": "GP",
+    "avgMinutes": "MIN",
+    "avgRebounds": "REB",
+    "avgPoints": "PTS",
+    "avgAssists": "AST",
+    "avgTurnovers": "TO",
+    "avgSteals": "STL",
+    "avgBlocks": "BLK",
+    "avgFieldGoalsMade": "FGM",
+    "avgFieldGoalsAttempted": "FGA",
+    "avgFreeThrowsMade": "FTM",
+    "avgFreeThrowsAttempted": "FTA",
+    "avgThreePointFieldGoalsMade": "3Pts",
+    "avgThreePointFieldGoalsAttempted": "3PTA",
+    "fieldGoalPct": "FG%",
+    "freeThrowPct": "FT%",
+    "threePointFieldGoalPct": "3P%",
+    "avgFouls": "PF",
+    "doubleDouble": "DD2",
+    "tripleDouble": "TD3",
+    "plusMinus": "+/-",
+    "avgPlusMinus": "+/-",
+}
+
+_SEASON_STATS_COLUMNS = [
+    "PLAYER", "PLAYER_ID", "TEAM", "POS", "GP", "MIN", "PTS", "REB", "AST",
+    "STL", "BLK", "TO", "FGM", "FGA", "FTM", "FTA",
+    "3Pts", "3PTA", "FG%", "FT%", "3P%", "PF", "DD2", "TD3", "+/-",
+]
+
+# Kategori bazlı index yedeği: API kökünde 'categories' şeması gelmezse
+# kullanılır (2026 başında gözlemlenen sıralama).
+_FALLBACK_INDEX_MAP = {
+    "general": {0: "GP", 1: "MIN", 2: "PF", 6: "DD2", 7: "TD3", 11: "REB"},
+    "offensive": {
+        0: "PTS", 1: "FGM", 2: "FGA", 3: "FG%", 4: "3Pts", 5: "3PTA",
+        6: "3P%", 7: "FTM", 8: "FTA", 9: "FT%", 10: "AST", 11: "TO",
+    },
+    "defensive": {0: "STL", 1: "BLK"},
+}
+
+
+def _build_category_index_map(payload):
     """
-    FIXED VERSION (INDEX MAPPING):
-    API artık 'names' göndermediği için, veriler doğrudan
-    sıra numarasına (index) göre haritalanır.
-    Referans: Luka Doncic JSON yapısı analiz edilmiştir.
+    Yanıtın kökündeki 'categories' şemasından
+    {kategori_adı: {index: sütun}} haritası üretir.
     """
-    import pandas as pd
-    import requests
-    
-    # Beklenen sütunlar
-    REQUIRED_COLUMNS = [
-        "PLAYER", "TEAM", "GP", "MIN", "PTS", "REB", "AST", 
-        "STL", "BLK", "TO", "FGM", "FGA", "FTM", "FTA", 
-        "3Pts", "3PTA", "FG%", "FT%", "+/-"
-    ]
-    
-    base_url = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Referer": "https://www.espn.com/"
+    index_map = {}
+    for category in payload.get("categories") or []:
+        name = category.get("name")
+        names = category.get("names")
+        if not name or not names:
+            continue
+        mapping = {}
+        for idx, stat_name in enumerate(names):
+            column = _STAT_NAME_TO_COLUMN.get(stat_name)
+            # Aynı sütuna birden çok isim eşleşirse ilkini (ortalama) koru.
+            if column and column not in mapping.values():
+                mapping[idx] = column
+        if mapping:
+            index_map[name] = mapping
+    return index_map or dict(_FALLBACK_INDEX_MAP)
+
+
+def _fetch_byathlete_page(season_year, page, limit, season_type):
+    params = {
+        "region": "us", "lang": "en", "contentorigin": "espn",
+        "isqualified": "false", "page": page, "limit": limit,
+        "sort": "offensive.avgPoints:desc",
+        "season": season_year,
+        # KRİTİK: seasontype verilmezse ESPN, sezon bittiğinde playoff
+        # istatistiklerini döndürüyor (582 yerine 230 oyuncu).
+        "seasontype": season_type,
     }
+    response = get_session().get(
+        "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete",
+        params=params,
+        headers={"Referer": "https://www.espn.com/"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()
 
-    # API Stratejisi: 2026 -> 2025 -> Current
-    attempts = [season_year, season_year - 1]
-    found_athletes = []
 
-    print(f"🔄 Fetching Official Stats (Target: {season_year})...")
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_nba_season_stats_official(season_year=None, season_type=SEASON_TYPE_REGULAR):
+    """
+    Resmî ESPN sezon ortalamalarını çeker.
 
-    for s in attempts:
+    Args:
+        season_year: ESPN sezon yılı (2026-27 için 2027). None ise güncel
+                     sezondan başlayıp veri bulunana kadar geri düşer.
+        season_type: 2 = düzenli sezon (varsayılan), 3 = playoff.
+
+    Returns:
+        DataFrame - PLAYER, PLAYER_ID, TEAM, POS ve ortalama istatistikler.
+        Veri bulunamazsa beklenen sütunlarla boş DataFrame.
+    """
+    attempts = [season_year] if season_year else season_candidates()
+
+    payload = None
+    used_season = None
+    for candidate in attempts:
         try:
-            params = {
-                "region": "us", "lang": "en", "contentorigin": "espn",
-                "isqualified": "false", "page": 1, "limit": 1000, 
-                "sort": "offensive.avgPoints:desc",
-                "season": s
-            }
-            
-            response = requests.get(base_url, headers=headers, params=params, timeout=10)
-            data = response.json()
-            athletes = data.get("athletes", [])
-            
-            if athletes:
-                print(f"   ✓ Success with season {s} (Found {len(athletes)} players)")
-                found_athletes = athletes
+            data = _fetch_byathlete_page(candidate, page=1, limit=1000, season_type=season_type)
+            if data.get("athletes"):
+                payload = data
+                used_season = candidate
                 break
-        except Exception:
-            continue
+            print(f"   · {candidate} sezonunda veri yok, geri düşülüyor...")
+        except Exception as exc:
+            print(f"   · {candidate} sezonu çekilemedi: {exc}")
 
-    processed_data = []
+    if not payload:
+        print("❌ Sezon istatistiği bulunamadı.")
+        return pd.DataFrame(columns=_SEASON_STATS_COLUMNS)
 
-    if not found_athletes:
-        print("❌ No data found.")
-        # Boş DataFrame döndür (KeyError engellemek için sütunlarla)
-        df = pd.DataFrame(columns=REQUIRED_COLUMNS)
-        return df
+    athletes = list(payload["athletes"])
 
-    # --- PARSING ENGINE (INDEX BASED) ---
-    for ath_entry in found_athletes:
+    # Sayfalama: 1000 satırlık tek istek çoğu zaman yetiyor ama
+    # kadro genişlerse kalan sayfaları da al.
+    pagination = payload.get("pagination") or {}
+    total_pages = int(pagination.get("pages") or 1)
+    for page in range(2, min(total_pages, 5) + 1):
         try:
-            row = {col: 0.0 for col in REQUIRED_COLUMNS}
-            
-            # 1. Oyuncu Bilgileri
-            athlete = ath_entry.get('athlete', {})
-            row['PLAYER'] = athlete.get('displayName', 'Unknown')
-            row['TEAM'] = athlete.get('team', {}).get('abbreviation', 'FA')
-            
-            # 2. Kategorileri Ayır
-            categories = {c['name']: c.get('values', []) for c in ath_entry.get('categories', [])}
-            
-            # --- GENERAL KATEGORİSİ ---
-            # Beklenen Sıra: [0:GP, 1:MIN, ..., 11:REB(Tahmini), ...]
-            gen = categories.get('general', [])
-            if len(gen) > 1:
-                row['GP'] = float(gen[0])
-                row['MIN'] = float(gen[1])
-                # Luka verisinde index 11 (7.7) Rebound gibi görünüyor
-                if len(gen) > 11:
-                    row['REB'] = float(gen[11])
+            extra = _fetch_byathlete_page(used_season, page, 1000, season_type)
+            athletes.extend(extra.get("athletes") or [])
+        except Exception as exc:
+            print(f"   · sayfa {page} alınamadı: {exc}")
+            break
 
-            # --- OFFENSIVE KATEGORİSİ ---
-            # Beklenen Sıra:
-            # 0:PTS, 1:FGM, 2:FGA, 3:FG%, 4:3PM, 5:3PA, 6:3P%, 
-            # 7:FTM, 8:FTA, 9:FT%, 10:AST, 11:TO
-            off = categories.get('offensive', [])
-            if len(off) > 11:
-                row['PTS'] = float(off[0])
-                row['FGM'] = float(off[1])
-                row['FGA'] = float(off[2])
-                row['FG%'] = float(off[3])
-                row['3Pts'] = float(off[4])
-                row['3PTA'] = float(off[5])
-                # Index 6 3P% (Atla)
-                row['FTM'] = float(off[7])
-                row['FTA'] = float(off[8])
-                row['FT%'] = float(off[9])
-                row['AST'] = float(off[10])
-                row['TO'] = float(off[11])
+    print(f"✓ {get_season_label(used_season)} sezonu: {len(athletes)} oyuncu")
 
-            # --- DEFENSIVE KATEGORİSİ ---
-            # Beklenen Sıra: 0:STL, 1:BLK
-            defi = categories.get('defensive', [])
-            if len(defi) > 1:
-                row['STL'] = float(defi[0])
-                row['BLK'] = float(defi[1])
-            
-            # Rebound Kontrolü (Eğer General'den gelmediyse Defensive'den kontrol etmeye gerek yok, 
-            # veri yapısında defensive içinde REB yoktu)
-            
-            # Yüzde Düzeltmeleri (Eğer 0-1 arasındaysa 100 ile çarp)
-            if row['FG%'] <= 1.0 and row['FG%'] > 0: row['FG%'] *= 100
-            if row['FT%'] <= 1.0 and row['FT%'] > 0: row['FT%'] *= 100
-            
-            if row['GP'] > 0:
-                processed_data.append(row)
+    index_map = _build_category_index_map(payload)
+    rows = []
 
+    for entry in athletes:
+        try:
+            row = {col: 0.0 for col in _SEASON_STATS_COLUMNS}
+            athlete = entry.get("athlete") or {}
+
+            row["PLAYER"] = athlete.get("displayName") or "Unknown"
+            row["PLAYER_ID"] = athlete.get("id")
+            # ESPN artık 'team' nesnesi yerine teamShortName gönderiyor.
+            row["TEAM"] = (
+                athlete.get("teamShortName")
+                or (athlete.get("teams") or [{}])[0].get("abbreviation")
+                or (athlete.get("team") or {}).get("abbreviation")
+                or "FA"
+            )
+            row["POS"] = (athlete.get("position") or {}).get("abbreviation") or ""
+
+            for category in entry.get("categories") or []:
+                mapping = index_map.get(category.get("name"))
+                if not mapping:
+                    continue
+                values = category.get("values") or []
+                for idx, column in mapping.items():
+                    if idx < len(values) and values[idx] is not None:
+                        row[column] = float(values[idx])
+
+            # Yüzdeler kaynağa göre 0-1 veya 0-100 gelebiliyor; normalize et.
+            for pct in ("FG%", "FT%", "3P%"):
+                if 0 < row[pct] <= 1.0:
+                    row[pct] *= 100
+
+            if row["GP"] > 0:
+                rows.append(row)
         except Exception:
             continue
 
-    df = pd.DataFrame(processed_data)
-    
-    # Güvenlik Kontrolü: DataFrame boşsa veya sütunlar eksikse
-    for col in REQUIRED_COLUMNS:
+    if not rows:
+        return pd.DataFrame(columns=_SEASON_STATS_COLUMNS)
+
+    df = pd.DataFrame(rows)
+    for col in _SEASON_STATS_COLUMNS:
         if col not in df.columns:
             df[col] = 0.0
 
-    return df.sort_values(by="PTS", ascending=False)
-    # services/espn_api.py dosyasında ilgili yerleri bu kodla değiştirin
+    return df.sort_values(by="PTS", ascending=False).reset_index(drop=True)
 
-# =================================================================
-# GÜNCELLENMİŞ GET_ACTIVE_PLAYERS_STATS VE YEREL AGGREGATE FONKSİYONU
-# =================================================================
-
-@st.cache_data(ttl=3600)
-def get_active_players_stats(days=None, season_stats=True):
-    """
-    Aktif oyuncuların istatistiklerini çeker.
-    
-    Args:
-        days: Kaç günlük veri alınacak (None ise sezon başından itibaren)
-        season_stats: True ise sezon başından, False ise son X gün
-    """
-    end_date = datetime.now()
-    
-    if season_stats or days is None:
-        # NBA 2024-25 sezonu başlangıcı: 22 Ekim 2024
-        # NBA 2025-26 sezonu başlangıcı: ~22 Ekim 2025 (tahmini)
-        current_year = end_date.year
-        current_month = end_date.month
-        
-        # Eğer Ekim öncesiyse, geçen sezonun verisini kullan
-        if current_month < 10:
-            season_start_year = current_year - 1
-        else:
-            season_start_year = current_year
-        
-        # NBA sezonları genelde Ekim'in son haftasında başlar
-        start_date = datetime(season_start_year, 10, 22)
-        
-        print(f"📊 Sezon istatistikleri: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
-        print(f"📅 Toplam {(end_date - start_date).days} gün")
-    else:
-        # Son X gün
-        start_date = end_date - timedelta(days=days)
-        print(f"📊 Son {days} gün istatistikleri")
-    
-    # GÜNCEL ROSTER BİLGİSİNİ ÇEK
-    current_rosters = get_current_team_rosters()
-    
-    # İsim normalleştirme için yardımcı fonksiyon
-    def normalize_name(name):
-        """İsimleri karşılaştırma için normalize eder"""
-        if not name:
-            return ""
-        return name.replace(".", "").replace("'", "").replace("-", " ").lower().strip()
-    
-    # Normalize edilmiş roster dictionary oluştur
-    normalized_rosters = {}
-    for player_name, team in current_rosters.items():
-        norm_name = normalize_name(player_name)
-        normalized_rosters[norm_name] = {
-            'team': team,
-            'original_name': player_name
-        }
-    
-    games_data = get_historical_boxscores(start_date, end_date)
-    
-    player_stats = {}
-    
-    # Güvenli sayı çevirme fonksiyonu
-    def to_num(val):
-        try:
-            if val == '' or val is None or val == '--':
-                return 0.0
-            return float(val)
-        except (ValueError, TypeError):
-            return 0.0
-    
-    # Dakika parse fonksiyonu
-    def parse_minutes(min_str):
-        try:
-            if min_str == '' or min_str is None or min_str == '--':
-                return 0.0
-            if isinstance(min_str, (int, float)):
-                return float(min_str)
-            if isinstance(min_str, str):
-                if ':' in min_str:
-                    parts = min_str.split(':')
-                    return float(parts[0]) + float(parts[1]) / 60
-                else:
-                    return float(min_str)
-            return 0.0
-        except (ValueError, TypeError):
-            return 0.0
-
-    # Her maçtaki her oyuncu için istatistikleri topla
-    for game in games_data:
-        for p in game['players']:
-            name = p.get('PLAYER', '')
-            if not name:
-                continue
-            
-            # Dakikayı parse et - 0 ise atla
-            minutes_played = parse_minutes(p.get('MIN', 0))
-            if minutes_played == 0:
-                continue
-            
-            # Güncel takımı bul (normalize edilmiş isimle)
-            norm_name = normalize_name(name)
-            roster_info = normalized_rosters.get(norm_name)
-            
-            if roster_info:
-                current_team = roster_info['team']
-                display_name = roster_info['original_name']
-            else:
-                current_team = p.get('TEAM', 'UNK')
-                display_name = name
-            
-            if display_name not in player_stats:
-                player_stats[display_name] = {
-                    'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
-                    'STL': 0, 'BLK': 0, 'TO': 0, 
-                    'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
-                    '3Pts': 0, '3PTA': 0,  # 3PTA eklendi
-                    'TEAM': current_team,
-                    'MIN': 0,
-                    'last_game_date': game['date']
-                }
-            
-            stats = player_stats[display_name]
-            stats['TEAM'] = current_team
-            stats['GP'] += 1
-            stats['MIN'] += minutes_played
-            
-            if game['date'] > stats['last_game_date']:
-                stats['last_game_date'] = game['date']
-            
-            # İstatistikleri topla
-            stats['PTS'] += to_num(p.get('PTS', 0))
-            stats['REB'] += to_num(p.get('REB', 0))
-            stats['AST'] += to_num(p.get('AST', 0))
-            stats['STL'] += to_num(p.get('STL', 0))
-            stats['BLK'] += to_num(p.get('BLK', 0))
-            stats['TO']  += to_num(p.get('TO', 0))
-            stats['FGM'] += to_num(p.get('FGM', 0))
-            stats['FGA'] += to_num(p.get('FGA', 0))
-            stats['FTM'] += to_num(p.get('FTM', 0))
-            stats['FTA'] += to_num(p.get('FTA', 0))
-            stats['3Pts'] += to_num(p.get('3Pts', 0))
-            stats['3PTA'] += to_num(p.get('3PTA', 0))
-
-    # Ortalamaları hesapla - Sadece maç başına 10+ dakika oynayanlar
-    final_list = []
-    for name, s in player_stats.items():
-        if s['GP'] == 0:
-            continue
-            
-        avg_minutes = s['MIN'] / s['GP']
-        
-        # MAÇBAŞI 10 DAKİKADAN AZ OYNAYANLAR HARİÇ
-        if avg_minutes < 10:
-            continue
-        
-        # Yüzdeleri hesapla
-        fg_pct = round((s['FGM'] / s['FGA'] * 100) if s['FGA'] > 0 else 0, 1)
-        ft_pct = round((s['FTM'] / s['FTA'] * 100) if s['FTA'] > 0 else 0, 1)
-        three_pct = round((s['3Pts'] / s['3PTA'] * 100) if s['3PTA'] > 0 else 0, 1)
-        
-        final_list.append({
-            'PLAYER': name,
-            'TEAM': s['TEAM'],
-            'GP': s['GP'],
-            'MIN': round(avg_minutes, 1),
-            'PTS': round(s['PTS'] / s['GP'], 1),
-            'REB': round(s['REB'] / s['GP'], 1),
-            'AST': round(s['AST'] / s['GP'], 1),
-            'STL': round(s['STL'] / s['GP'], 1),
-            'BLK': round(s['BLK'] / s['GP'], 1),
-            'TO': round(s['TO'] / s['GP'], 1),
-            'FGM': round(s['FGM'] / s['GP'], 1),
-            'FGA': round(s['FGA'] / s['GP'], 1),
-            'FTM': round(s['FTM'] / s['GP'], 1),
-            'FTA': round(s['FTA'] / s['GP'], 1),
-            '3Pts': round(s['3Pts'] / s['GP'], 1),
-            '3PM': round(s['3Pts'] / s['GP'], 1),  # Duplicate for compatibility
-            '3PTA': round(s['3PTA'] / s['GP'], 1),
-            'FG%': fg_pct,
-            'FT%': ft_pct,
-            '3P%': three_pct,
-        })
-    
-    print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
-    
-    return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
 @st.cache_data(ttl=86400)
 def get_current_team_rosters():
     """
@@ -577,7 +490,7 @@ def get_current_team_rosters():
         t_abbr = team_info['abbr']
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/roster"
         try:
-            resp = requests.get(url, timeout=5)
+            resp = espn_get(url, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 athletes = data.get('athletes', [])
@@ -627,65 +540,54 @@ HEADERS = {
 
 def call_espn_api(league_id: int, views: list = None):
     """
-    ESPN Fantasy API'yi çağırır - Season parametresi YOK
+    ESPN Fantasy lig verisini çeker.
+
+    Önce leagueHistory (sezondan bağımsız) denenir; olmazsa güncel sezondan
+    başlayarak sezon bazlı endpoint'e düşülür. Sezon yılları sabit değil,
+    ESPN takviminden gelir.
     """
     if views is None:
         views = ['mMatchupScore', 'mScoreboard', 'mSettings', 'mTeam', 'modular', 'mNav']
-    
-    # Season parametresi olmadan direkt league endpoint
-    base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/leagueHistory/{league_id}"
-    
+
     params = {'view': views}
-    
-    # Önce leagueHistory dene
+
+    # 1) leagueHistory - sezon parametresi gerektirmez
+    base_url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/leagueHistory/{league_id}"
     try:
-        print(f"Trying leagueHistory: {base_url}")
-        response = requests.get(base_url, headers=HEADERS, params=params, timeout=10)
-        
+        response = get_session().get(base_url, headers=HEADERS, params=params, timeout=15)
         if response.status_code == 200:
             data = response.json()
-            # leagueHistory bir array döndürür, en son sezonu al
-            if isinstance(data, list) and len(data) > 0:
-                print(f"✓ Found {len(data)} seasons, using latest")
-                return data[0]  # En son sezon
-        
+            # leagueHistory bir dizi döndürür, en son sezonu al
+            if isinstance(data, list) and data:
+                print(f"✓ leagueHistory: {len(data)} sezon bulundu, en yenisi kullanılıyor")
+                return data[0]
     except Exception as e:
-        print(f"leagueHistory failed: {str(e)}")
-    
-    # Alternatif: Direkt league endpoint (bazı ligler için)
-    alt_url = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2026/segments/0/leagues/{league_id}"
-    
-    try:
-        print(f"Trying direct endpoint: {alt_url}")
-        response = requests.get(alt_url, headers=HEADERS, params=params, timeout=10)
-        
-        if response.status_code == 401:
-            raise PermissionError("Bu lig private. Sadece public ligler destekleniyor.")
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'teams' in data:
-                print(f"✓ API call successful - Found {len(data.get('teams', []))} teams")
-                return data
-        
-        # 2024'ü de dene
-        alt_url_2024 = f"https://fantasy.espn.com/apis/v3/games/fba/seasons/2025/segments/0/leagues/{league_id}"
-        print(f"Trying 2024: {alt_url_2024}")
-        response = requests.get(alt_url_2024, headers=HEADERS, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'teams' in data:
-                print(f"✓ Found 2024 season - {len(data.get('teams', []))} teams")
-                return data
-        
-        raise RuntimeError(f"Hiçbir endpoint çalışmadı. Son status: {response.status_code}")
-        
-    except PermissionError:
-        raise
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        raise RuntimeError(f"ESPN API'ye bağlanılamadı: {str(e)}")
+        print(f"leagueHistory başarısız: {e}")
+
+    # 2) Sezon bazlı endpoint - güncel sezondan geriye doğru dene
+    last_status = None
+    for season in season_candidates():
+        url = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba"
+               f"/seasons/{season}/segments/0/leagues/{league_id}")
+        try:
+            response = get_session().get(url, headers=HEADERS, params=params, timeout=15)
+            last_status = response.status_code
+
+            if response.status_code == 401:
+                raise PermissionError("Bu lig private. Sadece public ligler destekleniyor.")
+
+            if response.status_code == 200:
+                data = response.json()
+                if 'teams' in data:
+                    print(f"✓ {get_season_label(season)} sezonu - {len(data['teams'])} takım")
+                    return data
+        except PermissionError:
+            raise
+        except requests.exceptions.RequestException as e:
+            print(f"{season} sezonu istenirken hata: {e}")
+
+    raise RuntimeError(f"Lig verisi alınamadı (son durum: {last_status}). "
+                       f"Lig ID'sinin doğru ve ligin public olduğundan emin olun.")
 
 def get_team_dict(league_id: int):
     """Takım ID'lerini kısaltmalarıyla eşleştirir"""
@@ -811,60 +713,61 @@ def get_standings(league_id: int, season: int = None) -> List[Dict]:
 
 # services/espn_api.py dosyasının en altına ekle:
 
-# services/espn_api.py dosyasında get_active_players_stats fonksiyonunu bununla değiştirin:
+_ACTIVE_STATS_COLUMNS = [
+    'PLAYER', 'TEAM', 'PLAYER_ID', 'GP', 'MIN', 'PTS', 'REB', 'AST',
+    'STL', 'BLK', 'TO', 'FGM', 'FGA', 'FTM', 'FTA', '3Pts', '3PM', '3PTA',
+    'FG%', 'FT%', '3P%',
+]
+
 
 @st.cache_data(ttl=3600)
 def get_active_players_stats(days=None, season_stats=True):
     """
-    Aktif oyuncuların istatistiklerini çeker.
-    
+    Aktif oyuncuların maç loglarından toplanmış ortalamalarını çeker.
+
     Args:
         days: Kaç günlük veri alınacak (None ise sezon başından itibaren)
         season_stats: True ise sezon başından, False ise son X gün
     """
     end_date = datetime.now()
-    
+
     if season_stats or days is None:
-        # NBA 2024-25 sezonu başlangıcı: 22 Ekim 2024
-        # NBA 2025-26 sezonu başlangıcı: ~22 Ekim 2025 (tahmini)
-        current_year = end_date.year
-        current_month = end_date.month
-        
-        # Eğer Ekim öncesiyse, geçen sezonun verisini kullan
-        if current_month < 10:
-            season_start_year = current_year - 1
-        else:
-            season_start_year = current_year
-        
-        # NBA sezonları genelde Ekim'in son haftasında başlar
-        start_date = datetime(season_start_year, 10, 22)
-        
-        print(f"📊 Sezon istatistikleri: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
-        print(f"📅 Toplam {(end_date - start_date).days} gün")
+        # Sezon başlangıcı ESPN takviminden gelir (bkz. services/nba_season.py).
+        start_date = get_season_start_date()
+        if start_date > end_date:
+            # Sezon henüz başlamadı; bir önceki sezonun verisini göster.
+            start_date = get_season_start_date(get_current_season_year() - 1)
+        print(f"📊 Sezon istatistikleri: {start_date:%Y-%m-%d} - {end_date:%Y-%m-%d}")
     else:
-        # Son X gün
         start_date = end_date - timedelta(days=days)
         print(f"📊 Son {days} gün istatistikleri")
-    
+
     # GÜNCEL ROSTER BİLGİSİNİ ÇEK
     current_rosters = get_current_team_rosters()
-    
+
     # İsim normalleştirme için yardımcı fonksiyon
     def normalize_name(name):
         """İsimleri karşılaştırma için normalize eder"""
         if not name:
             return ""
         return name.replace(".", "").replace("'", "").replace("-", " ").lower().strip()
-    
-    # Normalize edilmiş roster dictionary oluştur
+
+    # Normalize edilmiş roster dictionary oluştur.
+    # get_current_team_rosters() {'team': ..., 'id': ...} sözlüğü döndürür;
+    # eski sürümlerde düz string dönebildiği için ikisi de desteklenir.
     normalized_rosters = {}
-    for player_name, team in current_rosters.items():
+    for player_name, info in current_rosters.items():
         norm_name = normalize_name(player_name)
+        if isinstance(info, dict):
+            team_code, player_id = info.get('team'), info.get('id')
+        else:
+            team_code, player_id = info, None
         normalized_rosters[norm_name] = {
-            'team': team,
+            'team': team_code,
+            'id': player_id,
             'original_name': player_name
         }
-    
+
     games_data = get_historical_boxscores(start_date, end_date)
     
     player_stats = {}
@@ -913,18 +816,21 @@ def get_active_players_stats(days=None, season_stats=True):
             
             if roster_info:
                 current_team = roster_info['team']
+                player_id = roster_info['id']
                 display_name = roster_info['original_name']
             else:
                 current_team = p.get('TEAM', 'UNK')
+                player_id = None
                 display_name = name
-            
+
             if display_name not in player_stats:
                 player_stats[display_name] = {
-                    'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0, 
-                    'STL': 0, 'BLK': 0, 'TO': 0, 
-                    'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0, 
+                    'GP': 0, 'PTS': 0, 'REB': 0, 'AST': 0,
+                    'STL': 0, 'BLK': 0, 'TO': 0,
+                    'FGM': 0, 'FGA': 0, 'FTM': 0, 'FTA': 0,
                     '3Pts': 0, '3PTA': 0,
                     'TEAM': current_team,
+                    'PLAYER_ID': player_id,
                     'MIN': 0,
                     'last_game_date': game['date']
                 }
@@ -952,10 +858,6 @@ def get_active_players_stats(days=None, season_stats=True):
             stats['FTA'] += to_num(p.get('FTA', 0))
             stats['3Pts'] += to_num(p.get('3Pts', 0))
             stats['3PTA'] += to_num(p.get('3PTA', 0))
-            
-            # Debug: İlk 3 oyuncu için değerleri yazdır
-            if stats['GP'] == 1 and len(player_stats) <= 3:
-                print(f"DEBUG {display_name}: FGM={p.get('FGM')}, FGA={p.get('FGA')}, FTM={p.get('FTM')}, FTA={p.get('FTA')}")
 
     # Ortalamaları hesapla - Sadece maç başına 10+ dakika oynayanlar
     final_list = []
@@ -977,6 +879,7 @@ def get_active_players_stats(days=None, season_stats=True):
         final_list.append({
             'PLAYER': name,
             'TEAM': s['TEAM'],
+            'PLAYER_ID': s.get('PLAYER_ID'),
             'GP': s['GP'],
             'MIN': round(avg_minutes, 1),
             'PTS': round(s['PTS'] / s['GP'], 1),
@@ -998,7 +901,13 @@ def get_active_players_stats(days=None, season_stats=True):
         })
     
     print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
-    
+
+    if not final_list:
+        # Seçilen aralıkta hiç maç yoksa (ör. sezon arası) boş ama
+        # sütunları tam bir DataFrame döndür; çağıranlar .empty ile
+        # kontrol ediyor ve sort_values sütun bulamayınca patlıyordu.
+        return pd.DataFrame(columns=_ACTIVE_STATS_COLUMNS)
+
     return pd.DataFrame(final_list).sort_values(by="PTS", ascending=False)
 
 
@@ -1157,45 +1066,6 @@ def calculate_game_score(home_score, away_score, status_desc,
     return round(final_score, 1)
 
 
-# ============================================
-# KULLANIM ÖRNEKLERİ
-# ============================================
-
-# Örnek 1: Basit kullanım (sadece skor)
-score1 = calculate_game_score(115, 113, "Final")
-print(f"Basit skor: {score1}")
-
-# Örnek 2: Liderlik değişimleriyle
-score2 = calculate_game_score(128, 126, "Final OT", lead_changes=18)
-print(f"Uzatmalı + çok liderlik değişimi: {score2}")
-
-# Örnek 3: Tam veri ile
-score3 = calculate_game_score(
-    home_score=145,
-    away_score=142,
-    status_desc="Final 2OT",
-    home_offensive_rating=118.5,  # Sezon ortalaması
-    away_offensive_rating=116.2,
-    home_defensive_rating=112.0,
-    away_defensive_rating=114.5,
-    lead_changes=22
-)
-print(f"Tüm verilerle: {score3}")
-
-# Örnek 4: Dict ile stats gönderimi
-lakers_stats = {'offensive_rating': 115.5, 'defensive_rating': 113.2}
-celtics_stats = {'offensive_rating': 119.8, 'defensive_rating': 110.5}
-
-score4 = calculate_game_score(
-    home_score=122,
-    away_score=118,
-    status_desc="Final",
-    home_team_stats=lakers_stats,
-    away_team_stats=celtics_stats,
-    lead_changes=12
-)
-print(f"Stats dict ile: {score4}")
-
 def get_score_color(score):
     """Puana göre renk kodu döndürür"""
     if score >= 8.5: return "#22c55e" # Yeşil (Harika)
@@ -1203,60 +1073,89 @@ def get_score_color(score):
     elif score >= 5.0: return "#f97316" # Turuncu (Eh)
     return "#ef4444" # Kırmızı (Sıkıcı)
 
-# KULLANIM ÖRNEKLERİ:
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_game_ids_in_range(start_date, end_date):
+    """
+    Bir tarih aralığındaki tüm maç ID'lerini {tarih: [id, ...]} olarak döndürür.
 
-# Sezon başından itibaren (varsayılan):
-# df = get_active_players_stats()
+    ESPN scoreboard'u 'dates=YYYYMMDD-YYYYMMDD' aralığını destekliyor; günde
+    bir istek atmak yerine ~30 günlük bloklar hâlinde çekilir. Tam bir sezon
+    için ~170 istek yerine ~6 istek yeterli oluyor.
+    """
+    CHUNK_DAYS = 30
+    # Çağıranlar hem datetime hem date gönderebiliyor; tek tipe indir.
+    start_date = start_date.date() if isinstance(start_date, datetime) else start_date
+    end_date = end_date.date() if isinstance(end_date, datetime) else end_date
 
-# Son 15 gün:
-# df = get_active_players_stats(days=15, season_stats=False)
+    chunks = []
+    cursor = start_date
+    while cursor <= end_date:
+        chunk_end = min(cursor + timedelta(days=CHUNK_DAYS - 1), end_date)
+        chunks.append((cursor, chunk_end))
+        cursor = chunk_end + timedelta(days=1)
 
-# Son 30 gün:
-# df = get_active_players_stats(days=30, season_stats=False)
+    def fetch_chunk(bounds):
+        c_start, c_end = bounds
+        url = f"{SCOREBOARD_URL}?dates={c_start:%Y%m%d}-{c_end:%Y%m%d}&limit=1000"
+        try:
+            data = espn_get(url, timeout=25).json()
+        except Exception as exc:
+            print(f"Hata (get_game_ids_in_range {c_start:%Y-%m-%d}): {exc}")
+            return {}
+
+        by_date = {}
+        for event in data.get("events", []):
+            event_date = _parse_event_date(event.get("date"))
+            if event_date:
+                by_date.setdefault(event_date, []).append(event["id"])
+        return by_date
+
+    date_game_map = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        for partial in executor.map(fetch_chunk, chunks):
+            for day, ids in partial.items():
+                date_game_map.setdefault(day, []).extend(ids)
+
+    return date_game_map
+
+
+def _parse_event_date(value):
+    """
+    ESPN event tarihini (UTC ISO) maç gününe çevirir.
+
+    Maç saatleri UTC geldiği için akşam maçları ertesi güne kayıyor
+    (19:00 ET = 00:00 UTC). 8 saat geri alınca ESPN'in kendi günlük
+    gruplamasıyla birebir örtüşüyor - doğrulandı.
+    """
+    if not value:
+        return None
+    try:
+        return (datetime.strptime(value[:16], "%Y-%m-%dT%H:%M") - timedelta(hours=8)).date()
+    except ValueError:
+        return None
+
 
 def get_historical_boxscores(start_date, end_date):
     """
     Belirtilen tarih aralığındaki TÜM maçların boxscore'larını çeker.
-    Performans için Threading kullanır.
+    Maç ID'leri toplu, boxscore'lar paralel ve cache'li olarak alınır.
     """
-    all_game_data = []
-    
-    # Tarih listesi oluştur
-    date_list = []
-    curr = start_date
-    while curr <= end_date:
-        date_list.append(curr)
-        curr += timedelta(days=1)
-        
-    print(f"Fetching data from {start_date} to {end_date} ({len(date_list)} days)")
+    date_game_map = get_game_ids_in_range(start_date, end_date)
+    print(f"Fetching data from {start_date:%Y-%m-%d} to {end_date:%Y-%m-%d} "
+          f"({len(date_game_map)} maç günü)")
 
-    # 1. Adım: Tüm günlerin Game ID'lerini topla
-    # Threading ile çok daha hızlı
-    date_game_map = {} # {date: [game_ids]}
-    
-    def fetch_ids_for_date(d):
-        return d, get_game_ids(d)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_date = {executor.submit(fetch_ids_for_date, d): d for d in date_list}
-        for future in concurrent.futures.as_completed(future_to_date):
-            d, ids = future.result()
-            if ids:
-                date_game_map[d] = ids
-
-    # 2. Adım: Tüm Game ID'ler için Boxscore çek
+    # Tüm Game ID'leri düzleştir
     all_game_ids = []
     game_id_to_date = {}
-    
     for d, ids in date_game_map.items():
         for gid in ids:
             all_game_ids.append(gid)
             game_id_to_date[gid] = d
-            
-    # Boxscore'ları paralel çek
+
+    # Boxscore'ları paralel çek (cache'li sürümle - aynı maç bir daha çekilmez)
     results = []
     def fetch_box_with_date(gid):
-        return game_id_to_date[gid], get_boxscore(gid)
+        return game_id_to_date[gid], get_cached_boxscore(gid)
 
     # İlerleme çubuğu (Streamlit context'inde ise)
     total_games = len(all_game_ids)

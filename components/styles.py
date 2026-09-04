@@ -38,12 +38,26 @@ def load_styles():
 
     /* ===============================
        MAIN CONTENT CONTAINER
-       =============================== */
+       ===============================
+       NOT: Eski "section.main > div" seçicisi Streamlit 1.4x ile birlikte
+       DOM'dan kalktı; kural ölü kaldığı için arka plandaki saha fotoğrafı
+       tüm içeriğin arasından geçiyordu. Güncel test-id ile birlikte eski
+       sınıf adı da yedek olarak tutuluyor. */
+    [data-testid="stMainBlockContainer"],
     section.main > div {
         background-color: rgba(22, 26, 34, 0.94);
         border: 1px solid var(--border-subtle);
-        padding: 28px 32px;
-        margin: 18px 24px;
+        border-radius: 10px;
+        padding: 26px 30px;
+        margin: 16px 20px;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stMainBlockContainer"],
+        section.main > div {
+            padding: 14px 12px;
+            margin: 8px 6px;
+        }
     }
 
     /* ===============================
