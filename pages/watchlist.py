@@ -63,7 +63,7 @@ def render_watchlist_page():
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
         with col_btn1:
-            if st.button("➕ Add to Watchlist", type="primary", use_container_width=True):
+            if st.button("➕ Add to Watchlist", type="primary", width='stretch'):
                 if player_name:
                     # Check if already exists
                     watchlist = db.get_watchlist(user_id)
@@ -187,7 +187,7 @@ def render_watchlist_page():
                     )
                     col_save, col_cancel = st.columns(2)
                     with col_save:
-                        if st.button("💾 Save", key=f"save_{item['id']}", use_container_width=True):
+                        if st.button("💾 Save", key=f"save_{item['id']}", width='stretch'):
                             if db.update_watchlist_notes(item['id'], new_notes):
                                 st.session_state[f"editing_{item['id']}"] = False
                                 st.success("Notes updated!")
@@ -195,7 +195,7 @@ def render_watchlist_page():
                             else:
                                 st.error("Failed to update notes")
                     with col_cancel:
-                        if st.button("❌ Cancel", key=f"cancel_{item['id']}", use_container_width=True):
+                        if st.button("❌ Cancel", key=f"cancel_{item['id']}", width='stretch'):
                             st.session_state[f"editing_{item['id']}"] = False
                             st.rerun()
             
@@ -208,7 +208,7 @@ def render_watchlist_page():
             
             with col1:
                 # Export watchlist
-                if st.button("📥 Export to CSV", use_container_width=True):
+                if st.button("📥 Export to CSV", width='stretch'):
                     df = pd.DataFrame(filtered_watchlist)
                     df['created_at'] = df['created_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
                     csv = df[['player_name', 'notes', 'created_at']].to_csv(index=False)
@@ -217,12 +217,12 @@ def render_watchlist_page():
                         data=csv,
                         file_name=f"watchlist_{datetime.now().strftime('%Y%m%d')}.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        width='stretch'
                     )
             
             with col2:
                 # Clear all
-                if st.button("🗑️ Clear All", use_container_width=True, type="secondary"):
+                if st.button("🗑️ Clear All", width='stretch', type="secondary"):
                     st.session_state.confirm_clear = True
             
             if st.session_state.get("confirm_clear", False):
@@ -244,6 +244,6 @@ def render_watchlist_page():
     st.markdown("---")
     col_back, col_space = st.columns([1, 3])
     with col_back:
-        if st.button("⬅️ Back to Home", use_container_width=True):
+        if st.button("⬅️ Back to Home", width='stretch'):
             st.session_state.page = "home"
             st.rerun()

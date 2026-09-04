@@ -1,3 +1,9 @@
+# EN BAŞTA: konsol kodlamasını UTF-8'e sabitle. Windows'un cp1254 kod
+# sayfasında log satırlarındaki ✓/❌/📊 karakterleri UnicodeEncodeError
+# fırlatıp sayfayı komple düşürüyordu.
+from utils.console import configure_console_encoding
+configure_console_encoding()
+
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -6,6 +12,8 @@ import textwrap
 import extra_streamlit_components as stx
 import time
 from services.espn_api import (calculate_game_score, get_score_color)
+from services.nba_season import (get_current_season_year, get_season_label,
+                                 get_season_start_date, is_offseason)
 from auth import check_authentication_enhanced, inject_auth_bridge, logout_enhanced
 import os
 import pickle
@@ -349,6 +357,11 @@ if mobile_app_mode or native_app_mode:
 # ==================== 6. GLOBAL CSS ====================
 st.markdown(f"""
     <style>
+        /* Streamlit'in pages/ klasöründen otomatik ürettiği gezinme listesini
+           gizle - yönlendirme st.session_state.page üzerinden yapılıyor.
+           (config.toml'daki ui.hideSidebarNav 1.49 ile kaldırıldı.) */
+        [data-testid="stSidebarNav"] {{ display: none !important; }}
+
         @media (max-width: 768px) {{
             [data-testid="stSidebar"] {{
                 position: fixed !important;
@@ -830,7 +843,7 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     with st.form("trivia_form", border=False):
         options = {"A": question['option_a'], "B": question['option_b'], "C": question['option_c'], "D": question['option_d']}
         choice = st.radio("Your answer:", list(options.keys()), format_func=lambda x: f"{x}) {options[x]}", index=None)
-        submitted = st.form_submit_button("Answer", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("Answer", width='stretch', type="primary")
 
     if submitted:
         if not choice:
@@ -912,9 +925,21 @@ def handle_daily_trivia(all_cookies):
 
 
 # ==================== 11. SIDEBAR ====================
-st.sidebar.image("HoopLifeNBA_logo.png", use_container_width=True)
+st.sidebar.image("HoopLifeNBA_logo.png", width='stretch')
 
 with st.sidebar:
+    st.markdown("---")
+
+    # Mock Draft - herkese açık
+    if st.button("🏀 Mock Draft", width='stretch', type="secondary", key="sidebar_mock_draft_btn"):
+        st.session_state.page = "mock_draft"
+        st.rerun()
+
+    # Card Game button - accessible to everyone
+    if st.button("Card Connections", width='stretch', type="secondary", key="sidebar_card_game_btn"):
+        st.session_state.page = "card_game"
+        st.rerun()
+
     st.markdown("---")
 
     if is_authenticated and user:
@@ -929,15 +954,15 @@ with st.sidebar:
         if is_pro:
             st.success("PRO Member")
             watchlist_count = len(db.get_watchlist(user['id']))
-            if st.button(f"My Watchlist ({watchlist_count})", use_container_width=True):
+            if st.button(f"My Watchlist ({watchlist_count})", width='stretch'):
                 st.session_state.page = "watchlist"
                 st.rerun()
         else:
             st.info("Free Account")
-            if st.button("Upgrade to PRO", use_container_width=True):
+            if st.button("Upgrade to PRO", width='stretch'):
                 st.info("Contact admin for PRO upgrade")
 
-        if st.button("Logout", use_container_width=True):
+        if st.button("Logout", width='stretch'):
             logout_enhanced()
     else:
         st.markdown("""
@@ -948,7 +973,7 @@ with st.sidebar:
             </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Login / Register", use_container_width=True, type="primary"):
+        if st.button("Login / Register", width='stretch', type="primary"):
             st.session_state.page = "login"
             st.rerun()
 
@@ -971,7 +996,7 @@ if st.session_state.page == "login":
 if st.session_state.page == "injury":
     from pages.injury_report import render_injury_page
     render_injury_page()
-    if st.sidebar.button("Back to Home", use_container_width=True):
+    if st.sidebar.button("Back to Home", width='stretch'):
         st.session_state.page = "home"
         st.rerun()
     st.stop()
@@ -981,11 +1006,11 @@ if st.session_state.page == "trends":
         st.warning("This is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Login / Register", use_container_width=True, type="primary"):
+            if st.button("Login / Register", width='stretch', type="primary"):
                 st.session_state.page = "login"
                 st.rerun()
         with col2:
-            if st.button("Back to Home", use_container_width=True):
+            if st.button("Back to Home", width='stretch'):
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
@@ -1003,11 +1028,11 @@ if st.session_state.page == "watchlist":
         st.warning("Watchlist is a PRO feature.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Login / Register", use_container_width=True, type="primary"):
+            if st.button("Login / Register", width='stretch', type="primary"):
                 st.session_state.page = "login"
                 st.rerun()
         with col2:
-            if st.button("⬅️ Back to Home", use_container_width=True):
+            if st.button("⬅️ Back to Home", width='stretch'):
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
@@ -1018,6 +1043,24 @@ if st.session_state.page == "watchlist":
 if st.session_state.page == "trade_analyzer":
     from pages.trade_analyzer import render_trade_analyzer_page
     render_trade_analyzer_page()
+    st.stop()
+
+if st.session_state.page == "mock_draft":
+    from pages.mock_draft import render_mock_draft_page
+    render_mock_draft_page()
+    if st.sidebar.button("Back to Home", width='stretch', key="md_sidebar_back"):
+        st.session_state.page = "home"
+        st.rerun()
+    st.stop()
+
+if st.session_state.page == "card_game":
+    from pages.card_game import render_card_game_page
+    render_card_game_page()
+    if st.sidebar.button("Back to Home", width='stretch', key="cg_sidebar_back"):
+        st.session_state.page = "home"
+        st.session_state.pop("card_game", None)
+        st.session_state.pop("cg_selected_cards", None)
+        st.rerun()
     st.stop()
 
 # ==================== 13. BOX SCORE DIALOG ====================
@@ -1124,7 +1167,7 @@ def show_boxscore_dialog(game_info):
                         cols_show = ['⭐'] + final_cols
                     else:
                         cols_show = final_cols
-                    st.dataframe(team_df[cols_show], use_container_width=True, hide_index=True, height=400)
+                    st.dataframe(team_df[cols_show], width='stretch', hide_index=True, height=400)
                 else:
                     st.info(f"No stats available for {team_name}")
 
@@ -1135,16 +1178,658 @@ def show_boxscore_dialog(game_info):
             else:
                 with tab2: st.info("Waiting for data...")
     else:
-        st.dataframe(df[final_cols], use_container_width=True)
+        st.dataframe(df[final_cols], width='stretch')
 
 
-# ==================== 14. ANA SAYFA ====================
+# ==================== 14. PLAYOFF BRACKET DIALOG ====================
+@st.dialog("🏆 NBA Playoff Bracket Predictions", width="large")
+def show_playoff_bracket_dialog():
+    st.session_state.active_dialog = 'playoff_bracket'
+
+    # Playoff yılı = sezonun bitiş yılı (2026-27 sezonu -> 2027 playoffları)
+    bracket_year = get_current_season_year()
+
+    # Check if there's a shared bracket in URL params
+    shared_data = st.query_params.get("bracket", None)
+
+    st.markdown("""
+    <style>
+    .bracket-title {
+        text-align: center;
+        font-size: 1.4rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ff4b4b, #ff8c00);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 4px;
+    }
+    .bracket-subtitle {
+        text-align: center;
+        color: rgba(255,255,255,0.6);
+        font-size: 0.85rem;
+        margin-bottom: 20px;
+    }
+    #bracket-root {
+        font-family: 'Inter', 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, #0f0f1a 0%, #1a1c2e 100%);
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    .bracket-conference {
+        margin-bottom: 28px;
+    }
+    .conf-label {
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 4px 14px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-bottom: 12px;
+    }
+    .conf-east { background: rgba(30,144,255,0.2); color: #4da6ff; border: 1px solid rgba(30,144,255,0.4); }
+    .conf-west { background: rgba(255,75,75,0.2); color: #ff6b6b; border: 1px solid rgba(255,75,75,0.4); }
+    .round-row {
+        display: grid;
+        gap: 6px;
+    }
+    .matchup {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    .matchup:hover { border-color: rgba(255,255,255,0.2); }
+    .team-pick {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background 0.15s ease;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: rgba(255,255,255,0.85);
+    }
+    .team-pick:hover { background: rgba(255,255,255,0.07); }
+    .team-pick.winner {
+        background: linear-gradient(90deg, rgba(255,165,0,0.18) 0%, rgba(255,165,0,0.05) 100%);
+        color: #ffd700;
+        border-left: 3px solid #ffd700;
+    }
+    .team-pick.loser { opacity: 0.4; }
+    .seed-badge {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.1);
+        display: flex;
+        align-items: center;
+        justify-content:center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        flex-shrink: 0;
+        color: rgba(255,255,255,0.7);
+    }
+    .matchup-divider {
+        height: 1px;
+        background: rgba(255,255,255,0.06);
+        margin: 0;
+    }
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .action-btn {
+        padding: 10px 22px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        font-size: 0.88rem;
+        font-weight: 700;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .btn-download {
+        background: linear-gradient(135deg, #ff4b4b, #c0392b);
+        color: white;
+        box-shadow: 0 4px 15px rgba(255,75,75,0.35);
+    }
+    .btn-download:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,75,75,0.5); }
+    .btn-share {
+        background: linear-gradient(135deg, #4da6ff, #1a78c2);
+        color: white;
+        box-shadow: 0 4px 15px rgba(77,166,255,0.35);
+    }
+    .btn-share:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(77,166,255,0.5); }
+    .btn-reset {
+        background: rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.15);
+    }
+    .btn-reset:hover { background: rgba(255,255,255,0.13); }
+    .share-box {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        color: #4da6ff;
+        word-break: break-all;
+        margin-top: 12px;
+        display: none;
+    }
+    .copy-hint {
+        font-size: 0.72rem;
+        color: rgba(255,255,255,0.4);
+        margin-top: 5px;
+        text-align: center;
+        display: none;
+    }
+    .finalist-display {
+        text-align: center;
+        padding: 10px;
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.5);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+    .finalist-name {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #ffd700;
+        display: block;
+        margin-top: 3px;
+    }
+    .champion-box {
+        background: linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,140,0,0.1));
+        border: 1px solid rgba(255,215,0,0.3);
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+        margin: 12px 0;
+    }
+    .champion-label {
+        font-size: 0.72rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255,215,0,0.6);
+        margin-bottom: 4px;
+    }
+    .champion-name {
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #ffd700;
+    }
+    .round-header {
+        font-size: 0.68rem;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.3);
+        margin-bottom: 8px;
+        margin-top: 14px;
+        text-align: left;
+        padding-left: 2px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f'<div class="bracket-title">🏆 {bracket_year} NBA Playoff Bracket</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bracket-subtitle">Make your predictions — download or share with friends!</div>', unsafe_allow_html=True)
+
+    shared_param = st.query_params.get("bracket", "")
+
+    components.html(f"""
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ background: transparent; font-family: 'Segoe UI', system-ui, sans-serif; }}
+#bracket-root {{
+    background: linear-gradient(135deg, #0f0f1a 0%, #1a1c2e 100%);
+    border-radius: 16px;
+    padding: 20px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #fff;
+}}
+.bracket-inner {{
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}}
+.conf-label {{
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 3px 12px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-bottom: 10px;
+}}
+.conf-east {{ background: rgba(30,144,255,0.2); color: #4da6ff; border: 1px solid rgba(30,144,255,0.4); }}
+.conf-west {{ background: rgba(255,75,75,0.2); color: #ff6b6b; border: 1px solid rgba(255,75,75,0.4); }}
+.conf-section {{
+    margin-bottom: 18px;
+}}
+.round-header {{
+    font-size: 0.62rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 6px;
+    margin-top: 10px;
+    padding-left: 2px;
+}}
+.round-grid {{
+    display: grid;
+    gap: 6px;
+}}
+.matchup {{
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+}}
+.team-pick {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    transition: background 0.15s;
+    user-select: none;
+}}
+.team-pick:hover {{ background: rgba(255,255,255,0.07); }}
+.team-pick.winner {{
+    background: linear-gradient(90deg, rgba(255,165,0,0.22) 0%, rgba(255,165,0,0.04) 100%);
+    color: #ffd700;
+    border-left: 3px solid #ffd700;
+}}
+.team-pick.loser {{ opacity: 0.38; }}
+.seed {{ width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; flex-shrink: 0; color: rgba(255,255,255,0.6); }}
+.div-line {{ height: 1px; background: rgba(255,255,255,0.06); }}
+.champion-box {{
+    background: linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,140,0,0.1));
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    margin: 14px 0;
+}}
+.champion-label {{ font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,215,0,0.6); margin-bottom: 3px; }}
+.champion-name {{ font-size: 1.15rem; font-weight: 900; color: #ffd700; }}
+.finalist-row {{ display: flex; gap: 10px; margin: 10px 0; }}
+.finalist-box {{
+    flex: 1;
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px;
+}}
+.finalist-conf {{ font-size: 0.62rem; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.35); }}
+.finalist-name {{ font-size: 0.9rem; font-weight: 800; color: #fff; margin-top: 4px; min-height: 22px; }}
+.finals-trophy {{ text-align: center; font-size: 1.8rem; margin: 6px 0; }}
+.btn-row {{ display: flex; gap: 8px; margin-top: 16px; justify-content: center; flex-wrap: wrap; }}
+.action-btn {{
+    padding: 9px 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}}
+.btn-download {{ background: linear-gradient(135deg, #ff4b4b, #c0392b); color: white; box-shadow: 0 3px 12px rgba(255,75,75,0.4); }}
+.btn-download:hover {{ transform: translateY(-1px); box-shadow: 0 5px 18px rgba(255,75,75,0.55); }}
+.btn-share {{ background: linear-gradient(135deg, #4da6ff, #1a78c2); color: white; box-shadow: 0 3px 12px rgba(77,166,255,0.4); }}
+.btn-share:hover {{ transform: translateY(-1px); box-shadow: 0 5px 18px rgba(77,166,255,0.55); }}
+.btn-reset {{ background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.15); }}
+.btn-reset:hover {{ background: rgba(255,255,255,0.13); }}
+.share-url {{
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(77,166,255,0.3);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 0.75rem;
+    color: #4da6ff;
+    word-break: break-all;
+    margin-top: 10px;
+    cursor: pointer;
+    display: none;
+}}
+.copy-hint {{ font-size: 0.68rem; color: rgba(255,255,255,0.35); margin-top: 4px; text-align: center; display: none; }}
+.toast {{
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(30,30,50,0.95); color: #fff; padding: 10px 20px;
+    border-radius: 30px; font-size: 0.82rem; border: 1px solid rgba(255,255,255,0.15);
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 9999;
+}}
+</style>
+</head>
+<body>
+<div id="bracket-root">
+  <div class="bracket-inner" id="capture-area">
+    <div id="east-section" class="conf-section"></div>
+    <div id="finals-section"></div>
+    <div id="west-section" class="conf-section"></div>
+  </div>
+  <div class="btn-row">
+    <button class="action-btn btn-download" onclick="downloadBracket()">⬇ Download Image</button>
+    <button class="action-btn btn-share" onclick="shareBracket()">🔗 Share Link</button>
+    <button class="action-btn btn-reset" onclick="resetBracket()">↺ Reset</button>
+  </div>
+  <div id="share-url" class="share-url" onclick="copyUrl()"></div>
+  <div id="copy-hint" class="copy-hint">Click to copy</div>
+  <div id="toast" class="toast"></div>
+</div>
+
+<script>
+const EAST_TEAMS = [
+  {{name:'Cleveland Cavaliers', seed:1}},
+  {{name:'Boston Celtics',      seed:2}},
+  {{name:'New York Knicks',     seed:3}},
+  {{name:'Milwaukee Bucks',     seed:4}},
+  {{name:'Indiana Pacers',      seed:5}},
+  {{name:'Miami Heat',          seed:6}},
+  {{name:'Detroit Pistons',     seed:7}},
+  {{name:'Orlando Magic',       seed:8}},
+];
+const WEST_TEAMS = [
+  {{name:'Oklahoma City Thunder', seed:1}},
+  {{name:'Houston Rockets',       seed:2}},
+  {{name:'LA Lakers',             seed:3}},
+  {{name:'Denver Nuggets',        seed:4}},
+  {{name:'LA Clippers',           seed:5}},
+  {{name:'Golden State Warriors', seed:6}},
+  {{name:'Minnesota Timberwolves',seed:7}},
+  {{name:'Memphis Grizzlies',     seed:8}},
+];
+
+const SHARED = '{shared_param}';
+
+let state = {{
+  east: {{ r1: [null,null,null,null], r2: [null,null], cf: null }},
+  west: {{ r1: [null,null,null,null], r2: [null,null], cf: null }},
+  champion: null
+}};
+
+function loadShared() {{
+  if (!SHARED) return;
+  try {{
+    const decoded = atob(SHARED);
+    const parsed = JSON.parse(decoded);
+    if (parsed && parsed.east && parsed.west) {{
+      state = parsed;
+      showToast('📋 Shared bracket loaded!');
+    }}
+  }} catch(e) {{}}
+}}
+
+function saveState() {{
+  try {{ localStorage.setItem('hl_bracket_{bracket_year}', JSON.stringify(state)); }} catch(e) {{}}
+}}
+function loadState() {{
+  try {{
+    const s = localStorage.getItem('hl_bracket_{bracket_year}');
+    if (s) state = JSON.parse(s);
+  }} catch(e) {{}}
+}}
+
+function getMatchupTeams(conf, round, matchupIdx) {{
+  if (round === 0) {{
+    const teams = conf === 'east' ? EAST_TEAMS : WEST_TEAMS;
+    const pairs = [[0,7],[1,6],[2,5],[3,4]];
+    return [teams[pairs[matchupIdx][0]], teams[pairs[matchupIdx][1]]];
+  }}
+  if (round === 1) {{
+    const winners = state[conf].r1;
+    const pairs = [[0,1],[2,3]];
+    const t1 = winners[pairs[matchupIdx][0]];
+    const t2 = winners[pairs[matchupIdx][1]];
+    return [t1 ? {{name:t1, seed:'?'}} : null, t2 ? {{name:t2, seed:'?'}} : null];
+  }}
+  if (round === 2) {{
+    const w1 = state[conf].r2[0];
+    const w2 = state[conf].r2[1];
+    return [w1 ? {{name:w1, seed:'?'}} : null, w2 ? {{name:w2, seed:'?'}} : null];
+  }}
+  return [null, null];
+}}
+
+function pickWinner(conf, round, matchupIdx, teamName) {{
+  if (round === 0) {{
+    state[conf].r1[matchupIdx] = teamName;
+    const checkR1 = state[conf].r1[matchupIdx === 0 || matchupIdx === 1 ? (matchupIdx === 0 ? 1 : 0) : (matchupIdx === 2 ? 3 : 2)];
+    // invalidate downstream if changed
+    const affectedR2 = matchupIdx < 2 ? 0 : 1;
+    if (state[conf].r2[affectedR2] && !state[conf].r1.slice(matchupIdx < 2 ? 0 : 2, matchupIdx < 2 ? 2 : 4).includes(state[conf].r2[affectedR2])) {{
+      state[conf].r2[affectedR2] = null;
+      state[conf].cf = null;
+      state.champion = null;
+    }}
+  }} else if (round === 1) {{
+    state[conf].r2[matchupIdx] = teamName;
+    if (state[conf].cf && state[conf].cf !== state[conf].r2[0] && state[conf].cf !== state[conf].r2[1]) {{
+      state[conf].cf = null;
+      state.champion = null;
+    }}
+  }} else if (round === 2) {{
+    state[conf].cf = teamName;
+    if (state.champion && state.champion !== teamName && state.champion !== (conf === 'east' ? state.west.cf : state.east.cf)) {{
+      state.champion = null;
+    }}
+  }} else if (round === 3) {{
+    state.champion = teamName;
+  }}
+  saveState();
+  render();
+}}
+
+function makeMatchup(conf, round, matchupIdx) {{
+  const [t1, t2] = getMatchupTeams(conf, round, matchupIdx);
+  const winner = round === 0 ? state[conf].r1[matchupIdx]
+               : round === 1 ? state[conf].r2[matchupIdx]
+               : round === 2 ? state[conf].cf
+               : state.champion;
+
+  const row = (t, isTop) => {{
+    if (!t) return `<div class="team-pick" style="opacity:0.3;cursor:default;"><div class="seed">?</div><span>TBD</span></div>`;
+    const cls = winner === t.name ? 'winner' : (winner && winner !== t.name ? 'loser' : '');
+    const onclick = `pickWinner('${{conf}}',${{round}},${{matchupIdx}},'${{t.name.replace(/'/g,"\\'")}}');event.stopPropagation();`;
+    return `<div class="team-pick ${{cls}}" onclick="${{onclick}}"><div class="seed">${{t.seed}}</div><span>${{t.name}}</span></div>`;
+  }};
+  return `<div class="matchup">${{row(t1,true)}}<div class="div-line"></div>${{row(t2,false)}}</div>`;
+}}
+
+function renderConf(conf) {{
+  const label = conf === 'east' ? 'Eastern Conference' : 'Western Conference';
+  const cls   = conf === 'east' ? 'conf-east' : 'conf-west';
+  const r1 = [0,1,2,3].map(i => makeMatchup(conf, 0, i)).join('');
+  const r2 = [0,1].map(i => makeMatchup(conf, 1, i)).join('');
+  const cf = makeMatchup(conf, 2, 0);
+  return `
+    <div class="conf-label ${{cls}}">${{label}}</div>
+    <div class="round-header">First Round</div>
+    <div class="round-grid" style="grid-template-columns:1fr 1fr">${{r1}}</div>
+    <div class="round-header">Semifinals</div>
+    <div class="round-grid" style="grid-template-columns:1fr 1fr">${{r2}}</div>
+    <div class="round-header">Conference Finals</div>
+    <div class="round-grid">${{cf}}</div>
+  `;
+}}
+
+function renderFinals() {{
+  const ef = state.east.cf;
+  const wf = state.west.cf;
+  const champ = state.champion;
+
+  const finalistsHtml = `
+    <div class="finalist-row">
+      <div class="finalist-box">
+        <div class="finalist-conf">East Champion</div>
+        <div class="finalist-name">${{ef || '—'}}</div>
+      </div>
+      <div class="finalist-box">
+        <div class="finalist-conf">West Champion</div>
+        <div class="finalist-name">${{wf || '—'}}</div>
+      </div>
+    </div>
+  `;
+
+  let champSection = '';
+  if (ef && wf) {{
+    const finalMatchup = `
+      <div class="round-header">NBA Finals — Pick Champion</div>
+      ${{makeMatchup('finals_pick', 3, 0)}}
+    `;
+    // Build custom finals matchup
+    const w = champ;
+    const r1 = (t, isEast) => {{
+      if(!t) return '';
+      const cls = w === t ? 'winner' : (w && w !== t ? 'loser' : '');
+      const conf = isEast ? 'east_finals' : 'west_finals';
+      return `<div class="team-pick ${{cls}}" onclick="pickWinner('',3,0,'${{t.replace(/'/g,"\\'")}}');event.stopPropagation();"><div class="seed">🏆</div><span>${{t}}</span></div>`;
+    }};
+    champSection = `
+      <div class="round-header">🏀 NBA Finals</div>
+      <div class="matchup">${{r1(ef,true)}}<div class="div-line"></div>${{r1(wf,false)}}</div>
+    `;
+    if (champ) {{
+      champSection += `
+        <div class="champion-box" style="margin-top:10px">
+          <div class="champion-label">🏆 Your NBA Champion</div>
+          <div class="champion-name">${{champ}}</div>
+        </div>
+      `;
+    }}
+  }} else {{
+    champSection = `<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:0.8rem;padding:16px 0;">Complete conference predictions to unlock Finals</div>`;
+  }}
+
+  return `
+    <div style="border-top:1px solid rgba(255,255,255,0.07);border-bottom:1px solid rgba(255,255,255,0.07);padding:14px 0;margin:4px 0;">
+      ${{finalistsHtml}}
+      ${{champSection}}
+    </div>
+  `;
+}}
+
+function render() {{
+  document.getElementById('east-section').innerHTML = renderConf('east');
+  document.getElementById('west-section').innerHTML = renderConf('west');
+  document.getElementById('finals-section').innerHTML = renderFinals();
+}}
+
+function resetBracket() {{
+  state = {{ east: {{r1:[null,null,null,null],r2:[null,null],cf:null}}, west: {{r1:[null,null,null,null],r2:[null,null],cf:null}}, champion:null }};
+  saveState();
+  document.getElementById('share-url').style.display = 'none';
+  document.getElementById('copy-hint').style.display = 'none';
+  render();
+  showToast('Bracket reset!');
+}}
+
+function downloadBracket() {{
+  const el = document.getElementById('capture-area');
+  showToast('⏳ Preparing image...');
+  html2canvas(el, {{
+    scale: 2.5,
+    backgroundColor: '#0f0f1a',
+    useCORS: true,
+    logging: false
+  }}).then(canvas => {{
+    const link = document.createElement('a');
+    link.download = 'my-nba-bracket-{bracket_year}.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast('✅ Image downloaded!');
+  }}).catch(() => showToast('❌ Download failed. Try again.'));
+}}
+
+function shareBracket() {{
+  const encoded = btoa(JSON.stringify(state));
+  const base = window.parent ? window.parent.location.href.split('?')[0] : location.href.split('?')[0];
+  const url = base + '?bracket=' + encoded;
+  const box = document.getElementById('share-url');
+  const hint = document.getElementById('copy-hint');
+  box.textContent = url;
+  box.style.display = 'block';
+  hint.style.display = 'block';
+  copyToClipboard(url);
+  showToast('🔗 Link copied to clipboard!');
+}}
+
+function copyUrl() {{
+  const url = document.getElementById('share-url').textContent;
+  copyToClipboard(url);
+  showToast('✅ Copied to clipboard!');
+}}
+
+function copyToClipboard(text) {{
+  try {{ navigator.clipboard.writeText(text); }} catch(e) {{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  }}
+}}
+
+function showToast(msg) {{
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(() => t.style.opacity = '0', 2500);
+}}
+
+// Init
+loadState();
+if (SHARED) loadShared();
+render();
+</script>
+</body>
+</html>
+""", height=900, scrolling=True)
+
+    if st.button("Close", type="secondary", key="close_bracket_dialog"):
+        st.session_state.active_dialog = None
+        st.rerun()
+
+
+# ==================== 15. ANA SAYFA ====================
 def home_page():
     if 'active_dialog' not in st.session_state:
         st.session_state.active_dialog = None
 
     if st.session_state.active_dialog is None or st.session_state.active_dialog == 'trivia':
         handle_daily_trivia(None)
+
+    # Auto-open bracket if shared link is detected
+    shared_bracket = st.query_params.get("bracket", "")
+    if shared_bracket and st.session_state.active_dialog is None:
+        st.session_state.active_dialog = None
+        show_playoff_bracket_dialog()
 
     render_header()
 
@@ -1176,6 +1861,36 @@ def home_page():
 
     games = get_scoreboard(resolved_date)
     st.caption(f"Games from {resolved_date.strftime('%B %d, %Y')}")
+
+    # Sezon arasındaysak seçilen günde maç yoktur; en yakın maç gününü
+    # gösterdiğimizi ve sezonun ne zaman başladığını belirt.
+    if is_offseason():
+        season_start = get_season_start_date()
+        days_to_tipoff = (season_start.date() - datetime.now().date()).days
+        if days_to_tipoff > 0:
+            st.info(f"🏀 {get_season_label()} season tips off in {days_to_tipoff} days "
+                    f"({season_start.strftime('%B %d, %Y')}). Showing the most recent "
+                    f"completed games — meanwhile, try the Mock Draft to prep.")
+
+    # Playoff Bracket Button
+    bracket_col1, bracket_col2, bracket_col3 = st.columns([1, 2, 1])
+    with bracket_col2:
+        components.html("""
+<style>
+.playoff-btn-wrap { text-align: center; margin: 8px 0 18px 0; }
+</style>
+<div class="playoff-btn-wrap">
+</div>
+""", height=0)
+        if st.button(
+            "🏆  NBA Playoff Bracket Predictions",
+            width='stretch',
+            type="primary",
+            key="open_bracket_btn",
+            help=f"Make your {get_current_season_year()} NBA Playoff predictions, download as an image or share the link!"
+        ):
+            st.session_state.active_dialog = None
+            show_playoff_bracket_dialog()
 
     col_header1, col_header2 = st.columns([3, 1])
     with col_header1:
@@ -1258,18 +1973,18 @@ def home_page():
 
                         st.markdown("<hr style='margin:8px 0;'>", unsafe_allow_html=True)
 
-                        if st.button("Box Score", key=f"btn_{game_id}", use_container_width=True):
+                        if st.button("Box Score", key=f"btn_{game_id}", width='stretch'):
                             st.session_state.active_dialog = None
                             show_boxscore_dialog(g)
 
     if total_games > games_to_show:
         if st.session_state.show_all_games:
-            if st.button("Show Less", use_container_width=True, type="secondary"):
+            if st.button("Show Less", width='stretch', type="secondary"):
                 st.session_state.show_all_games = False
                 st.rerun()
         else:
             remaining = total_games - games_to_show
-            if st.button(f"Show All Games (+{remaining} more)", use_container_width=True, type="primary"):
+            if st.button(f"Show All Games (+{remaining} more)", width='stretch', type="primary"):
                 st.session_state.show_all_games = True
                 st.rerun()
 

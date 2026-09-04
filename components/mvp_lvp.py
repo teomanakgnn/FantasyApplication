@@ -173,7 +173,7 @@ def render_mvp_lvp_section(date_range, weights, label):
         if not top_df.empty:
             st.dataframe(
                 top_df, 
-                use_container_width=True, 
+                width='stretch', 
                 hide_index=True,
                 column_config=col_config_mvp
             )
@@ -185,7 +185,7 @@ def render_mvp_lvp_section(date_range, weights, label):
         if not worst_df.empty:
             st.dataframe(
                 worst_df, 
-                use_container_width=True, 
+                width='stretch', 
                 hide_index=True,
                 column_config=col_config_lvp
             )

@@ -7,6 +7,8 @@ import requests
 import feedparser
 from typing import List, Dict
 
+from services.nba_season import get_season_label, get_season_start_date
+
 
 def is_embedded():
     return st.query_params.get("embed") == "true"
@@ -505,8 +507,6 @@ components.html("""
 </script>
 """, height=0, width=0)
 
-SEASON_START_DATE = datetime(2024, 10, 22)  # 2024-25 NBA season
-
 NBA_TEAMS = [
     "Hawks", "Celtics", "Nets", "Hornets", "Bulls", "Cavaliers", "Mavericks", 
     "Nuggets", "Pistons", "Warriors", "Rockets", "Pacers", "Clippers", "Lakers", 
@@ -577,17 +577,23 @@ def fetch_rss_rumors() -> List[Dict]:
             'standings', 'playoff picture', 'draft lottery'
         ]
         
+        # Eylül 2026 itibarıyla doğrulanmış çalışan kaynaklar.
+        # Kaldırılanlar: HoopsHype (feed kapandı), ESPN RSS (403),
+        # Bleacher Report (404) - hepsi artık veri döndürmüyor.
         rss_sources = [
-            {'url': 'https://www.hoopshype.com/feed/', 'source': 'HoopsHype'},
-            {'url': 'https://www.espn.com/espn/rss/nba/news', 'source': 'ESPN'},
-            {'url': 'https://bleacherreport.com/articles/feed?tag_id=18', 'source': 'B/R'},
-            {'url': 'https://www.cbssports.com/rss/headlines/nba/', 'source': 'CBS Sports'}
+            {'url': 'https://www.cbssports.com/rss/headlines/nba/', 'source': 'CBS Sports'},
+            {'url': 'https://basketball.realgm.com/rss/wiretap/0/0.xml', 'source': 'RealGM'},
+            {'url': 'https://sports.yahoo.com/nba/rss.xml', 'source': 'Yahoo Sports'},
+            {'url': 'https://clutchpoints.com/feed', 'source': 'ClutchPoints'},
         ]
-        
+
         for rss_source in rss_sources:
             try:
                 feed = feedparser.parse(rss_source['url'])
-                
+                if getattr(feed, 'bozo', 0) and not feed.entries:
+                    print(f"⚠️ RSS okunamadı: {rss_source['source']}")
+                    continue
+
                 for entry in feed.entries[:8]:
                     title = entry.get('title', 'No Title')
                     content = entry.get('summary', entry.get('description', 'No content'))
@@ -717,10 +723,17 @@ def fetch_espn_headlines() -> List[Dict]:
 
 @st.cache_data(ttl=1800)
 def fetch_reddit_rumors() -> List[Dict]:
-    """Try to fetch Reddit, fallback to empty"""
+    """
+    r/nba tartışmalarını çeker.
+
+    NOT: Reddit Haziran 2023'ten beri anonim JSON erişimini kapattı;
+    search.json her User-Agent ile 403 dönüyor. Fonksiyon OAuth kimlik
+    bilgileri girilirse çalışacak şekilde duruyor ama şu an her zaman
+    boş liste döndürüyor - diğer kaynaklar bunu telafi ediyor.
+    """
     try:
         rumors = []
-        
+
         url = "https://www.reddit.com/r/nba/search.json"
         params = {
             'q': 'trade OR rumors flair:rumor',
@@ -729,11 +742,12 @@ def fetch_reddit_rumors() -> List[Dict]:
             't': 'week'
         }
         headers = {'User-Agent': 'Mozilla/5.0 (compatible; NBA-Rumor-Bot/1.0)'}
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=10)
         if response.status_code != 200:
+            # 403 = anonim erişim kapalı; sessizce geç.
             return []
-        
+
         data = response.json()
         posts = data.get('data', {}).get('children', [])
         
@@ -822,35 +836,26 @@ def fetch_season_data(days, _cache_key=None):
         days: Kaç günlük veri (999 = full season)
         _cache_key: Saatlik cache key (her saat yenilenir)
     """
-    from services.espn_api import get_game_ids, get_cached_boxscore
-    
+    from services.espn_api import get_cached_boxscore, get_game_ids_in_range
+
     today = datetime.now()
-    
+
     if days >= 999:
-        start_date = SEASON_START_DATE
+        start_date = get_season_start_date()
+        if start_date > today:
+            # Sezon henüz başlamadı - önceki sezonun tamamını göster.
+            start_date = get_season_start_date(start_date.year)
     else:
         start_date = today - timedelta(days=days)
-    
-    total_days = (today - start_date).days + 1
-    dates_to_fetch = [start_date + timedelta(days=i) for i in range(total_days)]
-    
+
     all_records = []
     all_game_tasks = []
-    
-    # Phase 1: Collect game IDs (paralel, cached per date)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        future_to_date = {executor.submit(get_game_ids, d): d for d in dates_to_fetch}
-        
-        for future in concurrent.futures.as_completed(future_to_date):
-            date = future_to_date[future]
-            try:
-                ids = future.result()
-                if ids:
-                    for gid in ids:
-                        all_game_tasks.append((gid, date))
-            except:
-                pass
-    
+
+    # Phase 1: Collect game IDs (tek seferde aralık sorgusu, gün gün değil)
+    for game_date, ids in get_game_ids_in_range(start_date, today).items():
+        for gid in ids:
+            all_game_tasks.append((gid, game_date))
+
     if not all_game_tasks:
         return pd.DataFrame()
     
@@ -960,7 +965,7 @@ def render_player_trends_page():
         """, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
-    if st.sidebar.button("Back to Home", use_container_width=True):
+    if st.sidebar.button("Back to Home", width='stretch'):
         st.session_state.page = "home"
         st.rerun()
 
@@ -1087,7 +1092,7 @@ def render_player_trends_page():
             "PLAYER", "TEAM", "games_p1", "games_p2",
             "avg_p1", "avg_p2", "diff"
         ]],
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config={
             "PLAYER": st.column_config.TextColumn("Player", width="medium"),
@@ -1182,7 +1187,7 @@ def render_player_trends_page():
                 st.session_state.show_all_rumors = False
             
             if not st.session_state.show_all_rumors:
-                if st.button("Read More", use_container_width=True, type="primary"):
+                if st.button("Read More", width='stretch', type="primary"):
                     st.session_state.show_all_rumors = True
                     st.rerun()
             else:
@@ -1232,7 +1237,7 @@ def render_player_trends_page():
                         
                         st.divider()
                 
-                if st.button("Show Less", use_container_width=True):
+                if st.button("Show Less", width='stretch'):
                     st.session_state.show_all_rumors = False
                     st.rerun()
     

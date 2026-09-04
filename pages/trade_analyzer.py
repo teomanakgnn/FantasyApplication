@@ -862,7 +862,7 @@ def render_trade_analyzer_page():
         weights_df = pd.DataFrame(list(display_weights.items()), columns=['Stat', 'Weight'])
         weights_df = weights_df[weights_df['Weight'] != 0]
         weights_df = weights_df.sort_values(by='Weight', ascending=False)
-        st.dataframe(weights_df, hide_index=True, use_container_width=True)
+        st.dataframe(weights_df, hide_index=True, width='stretch')
 
     st.title("🏀 NBA Trade Analyzer")
     st.markdown(f"Using **{scoring_method}** method")
@@ -1194,7 +1194,7 @@ def render_trade_analyzer_page():
             
             st.dataframe(
                 display_df.style.format("{:.1f}", subset=numeric_only),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
 

@@ -78,7 +78,7 @@ def show_trivia_popup(trivia_data, user_id, db):
                 with col3:
                     st.metric("Accuracy", f"{stats['accuracy']:.1f}%")
         
-        if st.button("Close", use_container_width=True):
+        if st.button("Close", width='stretch'):
             mark_trivia_shown()
             st.rerun()
         return
@@ -123,7 +123,7 @@ def show_trivia_popup(trivia_data, user_id, db):
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        if st.button("✅ Submit Answer", use_container_width=True, type="primary"):
+        if st.button("✅ Submit Answer", width='stretch', type="primary"):
             is_correct = selected == trivia_data['correct_answer']
             
             # Cevabı kaydet (user_id varsa)
@@ -142,7 +142,7 @@ def show_trivia_popup(trivia_data, user_id, db):
             st.rerun()
     
     with col2:
-        if st.button("Skip", use_container_width=True, type="secondary"):
+        if st.button("Skip", width='stretch', type="secondary"):
             mark_trivia_shown()
             st.rerun()
     
@@ -175,7 +175,7 @@ def show_trivia_popup(trivia_data, user_id, db):
                 with col4:
                     st.metric("Streak", stats['days_played'])
         
-        if st.button("Close", use_container_width=True):
+        if st.button("Close", width='stretch'):
             if 'trivia_result' in st.session_state:
                 del st.session_state.trivia_result
             st.rerun()

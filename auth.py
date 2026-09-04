@@ -325,7 +325,7 @@ def render_auth_page_enhanced():
             with col_rem:
                 remember_me = st.checkbox("Remember me", value=True)
             st.write("")
-            submit = st.form_submit_button("Sign In", use_container_width=True)
+            submit = st.form_submit_button("Sign In", width='stretch')
 
         if submit:
             if not username or not password:
@@ -376,7 +376,7 @@ def render_auth_page_enhanced():
                 reg_password2 = st.text_input("Confirm", type="password")
             terms = st.checkbox("I agree to the Terms of Service")
             st.markdown("---")
-            submit_reg = st.form_submit_button("Create Free Account", use_container_width=True)
+            submit_reg = st.form_submit_button("Create Free Account", width='stretch')
 
             if submit_reg:
                 errors = []
