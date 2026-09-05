@@ -393,6 +393,11 @@ st.markdown(f"""
             [data-testid="stMain"] {{
                 margin-left: 0 !important;
                 width: 100% !important;
+                /* iOS Safari: asil kaydirici bu eleman. Ivmeli kaydirmayi
+                   acikca ac ve kaydirmanin ust cerceveye zincirlenmesini
+                   engelle - iframe icinde parmakla kaydirma boyle stabil. */
+                -webkit-overflow-scrolling: touch !important;
+                overscroll-behavior-y: contain !important;
             }}
         }}
 
@@ -993,13 +998,29 @@ components.html("""
         }
 
         function init() {
+            // Kullanici kaydirirken periyodik islerin layout okumasini
+            // engelle - yoksa her olcum yerlesimi zorluyor ve telefonda
+            // kaydirma takiliyor.
+            let scrolling = false, scrollTimer = null;
+            function markScrolling() {
+                scrolling = true;
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => { scrolling = false; updateVisibility(); }, 180);
+            }
+            const pdoc = window.parent.document;
+            ['touchstart', 'touchmove', 'scroll', 'wheel'].forEach((evt) => {
+                pdoc.addEventListener(evt, markScrolling, { passive: true, capture: true });
+            });
+
             createHoopLifeDock();
             ensureMobileTopBar();
-            setInterval(ensureMobileTopBar, 700);
+            setInterval(() => { if (!scrolling) ensureMobileTopBar(); }, 900);
             bindMobileAutoClose();
             setInterval(bindMobileAutoClose, 1500);
             collapseEmptyContainers();
-            setInterval(collapseEmptyContainers, 1000);
+            // Kaydirma sirasinda calistirma: bu fonksiyon da olcum yapiyor
+            // ve gereksiz yerlesim tetikliyor.
+            setInterval(() => { if (!scrolling) collapseEmptyContainers(); }, 1500);
             setTimeout(() => {
                 if (getSavedSidebarState()) {
                     const s = getSidebarState();
@@ -1011,8 +1032,16 @@ components.html("""
                 }
                 updateVisibility();
             }, 800);
-            function loop() { if (!isTransitioning) updateVisibility(); animationFrame = requestAnimationFrame(loop); }
-            loop();
+            // ONCEDEN: her karede updateVisibility() calisiyordu. Bu fonksiyon
+            // once layout okuyor (getBoundingClientRect + getComputedStyle),
+            // sonra stil yaziyor - yani her karede zorunlu senkron yerlesim.
+            // Gercek telefonda bu, parmakla kaydirmayi boguyordu.
+            // Artik: kullanici dokunurken hic calismiyor, aksi halde en fazla
+            // 400ms'de bir. Sidebar degisimlerini zaten MutationObserver
+            // yakaliyor.
+            setInterval(() => {
+                if (!isTransitioning && !scrolling) updateVisibility();
+            }, 400);
             let resizeTimer;
             window.parent.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => updateVisibility(), 100); });
             const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');

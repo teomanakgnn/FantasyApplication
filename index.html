@@ -41,9 +41,11 @@
       margin: 0; padding: 0;
       height: 100%;
       background: #0E1117;
-      /* iOS'ta lastik gibi geri sekmeyi (bounce) engelle */
-      overscroll-behavior: none;
       overflow: hidden;
+      /* NOT: Burada 'overscroll-behavior: none' KULLANMA. iOS'ta jesti
+         iframe'e devretmeyi engelleyip ic kaydirmayi oldurebiliyor.
+         'contain' zincirlemeyi keser ama ic kaydirmaya dokunmaz. */
+      overscroll-behavior: contain;
     }
 
     /* iframe'i tam olarak gorunur alana sabitle.
@@ -57,7 +59,8 @@
       height: 100dvh;
       border: none;
       display: block;
-      -webkit-overflow-scrolling: touch;
+      /* iOS'ta iframe icindeki dokunma jestlerinin duzgun iletilmesi icin */
+      touch-action: auto;
     }
 
     /* Streamlit Cloud uykudan uyanirken 20-30 sn bos beyaz kalabiliyor;
