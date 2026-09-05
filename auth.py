@@ -273,7 +273,7 @@ def render_auth_page_enhanced():
             color: #FBBF24 !important;
             padding: 2px 6px;
             border-radius: 10px;
-            font-size: 0.6rem;
+            font-size: 0.8rem;
             font-weight: bold;
             text-transform: uppercase;
             margin-left: 5px;
