@@ -182,7 +182,7 @@ def _inject_card_game_css():
             box-shadow:0 2px 8px rgba(0,0,0,0.3);
         }
         .cg-conn-label { font-weight:700; color:var(--cg-text)!important; font-size:0.93rem; }
-        .cg-conn-desc  { color:var(--cg-text-dim)!important; font-size:0.78rem; margin-top:1px; }
+        .cg-conn-desc  { color:var(--cg-text-dim)!important; font-size:0.86rem; margin-top:1px; }
 
         /* ───── SCOREBOARD ───── */
         .cg-scoreboard {
@@ -204,7 +204,7 @@ def _inject_card_game_css():
         }
         .cg-score-side { text-align:center; min-width:110px; }
         .cg-score-label {
-            font-size:0.7rem!important; color:var(--cg-text-dim)!important;
+            font-size:0.82rem!important; color:var(--cg-text-dim)!important;
             text-transform:uppercase; letter-spacing:2px; font-weight:800;
         }
         .cg-score-value {
@@ -349,7 +349,7 @@ def _inject_card_game_css():
             letter-spacing:-0.3px;
         }
         .gc-team-name {
-            font-size:0.7rem; font-weight:600;
+            font-size:0.82rem; font-weight:600;
             margin-top:2px; opacity:.85;
             letter-spacing:0.2px;
         }
@@ -361,7 +361,7 @@ def _inject_card_game_css():
         }
         .gc-attr {
             padding:4px 9px; border-radius:8px;
-            font-size:0.68rem; font-weight:700;
+            font-size:0.8rem; font-weight:700;
             background:rgba(255,255,255,0.04);
             border:1px solid rgba(255,255,255,0.07);
             color:var(--cg-text-dim);
@@ -388,7 +388,7 @@ def _inject_card_game_css():
             background:rgba(245,158,11,0.08);
             border-color:rgba(245,158,11,0.18);
             color:#fcd34d;
-            font-size:0.63rem;
+            font-size:0.78rem;
         }
 
         /* Contribution badge */
@@ -516,7 +516,7 @@ def _inject_card_game_css():
         }
         .cg-section-count {
             padding:3px 12px; border-radius:12px;
-            font-size:0.73rem; font-weight:700;
+            font-size:0.82rem; font-weight:700;
             background:rgba(255,255,255,0.04);
             color:var(--cg-text-dim);
             border:1px solid rgba(255,255,255,0.04);

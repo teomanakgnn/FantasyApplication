@@ -533,6 +533,31 @@ st.markdown(f"""
             h1 {{ font-size: 1.3rem !important; }}
             h2 {{ font-size: 1.1rem !important; }}
             h3 {{ font-size: 1rem !important; }}
+
+            /* Icerik kisa oldugunda panel ekrani doldurmuyordu ve altta ham
+               parke fotografi kaliyordu (login sayfasinda belirgindi). */
+            [data-testid="stMainBlockContainer"] {{
+                min-height: 100dvh !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                border-left: none !important;
+                border-right: none !important;
+            }}
+
+            /* Dikey ritim: 14px'lik bosluklar telefonda sayfayi gereksiz
+               uzatiyordu. */
+            [data-testid="stVerticalBlock"] {{ gap: 0.6rem !important; }}
+            [data-testid="stMarkdownContainer"] hr,
+            [data-testid="stMainBlockContainer"] hr {{
+                margin: 0.7rem 0 !important;
+            }}
+            [data-testid="stMainBlockContainer"] h2,
+            [data-testid="stMainBlockContainer"] h3 {{
+                margin-top: 0.9rem !important;
+                margin-bottom: 0.3rem !important;
+            }}
+            /* Mac kartlari telefonda gereksiz uzundu */
+            [data-testid="stVerticalBlockBorderWrapper"] {{ padding: 2px 0 !important; }}
         }}
 
         /* Cok dar telefonlar */
@@ -794,20 +819,14 @@ components.html("""
             if (!state) return;
             const isMobile = window.parent.innerWidth <= 768;
             if (!state.isClosed) {
-                if (isMobile) {
-                    Object.assign(trigger.style, {
-                        top:'15px', left:'calc(85vw - 50px)',
-                        background:'rgba(255,75,75,0.95)', width:'40px', height:'40px',
-                        borderRadius:'12px', border:'1px solid rgba(255,255,255,0.25)',
-                        borderLeft:'1px solid rgba(255,255,255,0.25)'
-                    });
-                    trigger.innerHTML = '<div style="position:relative;width:18px;height:18px;"><span style="position:absolute;top:50%;left:0;width:100%;height:2px;background:white;transform:rotate(45deg);"></span><span style="position:absolute;top:50%;left:0;width:100%;height:2px;background:white;transform:rotate(-45deg);"></span></div>';
-                } else {
-                    trigger.style.display = 'none';
-                }
+                // Sidebar acik: mobilde ust bardaki hamburger X'e donuyor,
+                // masaustunde dock'a gerek yok. Her iki durumda da gizle.
+                trigger.style.display = 'none';
+            } else if (isMobile) {
+                // Mobilde gezinme ust bardaki hamburger ile yapiliyor;
+                // yuzen top icerigi kapatiyordu, tamamen gizle.
+                trigger.style.display = 'none';
             } else {
-                // Mobilde ust kisimda durunca basligin uzerine biniyordu;
-                // alt sol koseye alindi (FAB gibi).
                 Object.assign(trigger.style, {
                     display:'flex', left:'0',
                     top: isMobile ? 'auto' : '20%',
@@ -878,8 +897,81 @@ components.html("""
             });
         }
 
+        // ---------------------------------------------------------------
+        // MOBIL UST BAR
+        // Yuzen basketbol topu icerigin uzerinde duruyor ve metni kapatiyordu
+        // (olculdu: ana sayfada "PRO Feature" yazisinin uzerine biniyordu).
+        // Mobilde onun yerine standart bir uygulama basligi + hamburger.
+        // ---------------------------------------------------------------
+        function ensureMobileTopBar() {
+            const doc = window.parent.document;
+            const isMobile = window.parent.innerWidth <= 768;
+            let bar = doc.getElementById('hl-topbar');
+
+            if (!isMobile) {
+                if (bar) bar.style.display = 'none';
+                doc.documentElement.style.removeProperty('--hl-topbar-h');
+                return;
+            }
+
+            if (!bar) {
+                bar = doc.createElement('div');
+                bar.id = 'hl-topbar';
+                bar.innerHTML =
+                    '<button id="hl-burger" aria-label="Menu" ' +
+                    'style="all:unset;display:flex;align-items:center;justify-content:center;' +
+                    'width:44px;height:44px;border-radius:10px;cursor:pointer;flex:0 0 auto;">' +
+                    '<span id="hl-burger-icon" style="display:block;width:20px;height:14px;position:relative;">' +
+                    '<i style="position:absolute;top:0;left:0;width:100%;height:2px;background:#fff;border-radius:2px;transition:.25s;"></i>' +
+                    '<i style="position:absolute;top:6px;left:0;width:100%;height:2px;background:#fff;border-radius:2px;transition:.25s;"></i>' +
+                    '<i style="position:absolute;top:12px;left:0;width:100%;height:2px;background:#fff;border-radius:2px;transition:.25s;"></i>' +
+                    '</span></button>' +
+                    '<span style="font-weight:700;font-size:15px;letter-spacing:.2px;color:#fff;' +
+                    'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">HoopLife NBA</span>';
+                bar.style.cssText =
+                    'position:fixed;top:0;left:0;right:0;height:52px;z-index:999999998;' +
+                    'display:flex;align-items:center;gap:10px;padding:0 12px;' +
+                    'background:rgba(14,17,23,.96);backdrop-filter:saturate(140%) blur(10px);' +
+                    '-webkit-backdrop-filter:saturate(140%) blur(10px);' +
+                    'border-bottom:1px solid rgba(255,255,255,.09);';
+                doc.body.appendChild(bar);
+                bar.querySelector('#hl-burger').addEventListener('click', (e) => {
+                    e.preventDefault(); e.stopPropagation(); toggleSidebar();
+                });
+            }
+            bar.style.display = 'flex';
+
+            // Icerik barin altinda kalmasin
+            let pad = doc.getElementById('hl-topbar-pad');
+            if (!pad) {
+                pad = doc.createElement('style');
+                pad.id = 'hl-topbar-pad';
+                pad.textContent =
+                    '@media (max-width:768px){' +
+                    '[data-testid="stMainBlockContainer"]{padding-top:70px !important;}' +
+                    // Sidebar ust barin altindan baslasin, icerigi kaybolmasin
+                    '[data-testid="stSidebar"]{top:0 !important;}' +
+                    '[data-testid="stSidebar"] [data-testid="stSidebarContent"],' +
+                    '[data-testid="stSidebar"] > div{padding-top:56px !important;}' +
+                    '}';
+                doc.head.appendChild(pad);
+            }
+
+            // Sidebar acikken hamburger X'e donsun
+            const st = getSidebarState();
+            const open = st && !st.isClosed;
+            const bars = bar.querySelectorAll('#hl-burger-icon i');
+            if (bars.length === 3) {
+                bars[0].style.transform = open ? 'translateY(6px) rotate(45deg)' : '';
+                bars[1].style.opacity = open ? '0' : '1';
+                bars[2].style.transform = open ? 'translateY(-6px) rotate(-45deg)' : '';
+            }
+        }
+
         function init() {
             createHoopLifeDock();
+            ensureMobileTopBar();
+            setInterval(ensureMobileTopBar, 700);
             bindMobileAutoClose();
             setInterval(bindMobileAutoClose, 1500);
             collapseEmptyContainers();
