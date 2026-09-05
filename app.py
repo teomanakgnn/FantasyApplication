@@ -539,14 +539,18 @@ st.markdown(f"""
             h2 {{ font-size: 1.1rem !important; }}
             h3 {{ font-size: 1rem !important; }}
 
-            /* Icerik kisa oldugunda panel ekrani doldurmuyordu ve altta ham
-               parke fotografi kaliyordu (login sayfasinda belirgindi). */
+            /* Icerik kisa oldugunda altta ham parke fotografi kaliyordu.
+               Once min-height:100dvh kullaniliyordu; ama iOS iframe'i
+               "duzlestirdiginde" ic viewport devlesip dev bir bosluk
+               olusturabiliyor. Onun yerine zemini kaplayan arka plan: ayni
+               gorunum, yerlesim riski yok. */
+            [data-testid="stMain"] {{ background: rgba(22, 26, 34, 0.94) !important; }}
             [data-testid="stMainBlockContainer"] {{
-                min-height: 100dvh !important;
                 margin: 0 !important;
                 border-radius: 0 !important;
                 border-left: none !important;
                 border-right: none !important;
+                min-height: 0 !important;
             }}
 
             /* Dikey ritim: 14px'lik bosluklar telefonda sayfayi gereksiz
