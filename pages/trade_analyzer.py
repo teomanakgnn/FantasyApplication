@@ -739,12 +739,8 @@ def render_trade_analyzer_page():
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        .stApp {
-            background-image: url('https://wallup.net/wp-content/uploads/2016/03/29/318818-basketball-sport-sports-simple.jpg');
-            background-size: cover;
-            background-attachment: fixed;
-            background-position: center;
-        }
+        /* Arka plan artik tasarim sisteminden geliyor (components/styles.py).
+           Sayfaya ozel fotograf metinleri okunmaz yapiyordu. */
         .roster-card {
             background-color: rgba(255,255,255,0.08);
             padding: 12px;

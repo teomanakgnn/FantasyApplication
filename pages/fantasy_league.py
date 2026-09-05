@@ -581,12 +581,7 @@ def apply_custom_style():
         
         footer {{ visibility: hidden; display: none; }}
         
-        .stApp {{
-            background-image: url("{background_url}");
-            background-attachment: fixed;
-            background-position: center;
-            background-size: cover;
-        }}
+        /* Arka plan tasarim sisteminden (components/styles.py) geliyor. */
         
         /* CONTAINER VE TABLO STİLLERİ */
         .stDataFrame, .stContainer, div[data-testid="stExpander"] {{

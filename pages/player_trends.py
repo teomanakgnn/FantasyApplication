@@ -944,13 +944,7 @@ def render_player_trends_page():
     if background_url:
         st.markdown(f"""
             <style>
-                .stApp {{
-                    background-image: url("{background_url}") !important;
-                    background-size: cover !important;
-                    background-position: center !important;
-                    background-repeat: no-repeat !important;
-                    background-attachment: fixed !important;
-                }}
+                /* Arka plan tasarim sisteminden geliyor. */
                 .stApp::before {{
                     content: "";
                     position: fixed;
