@@ -42,25 +42,41 @@
       height: 100%;
       background: #0E1117;
       overflow: hidden;
-      /* NOT: Burada 'overscroll-behavior: none' KULLANMA. iOS'ta jesti
-         iframe'e devretmeyi engelleyip ic kaydirmayi oldurebiliyor.
-         'contain' zincirlemeyi keser ama ic kaydirmaya dokunmaz. */
       overscroll-behavior: contain;
+    }
+
+    /* iOS (Safari ve Chrome - ikisi de WebKit) iframe'leri "duzlestirir":
+       CSS yuksekligini yok sayip iframe'i icerik boyuna kadar buyutur ve
+       ic kaydirmayi vermez. Dis sayfa da overflow:hidden oldugu icin
+       tasan kisim tamamen erisilemez kaliyordu (kullanici: "Draftı Başlat
+       butonunun alti gozukmuyor ve kaydiramiyorum").
+
+       Cozum: iframe'i KAYDIRILABILIR bir sarmalayiciya al.
+       - iOS duzlestirirse: iframe uzar, sarmalayici onu kaydirir.
+       - Duzlestirmezse:    iframe viewport boyunda kalir, kendi icinde kayar.
+       Iki durumda da calisir. */
+    #app-scroll {
+      position: fixed;
+      inset: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      background: #0E1117;
     }
 
     /* iframe'i tam olarak gorunur alana sabitle.
        height:100% iOS'ta adres cubugu acilip kapandikca yaniliyor;
        dvh destekleniyorsa o kullanilir. */
     #app {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100vh;
-      height: 100dvh;
-      border: none;
       display: block;
-      /* iOS'ta iframe icindeki dokunma jestlerinin duzgun iletilmesi icin */
-      touch-action: auto;
+      width: 100%;
+      /* Sarmalayici zaten viewport'u kapliyor; iframe onu doldursun.
+         iOS duzlestirmesinde bu deger yok sayilip iframe uzayacak,
+         sarmalayici da kaydirmayi ustlenecek. */
+      height: 100%;
+      min-height: 100%;
+      border: none;
     }
 
     /* Streamlit Cloud uykudan uyanirken 20-30 sn bos beyaz kalabiliyor;
@@ -106,10 +122,13 @@
   <!-- NOT: Buraya ?embed=true EKLEME. Streamlit'in kendi embed modu
        sidebar'i gizliyor ve gezinme kayboluyor; commit a138390 zaten
        bu yuzden embed=true'dan app=true'ya gecmisti. -->
-  <iframe id="app"
-          src="https://fantasyapplication.streamlit.app"
-          title="HoopLife NBA"
-          allow="fullscreen; clipboard-write"></iframe>
+  <div id="app-scroll">
+    <iframe id="app"
+            src="https://fantasyapplication.streamlit.app"
+            title="HoopLife NBA"
+            scrolling="yes"
+            allow="fullscreen; clipboard-write"></iframe>
+  </div>
 
   <script>
     (function () {
