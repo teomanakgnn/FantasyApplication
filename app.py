@@ -405,11 +405,14 @@ st.markdown(f"""
             will-change: transform, width;
         }}
 
+        /* .main Streamlit 1.5x'te DOM'dan kalkti; guncel test-id ile yaz. */
+        [data-testid="stMainBlockContainer"],
         .main .block-container {{ padding-top: 1.5rem !important; }}
 
         @media (max-width: 768px) {{
+            [data-testid="stMainBlockContainer"],
             .main .block-container {{
-                padding-top: 0.75rem !important;
+                padding-top: 0.5rem !important;
                 padding-left: 0.6rem !important;
                 padding-right: 0.6rem !important;
             }}
@@ -854,10 +857,33 @@ components.html("""
             }, true);
         }
 
+        // Gorunmez yardimci elemanlar (components.html(height=0) iframe'leri
+        // ve sadece <style> iceren st.markdown bloklari) yuksekligi 0 olsa
+        // da stVerticalBlock'un flex 'gap' degeri yuzunden her biri 14px
+        // bosluk biraliyordu. Olculdu: ana sayfada baslik 122px asagida
+        // basliyordu. Gercek yuksekligi olcup bunlari gizle.
+        function collapseEmptyContainers() {
+            const doc = window.parent.document;
+            doc.querySelectorAll('[data-testid="stElementContainer"]').forEach((el) => {
+                const wasHidden = el.dataset.hlCollapsed === '1';
+                // Gizliyken olcum yapilamaz; kisa sureligine geri ac.
+                if (wasHidden) el.style.display = '';
+                const empty = el.getBoundingClientRect().height === 0;
+                if (empty) {
+                    el.style.display = 'none';
+                    el.dataset.hlCollapsed = '1';
+                } else if (wasHidden) {
+                    delete el.dataset.hlCollapsed;
+                }
+            });
+        }
+
         function init() {
             createHoopLifeDock();
             bindMobileAutoClose();
             setInterval(bindMobileAutoClose, 1500);
+            collapseEmptyContainers();
+            setInterval(collapseEmptyContainers, 1000);
             setTimeout(() => {
                 if (getSavedSidebarState()) {
                     const s = getSidebarState();

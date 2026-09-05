@@ -2,21 +2,131 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HoopLife NBA</title>
+
+  <!-- KRITIK: Bu etiket olmadan iOS Safari sayfayi 980px genisliginde
+       render edip kucultuyordu. Icerideki iframe de 980px gordugu icin
+       uygulamanin mobil CSS'i (max-width:768px) hic devreye girmiyor,
+       telefonda masaustu duzeni kucultulmus halde geliyordu. -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <title>HoopLife NBA — Fantasy Stats, Mock Draft & Analysis</title>
+  <meta name="description" content="NBA fantasy istatistikleri, mock draft simülatörü, sakatlık takibi ve takas analizi. Draftından önce prova yap.">
+  <meta name="theme-color" content="#0E1117">
+  <link rel="icon" href="HoopLifeNBA_logo.png">
+  <link rel="apple-touch-icon" href="HoopLifeNBA_logo.png">
+
+  <!-- Ana ekrana eklenince tam ekran uygulama gibi acilsin -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HoopLife">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Link paylasildiginda duzgun onizleme ciksin -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HoopLife NBA">
+  <meta property="og:title" content="HoopLife NBA — Fantasy Stats & Mock Draft">
+  <meta property="og:description" content="NBA fantasy istatistikleri, mock draft simülatörü ve takas analizi.">
+  <meta property="og:url" content="https://hooplifenba.com/">
+  <meta property="og:image" content="https://hooplifenba.com/HoopLifeNBA_logo.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HoopLife NBA — Fantasy Stats & Mock Draft">
+  <meta name="twitter:description" content="NBA fantasy istatistikleri, mock draft simülatörü ve takas analizi.">
+  <meta name="twitter:image" content="https://hooplifenba.com/HoopLifeNBA_logo.png">
+
   <style>
-    html, body, iframe {
-      margin: 0;
-      padding: 0;
-      width: 100%;
+    :root { color-scheme: dark; }
+
+    html, body {
+      margin: 0; padding: 0;
       height: 100%;
-      border: none;
+      background: #0E1117;
+      /* iOS'ta lastik gibi geri sekmeyi (bounce) engelle */
+      overscroll-behavior: none;
+      overflow: hidden;
     }
+
+    /* iframe'i tam olarak gorunur alana sabitle.
+       height:100% iOS'ta adres cubugu acilip kapandikca yaniliyor;
+       dvh destekleniyorsa o kullanilir. */
+    #app {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      border: none;
+      display: block;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Streamlit Cloud uykudan uyanirken 20-30 sn bos beyaz kalabiliyor;
+       marka renginde bir bekleme ekrani goster. */
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      background: #0E1117;
+      color: #E6E6E6;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      text-align: center;
+      padding: 24px;
+      z-index: 10;
+      transition: opacity .5s ease;
+    }
+    #splash.hidden { opacity: 0; pointer-events: none; }
+    #splash img { width: 132px; max-width: 46vw; height: auto; }
+    #splash .t { font-size: 15px; font-weight: 600; letter-spacing: .3px; }
+    #splash .s { font-size: 13px; color: #9AA0A6; max-width: 300px; line-height: 1.5; }
+    .spin {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,.15);
+      border-top-color: #C8102E;
+      animation: sp .9s linear infinite;
+    }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
   </style>
 </head>
 <body>
-  <iframe 
-    src="https://fantasyapplication.streamlit.app"
-    allow="fullscreen">
-  </iframe>
+  <div id="splash">
+    <img src="HoopLifeNBA_logo.png" alt="HoopLife NBA">
+    <div class="spin"></div>
+    <div class="t">Yükleniyor…</div>
+    <div class="s">Uygulama uzun süredir kullanılmadıysa uyanması yarım dakikayı bulabilir.</div>
+  </div>
+
+  <!-- NOT: Buraya ?embed=true EKLEME. Streamlit'in kendi embed modu
+       sidebar'i gizliyor ve gezinme kayboluyor; commit a138390 zaten
+       bu yuzden embed=true'dan app=true'ya gecmisti. -->
+  <iframe id="app"
+          src="https://fantasyapplication.streamlit.app"
+          title="HoopLife NBA"
+          allow="fullscreen; clipboard-write"></iframe>
+
+  <script>
+    (function () {
+      var splash = document.getElementById('splash');
+      var app = document.getElementById('app');
+      var done = false;
+      function hide() {
+        if (done) return;
+        done = true;
+        // iframe 'load' Streamlit kabugu gelince tetikleniyor; icerik
+        // biraz daha gec boyaniyor, o yuzden kisa bir pay birak.
+        setTimeout(function () {
+          splash.classList.add('hidden');
+          setTimeout(function () { splash.style.display = 'none'; }, 600);
+        }, 900);
+      }
+      app.addEventListener('load', hide);
+      // Yuklenme olayi hic gelmezse kullaniciyi sonsuza kadar bekletme
+      setTimeout(hide, 20000);
+    })();
+  </script>
 </body>
 </html>
