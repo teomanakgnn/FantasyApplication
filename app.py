@@ -879,16 +879,31 @@ components.html("""
         // Gorunmez yardimci elemanlar (components.html(height=0) iframe'leri
         // ve sadece <style> iceren st.markdown bloklari) yuksekligi 0 olsa
         // da stVerticalBlock'un flex 'gap' degeri yuzunden her biri 14px
-        // bosluk biraliyordu. Olculdu: ana sayfada baslik 122px asagida
-        // basliyordu. Gercek yuksekligi olcup bunlari gizle.
+        // bosluk biraliyordu.
+        //
+        // DIKKAT: Sadece "yuksekligi 0" bakmak yetmiyor - sidebar mobilde
+        // kapaliyken display:none oluyor ve icindeki HER SEY 0 yukseklik
+        // olcuyor. Onceki surum bu yuzden sidebar'daki Mock Draft / Card
+        // Connections / Login butonlarini kalici olarak gizliyordu; menu
+        // aciliyor ama bos geliyordu. Bu yuzden:
+        //   1) Sidebar icine asla dokunma
+        //   2) Sadece bilinen gorunmez tipleri gizle (bos iframe / style-only
+        //      markdown), rastgele 0 yukseklikli her seyi degil
+        function isInvisibleHelper(el) {
+            const md = el.querySelector('[data-testid="stMarkdown"]');
+            const ifr = el.querySelector('[data-testid="stIFrame"]');
+            if (ifr) return ifr.getBoundingClientRect().height === 0;
+            if (md && md.querySelector('style')) return !(md.innerText || '').trim();
+            return false;
+        }
+
         function collapseEmptyContainers() {
             const doc = window.parent.document;
             doc.querySelectorAll('[data-testid="stElementContainer"]').forEach((el) => {
+                if (el.closest('[data-testid="stSidebar"]')) return;
                 const wasHidden = el.dataset.hlCollapsed === '1';
-                // Gizliyken olcum yapilamaz; kisa sureligine geri ac.
                 if (wasHidden) el.style.display = '';
-                const empty = el.getBoundingClientRect().height === 0;
-                if (empty) {
+                if (isInvisibleHelper(el)) {
                     el.style.display = 'none';
                     el.dataset.hlCollapsed = '1';
                 } else if (wasHidden) {
@@ -935,11 +950,20 @@ components.html("""
                     '-webkit-backdrop-filter:saturate(140%) blur(10px);' +
                     'border-bottom:1px solid rgba(255,255,255,.09);';
                 doc.body.appendChild(bar);
-                bar.querySelector('#hl-burger').addEventListener('click', (e) => {
-                    e.preventDefault(); e.stopPropagation(); toggleSidebar();
-                });
             }
             bar.style.display = 'flex';
+
+            // KRITIK: Ust bar ana dokumanda kaliyor ama her Streamlit
+            // rerun'unda bu component iframe'i bastan kuruluyor. Dinleyici
+            // eski (yok olmus) iframe'in toggleSidebar'ina bagli kalinca
+            // hamburger sessizce calismaz oluyordu. Bu yuzden her turda
+            // yeniden ata (onclick atamasi oncekini degistirir).
+            const burgerEl = bar.querySelector('#hl-burger');
+            if (burgerEl) {
+                burgerEl.onclick = function (e) {
+                    e.preventDefault(); e.stopPropagation(); toggleSidebar();
+                };
+            }
 
             // Icerik barin altinda kalmasin
             let pad = doc.getElementById('hl-topbar-pad');
