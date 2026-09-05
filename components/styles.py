@@ -1,179 +1,292 @@
+"""
+HoopLife NBA - tek kaynaklı tasarım sistemi.
+
+Önceden her sayfa kendi CSS'ini ve kendi arka plan fotoğrafını yüklüyordu
+(11 dosyada 21 ayrı <style> bloğu, 4 farklı arka plan görseli). Sonuç
+her sayfanın başka bir siteymiş gibi durmasıydı.
+
+Burada tanımlanan token'lar (renk, boşluk, yarıçap, tipografi) ve temel
+bileşen stilleri bütün sayfalar için ortak zemini kurar. Sayfalar kendi
+özel bileşenlerini yine tanımlayabilir ama renk/boşluk değerlerini
+buradaki değişkenlerden almalıdır:
+
+    var(--bg-page)      sayfa zemini
+    var(--bg-panel)     ana içerik paneli
+    var(--bg-card)      kart / kutu
+    var(--bg-raised)    kart üstü vurgulu yüzey
+    var(--border)       standart kenarlık
+    var(--text)         ana metin
+    var(--text-dim)     ikincil metin
+    var(--accent)       marka kırmızısı
+    var(--space-1..5)   boşluk ölçeği
+    var(--radius-sm/md/lg)
+"""
+
 import streamlit as st
+
 
 def load_styles():
     st.markdown("""
     <style>
 
-    /* ===============================
-       COLOR SYSTEM
-       =============================== */
+    /* ===============================================================
+       1. TASARIM TOKEN'LARI
+       =============================================================== */
     :root {
-        --bg-main: #0E1117;
-        --bg-panel: #161A22;
-        --bg-card: #1C212B;
-        --border-subtle: #2A2F3A;
-        --text-main: #E6E6E6;
-        --text-muted: #9AA0A6;
-        --accent-red: #C8102E;
+        /* Yüzeyler - koyu, nötr, mavi-gri bir skala */
+        --bg-page:    #0B0E14;
+        --bg-panel:   #12161F;
+        --bg-card:    #171C27;
+        --bg-raised:  #1E2430;
+        --bg-input:   #1A1F2B;
+
+        --border:       #262D3A;
+        --border-soft:  #1E2430;
+        --border-focus: #3B4657;
+
+        --text:      #E8EAED;
+        --text-dim:  #9BA3B0;
+        --text-mute: #6B7280;
+
+        --accent:       #C8102E;   /* marka kırmızısı */
+        --accent-hover: #A50D26;
+        --accent-soft:  rgba(200, 16, 46, 0.14);
+        --info:    #4DA6FF;
+        --success: #3FBF7F;
+        --warn:    #E5A93C;
+        --danger:  #E5544B;
+
+        /* Boşluk ölçeği - tüm sayfalar bunları kullanır */
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 14px;
+        --space-4: 22px;
+        --space-5: 34px;
+
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+
+        --shadow-sm: 0 1px 2px rgba(0,0,0,.34);
+        --shadow-md: 0 6px 20px rgba(0,0,0,.30);
+
+        --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                system-ui, sans-serif;
     }
 
-    /* ===============================
-       FULL SITE BACKGROUND
-       =============================== */
-    html, body, #root, [data-testid="stAppViewContainer"] {
+    /* ===============================================================
+       2. ZEMİN
+       Önceden her sayfa kendi basketbol sahası fotoğrafını yüklüyordu
+       (4 farklı görsel) ve metinler fotoğrafın üstünde okunmuyordu.
+       Artık tek, sakin ve markalı bir zemin var.
+       =============================================================== */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
         background:
-            linear-gradient(
-                180deg,
-                rgba(14,17,23,0.65) 0%,
-                rgba(14,17,23,0.55) 100%
-            ),
-            url("https://wallpapercave.com/wp/wp2825278.jpg");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        color: var(--text-main);
-        font-family: Inter, Segoe UI, system-ui, sans-serif;
-        font-size: 14px;
+            radial-gradient(1100px 620px at 18% -8%,  rgba(200,16,46,.11), transparent 62%),
+            radial-gradient(900px  560px at 88% 108%, rgba(77,166,255,.09), transparent 60%),
+            var(--bg-page) !important;
+        background-attachment: fixed !important;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
     }
 
-    /* ===============================
-       MAIN CONTENT CONTAINER
-       ===============================
-       NOT: Eski "section.main > div" seçicisi Streamlit 1.4x ile birlikte
-       DOM'dan kalktı; kural ölü kaldığı için arka plandaki saha fotoğrafı
-       tüm içeriğin arasından geçiyordu. Güncel test-id ile birlikte eski
-       sınıf adı da yedek olarak tutuluyor. */
+    /* Sayfaların .stApp arka planını kendi fotoğraflarıyla ezmesini
+       engelle - tasarım sistemi tek zemin kullanır. */
+    .stApp { background-image: none !important; }
+    .stApp::before { background-image: none !important; }
+
+    /* ===============================================================
+       3. ANA İÇERİK PANELİ
+       =============================================================== */
     [data-testid="stMainBlockContainer"],
     section.main > div {
-        background-color: rgba(22, 26, 34, 0.94);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 26px 30px;
-        margin: 16px 20px;
+        background-color: var(--bg-panel);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5) calc(var(--space-5) - 4px);
+        margin: var(--space-3) var(--space-4);
+        box-shadow: var(--shadow-md);
     }
 
-    @media (max-width: 768px) {
-        [data-testid="stMainBlockContainer"],
-        section.main > div {
-            padding: 14px 12px;
-            margin: 8px 6px;
-        }
-    }
+    [data-testid="stMain"] { background: transparent; }
 
-    /* ===============================
-       SIDEBAR
-       =============================== */
+    /* ===============================================================
+       4. TİPOGRAFİ
+       =============================================================== */
+    h1, h2, h3, h4 { color: var(--text); font-family: var(--font); }
+    h1 { font-size: 1.55rem; font-weight: 750; letter-spacing: -.2px;
+         margin: 0 0 var(--space-2) 0; }
+    h2 { font-size: 1.18rem; font-weight: 700; letter-spacing: -.1px;
+         margin: var(--space-4) 0 var(--space-2) 0;
+         padding-bottom: var(--space-2);
+         border-bottom: 1px solid var(--border-soft); }
+    h3 { font-size: 1.02rem; font-weight: 650;
+         margin: var(--space-3) 0 var(--space-1) 0; }
+    p, li { color: var(--text); line-height: 1.55; }
+    a { color: var(--info); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    [data-testid="stCaptionContainer"], .stCaption, small {
+        color: var(--text-dim) !important;
+    }
+    hr { border-color: var(--border-soft); margin: var(--space-4) 0; }
+
+    /* ===============================================================
+       5. SIDEBAR
+       =============================================================== */
     section[data-testid="stSidebar"] {
-        background-color: rgba(22, 26, 34, 0.98);
-        border-right: 1px solid var(--border-subtle);
+        background-color: var(--bg-panel);
+        border-right: 1px solid var(--border);
     }
-                
-    /* Hide Streamlit top header */
-    header[data-testid="stHeader"] {
-    display: none;
-    }
-
-    /* Extra padding fix (bazı sürümlerde boşluk kalıyor) */
-    [data-testid="stAppViewContainer"] {
-    padding-top: 0rem;
-    }
-
-            
-
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-        font-size: 12px;
-        letter-spacing: 0.6px;
-        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.1px;
+        color: var(--text-mute);
         text-transform: uppercase;
-    }
-
-    /* ===============================
-       INPUTS
-       =============================== */
-    input, select {
-        background-color: var(--bg-card) !important;
-        color: var(--text-main) !important;
-        border: 1px solid var(--border-subtle) !important;
-        border-radius: 2px !important;
-        height: 34px;
-    }
-
-    /* ===============================
-       BUTTONS
-       =============================== */
-    button[kind="primary"] {
-        background-color: var(--accent-red) !important;
-        color: #FFFFFF !important;
-        border-radius: 2px !important;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-        height: 38px;
         border: none;
+        margin-top: var(--space-3);
     }
+    header[data-testid="stHeader"] { display: none; }
+    [data-testid="stAppViewContainer"] { padding-top: 0; }
 
-    button[kind="primary"]:hover {
-        background-color: #a60d24 !important;
-    }
-
-    /* ===============================
-       HEADERS
-       =============================== */
-    h1 {
-        font-size: 20px;
+    /* ===============================================================
+       6. BUTONLAR
+       =============================================================== */
+    [data-testid="stButton"] button,
+    [data-testid="stFormSubmitButton"] button,
+    [data-testid="stDownloadButton"] button {
+        border-radius: var(--radius-sm);
         font-weight: 600;
-        letter-spacing: 0.3px;
-        margin-bottom: 6px;
+        letter-spacing: .2px;
+        min-height: 40px;
+        transition: background-color .16s ease, border-color .16s ease,
+                    transform .06s ease;
+    }
+    [data-testid="stButton"] button:active { transform: translateY(1px); }
+
+    button[kind="primary"], button[data-testid="baseButton-primary"] {
+        background-color: var(--accent) !important;
+        color: #fff !important;
+        border: 1px solid var(--accent) !important;
+    }
+    button[kind="primary"]:hover, button[data-testid="baseButton-primary"]:hover {
+        background-color: var(--accent-hover) !important;
+        border-color: var(--accent-hover) !important;
+    }
+    button[kind="secondary"], button[data-testid="baseButton-secondary"] {
+        background-color: var(--bg-card) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+    }
+    button[kind="secondary"]:hover {
+        background-color: var(--bg-raised) !important;
+        border-color: var(--border-focus) !important;
     }
 
-    h2 {
-        font-size: 15px;
+    /* ===============================================================
+       7. GİRDİLER
+       =============================================================== */
+    input, textarea,
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextInput"] input,
+    [data-testid="stDateInput"] input {
+        background-color: var(--bg-input) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-sm) !important;
+    }
+    input:focus, textarea:focus { border-color: var(--border-focus) !important; }
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stWidgetLabel"] p {
+        color: var(--text-dim) !important;
+        font-size: .86rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* ===============================================================
+       8. KAPSAYICILAR / KARTLAR / TABLOLAR
+       =============================================================== */
+    [data-testid="stDataFrame"],
+    [data-testid="stTable"] {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    /* st.container(border=True) */
+    [data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] {
+        gap: var(--space-2);
+    }
+    div[data-testid="stExpander"] details {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+    }
+    div[data-testid="stExpander"] summary {
+        color: var(--text-dim);
+        font-size: .9rem;
         font-weight: 600;
-        margin-top: 30px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid var(--border-subtle);
     }
 
-    /* ===============================
-       DATAFRAMES
-       =============================== */
-    [data-testid="stDataFrame"] {
+    [data-testid="stMetric"] {
         background-color: var(--bg-card);
-        border: 1px solid var(--border-subtle);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: var(--space-3);
+    }
+    [data-testid="stMetricLabel"] { color: var(--text-dim) !important; }
+
+    /* Uyarı / bilgi kutuları */
+    [data-testid="stAlert"] {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
     }
 
-    /* ===============================
-       EXPANDER
-       =============================== */
-    details {
-        background-color: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 2px;
+    /* Sekmeler */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: var(--space-1);
+        border-bottom: 1px solid var(--border-soft);
     }
-
-    summary {
-        color: var(--text-muted);
-        font-size: 13px;
-        letter-spacing: 0.3px;
+    [data-testid="stTabs"] button[data-baseweb="tab"] {
+        color: var(--text-dim);
+        font-weight: 600;
     }
+    [data-testid="stTabs"] button[aria-selected="true"] { color: var(--text); }
 
-    /* ===============================
-       SCROLLBAR
-       =============================== */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-
+    /* ===============================================================
+       9. KAYDIRMA ÇUBUĞU
+       =============================================================== */
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb {
-        background-color: var(--border-subtle);
+        background-color: var(--border);
+        border-radius: 6px;
     }
+    ::-webkit-scrollbar-thumb:hover { background-color: var(--border-focus); }
 
-    ::-webkit-scrollbar-thumb:hover {
-        background-color: var(--accent-red);
+    /* ===============================================================
+       10. MOBİL
+       =============================================================== */
+    @media (max-width: 768px) {
+        html, body, [data-testid="stAppViewContainer"] { font-size: 15px; }
+        [data-testid="stMainBlockContainer"],
+        section.main > div {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+            padding: var(--space-3) var(--space-3) var(--space-5) !important;
+            box-shadow: none !important;
+        }
+        h1 { font-size: 1.3rem; }
+        h2 { font-size: 1.08rem; margin-top: var(--space-3); }
+        h3 { font-size: 1rem; }
     }
 
     </style>
     """, unsafe_allow_html=True)
-
-    
