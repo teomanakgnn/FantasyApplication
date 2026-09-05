@@ -7,6 +7,9 @@ geçen sezonun gerçek istatistikleriyle birleştirir.
 """
 
 import json
+import os
+import tempfile
+import time
 
 import pandas as pd
 import streamlit as st
@@ -63,49 +66,108 @@ def _eligible_positions(player):
     return sorted(set(positions), key=lambda p: order.index(p) if p in order else 99)
 
 
-@st.cache_data(ttl=21600, show_spinner=False)
-def fetch_draft_rankings(season_year=None):
+RANK_COLUMNS = ["PLAYER", "ESPN_ID", "TEAM", "POS", "POSITIONS",
+                "RANK", "AUCTION", "OWNED", "INJURY"]
+
+# Draft siralamasi gunde bir kez bile degismiyor ama ESPN'in bu ucu
+# yogun zamanlarda baglantiyi resetliyor (olculdu: soguk istekte
+# ConnectionError, ardindan calisiyor). Basarili bir cekimi diske yazip
+# ESPN ulasilamadiginda oradan servis ediyoruz - boylece sayfa hic
+# bos kalmiyor.
+_RANK_CACHE_DIR = os.path.join(tempfile.gettempdir(), "hooplife_draft_cache")
+_RANK_CACHE_MAX_AGE = 7 * 24 * 3600  # bayat da olsa hicbir seyden iyidir
+
+
+def _rank_cache_path(season):
+    return os.path.join(_RANK_CACHE_DIR, f"draft_ranks_{season}.json")
+
+
+def _save_rank_cache(season, rows):
+    try:
+        os.makedirs(_RANK_CACHE_DIR, exist_ok=True)
+        with open(_rank_cache_path(season), "w", encoding="utf-8") as fh:
+            json.dump({"saved_at": time.time(), "rows": rows}, fh)
+    except Exception as exc:
+        print(f"⚠️ Draft sıralaması diske yazılamadı: {exc}")
+
+
+def _load_rank_cache(season):
+    try:
+        path = _rank_cache_path(season)
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as fh:
+            blob = json.load(fh)
+        age = time.time() - float(blob.get("saved_at") or 0)
+        if age > _RANK_CACHE_MAX_AGE:
+            return None
+        print(f"↩️ Draft sıralaması disk önbelleğinden okundu ({age/3600:.1f} saat önce).")
+        return blob.get("rows") or None
+    except Exception:
+        return None
+
+
+def _fetch_rank_payload(season, attempts=3):
     """
-    ESPN fantasy havuzundan draft sıralamalı oyuncuları çeker.
+    Draft siralamasini ceker.
+
+    Once leaguedefaults ucu denenir: filtredeki 'limit' degerine uyuyor,
+    3179 yerine 500 oyuncu donduruyor (24MB -> 16MB). Olmazsa genel
+    players ucuna dusulur. Baglanti hatalarinda VE sirali oyuncu
+    icermeyen kisik yanitlarda artan bekleme ile tekrar denenir.
 
     Returns:
-        DataFrame - PLAYER, ESPN_ID, TEAM, POS, POSITIONS, RANK,
-                    AUCTION, OWNED, INJURY
-        Sıralama draft rank'e göre artan.
+        list[dict] - islenmis satirlar, basarisizsa None.
     """
-    season = season_year or get_current_season_year()
-
-    # Filtre başlığı ESPN tarafında yok sayılıyor ama sıralamayı etkiliyor;
-    # yanıtın tamamı alınıp rank'i olan oyuncular yerel olarak süzülür.
     fantasy_filter = {
         "players": {
-            "limit": 1500,
+            "limit": 500,
             "sortDraftRanks": {"sortPriority": 100, "sortAsc": True, "value": "STANDARD"},
         }
     }
-    headers = {"Accept": "application/json", "x-fantasy-filter": json.dumps(fantasy_filter)}
-    url = f"{FANTASY_BASE}/{season}/players?scoringPeriodId=0&view=kona_player_info"
+    headers = {"Accept": "application/json",
+               "x-fantasy-filter": json.dumps(fantasy_filter)}
 
-    try:
-        resp = get_session().get(url, headers=headers, timeout=60)
-        resp.raise_for_status()
-        payload = resp.json()
-    except Exception as exc:
-        print(f"⚠️ Draft sıralaması alınamadı ({season}): {exc}")
-        return pd.DataFrame(columns=[
-            "PLAYER", "ESPN_ID", "TEAM", "POS", "POSITIONS",
-            "RANK", "AUCTION", "OWNED", "INJURY",
-        ])
+    urls = [
+        f"{FANTASY_BASE}/{season}/segments/0/leaguedefaults/3?view=kona_player_info",
+        f"{FANTASY_BASE}/{season}/players?scoringPeriodId=0&view=kona_player_info",
+    ]
 
-    players = payload.get("players") if isinstance(payload, dict) else payload
     team_map = get_pro_team_map(season)
+    last_problem = None
 
+    for attempt in range(attempts):
+        for url in urls:
+            try:
+                resp = get_session().get(url, headers=headers, timeout=45)
+                resp.raise_for_status()
+                payload = resp.json()
+                players = payload.get("players") if isinstance(payload, dict) else payload
+                rows = _rows_from_players(players, team_map)
+                # Sadece "yanit geldi" yetmiyor: ESPN bazen sirali oyuncu
+                # icermeyen kisik bir yanit donuyor. Dogrulamayi burada
+                # yapip boyle bir yaniti da yeniden deneme sebebi sayiyoruz.
+                if len(rows) >= 50:
+                    return rows
+                last_problem = f"sıralı oyuncu yok/eksik ({len(rows)})"
+            except Exception as exc:
+                last_problem = f"{exc.__class__.__name__}"
+        if attempt < attempts - 1:
+            wait = 1.5 * (attempt + 1)
+            print(f"⚠️ Draft sıralaması alınamadı ({last_problem}), "
+                  f"{wait:.1f}s sonra tekrar denenecek")
+            time.sleep(wait)
+
+    print(f"❌ Draft sıralaması çekilemedi: {last_problem}")
+    return None
+
+
+def _rows_from_players(players, team_map):
     rows = []
     for player in players or []:
         ranks = (player.get("draftRanksByRankType") or {}).get("STANDARD")
         if not ranks or ranks.get("rank") is None:
             continue
-
         positions = _eligible_positions(player)
         rows.append({
             "PLAYER": player.get("fullName") or "Unknown",
@@ -118,16 +180,29 @@ def fetch_draft_rankings(season_year=None):
             "OWNED": round(float((player.get("ownership") or {}).get("percentOwned") or 0), 1),
             "INJURY": player.get("injuryStatus") or "ACTIVE",
         })
+    return rows
+
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def fetch_draft_rankings(season_year=None):
+    """
+    ESPN fantasy havuzundan draft sıralamalı oyuncuları çeker.
+
+    ESPN ulaşılamazsa diskteki son başarılı çekime düşer; o da yoksa
+    boş DataFrame döner (çağıran taraf "tekrar dene" gösterir).
+    """
+    season = season_year or get_current_season_year()
+
+    rows = _fetch_rank_payload(season)
+    if rows:
+        _save_rank_cache(season, rows)
+    else:
+        rows = _load_rank_cache(season)
 
     if not rows:
-        print(f"⚠️ {season} sezonunda draft sıralaması bulunamadı.")
-        return pd.DataFrame(columns=[
-            "PLAYER", "ESPN_ID", "TEAM", "POS", "POSITIONS",
-            "RANK", "AUCTION", "OWNED", "INJURY",
-        ])
+        return pd.DataFrame(columns=RANK_COLUMNS)
 
     df = pd.DataFrame(rows).sort_values(["RANK", "AUCTION"], ascending=[True, False])
-
     # ESPN aynı rank'i birden çok oyuncuya verebiliyor; sıralamayı benzersizleştir.
     df = df.reset_index(drop=True)
     df["ADP"] = df.index + 1

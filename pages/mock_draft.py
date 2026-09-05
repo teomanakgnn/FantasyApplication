@@ -13,7 +13,8 @@ import pandas as pd
 import streamlit as st
 
 from services.database import db
-from services.draft_data import get_draft_board, get_headshot_url
+from services.draft_data import (fetch_draft_rankings, get_draft_board,
+                                 get_headshot_url)
 from services.draft_engine import (
     SLOT_ELIGIBILITY,
     available_players,
@@ -220,6 +221,60 @@ def _inject_styles():
             font-size: 0.84rem;
         }
 
+        /* =====================================================
+           MOBIL (<=768px)
+           Olculen: bu sayfada 48 adet 10px civari yazi vardi ve
+           hizli secim butonlari 5 kolona yayilip alt alta diziliyordu.
+           ===================================================== */
+        @media (max-width: 768px) {
+            /* NOT: styles.py kok font-size'i 14px yapiyor; 0.72rem = 10.1px
+               oluyordu. Bu blokta bilerek px kullaniliyor. */
+            .draft-hero { padding: 12px 14px; border-radius: 12px; }
+            .draft-hero h1 { font-size: 19px; }
+            .draft-hero p { font-size: 13px; }
+
+            .clock-bar { padding: 9px 12px; gap: 9px; }
+            .clock-pill { font-size: 12px !important; letter-spacing: .6px; }
+            .clock-main { font-size: 15px; }
+            .clock-sub { font-size: 12.5px; }
+
+            /* Seride daha cok kart sigsin, yazilar okunur olsun */
+            .feed-card { min-width: 136px; max-width: 136px; padding: 7px 9px; }
+            .feed-no   { font-size: 12px; }
+            .feed-name { font-size: 14px; }
+            .feed-team { font-size: 12.5px; }
+
+            /* Draft board: hucreler daralsin ama yazi buyusun */
+            table.draft-board { font-size: 13px; }
+            table.draft-board th { font-size: 12px; }
+            table.draft-board td { min-width: 104px; padding: 5px 6px; }
+            .bd-meta { font-size: 12px; }
+            .board-scroll {
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior-x: contain;
+            }
+
+            .pick-row  { font-size: 14px; padding: 8px 10px; }
+            .pick-no   { font-size: 12.5px; min-width: 48px; }
+            .pick-meta { font-size: 12.5px; }
+            .slot-chip { font-size: 12.5px; padding: 3px 9px; }
+
+            .sel-card { padding: 11px 12px; gap: 11px; }
+            .sel-card img { width: 54px; height: 40px; }
+            .sel-name  { font-size: 16px; }
+            .sel-meta  { font-size: 12.5px; }
+            .sel-stats { font-size: 12.5px; }
+
+            .nom-player { font-size: 17px; }
+            .nom-bid    { font-size: 24px; }
+            .empty-note { font-size: 14px; padding: 14px; }
+
+            /* Satir ici style ile yazilan kucuk etiketler (badge, hizli
+               secim ust yazisi, sekme altligi) rem hesabindan etkilenmesin. */
+            .feed-card span, .sel-meta, .bd-meta { font-size: 12.5px !important; }
+            .hl-quick-cap { font-size: 12.5px !important; }
+        }
+
         /* Hızlı seçim butonları ile havuz tablosunun araç çubuğu üst üste
            binmesin diye araya boşluk. */
         .quick-gap { height: 26px; }
@@ -231,7 +286,7 @@ def _injury_badge(status):
     label, color = INJURY_LABELS.get(status, ("", ""))
     if not label:
         return ""
-    return (f"<span style='font-size:0.66rem;font-weight:700;color:{color};"
+    return (f"<span style='font-size:0.8rem;font-weight:700;color:{color};"
             f"border:1px solid {color};padding:0 5px;border-radius:4px;"
             f"margin-left:6px;'>{label}</span>")
 
@@ -253,8 +308,14 @@ def _render_setup(board):
     """, unsafe_allow_html=True)
 
     if board.empty:
-        st.error("Draft havuzu şu anda alınamadı. ESPN fantasy API'sine ulaşılamıyor "
-                 "olabilir; birkaç dakika sonra tekrar dene.")
+        st.error("Draft havuzu şu anda alınamadı — ESPN'in fantasy API'si "
+                 "ara ara bağlantıyı kesiyor.")
+        st.caption("Genelde tek denemede düzeliyor.")
+        if st.button("🔄 Tekrar dene", type="primary", width='stretch',
+                     key="draft_pool_retry"):
+            get_draft_board.clear()
+            fetch_draft_rankings.clear()
+            st.rerun()
         return
 
     st.caption(f"Havuzda {len(board)} sıralı oyuncu · "
@@ -356,7 +417,7 @@ def _render_saved_drafts(board):
         with c1:
             status = "✅ Tamamlandı" if row["complete"] else "⏳ Devam ediyor"
             st.markdown(f"**{row['name']}**  \n"
-                        f"<span style='font-size:0.78rem;color:#888'>"
+                        f"<span style='font-size:0.86rem;color:#888'>"
                         f"{row['format'].title()} · {row['team_count']} takım · "
                         f"{row['rounds']} tur · {status}</span>",
                         unsafe_allow_html=True)
@@ -566,7 +627,7 @@ def _render_auction_panel(state):
     st.markdown(f"""
         <div class="nom-card">
             <div class="nom-player">{player['name']}
-                <span style="font-size:0.78rem;color:rgba(255,255,255,0.5);font-weight:500;">
+                <span style="font-size:0.86rem;color:rgba(255,255,255,0.5);font-weight:500;">
                     {'/'.join(player['positions'])} · {player['team']} · ADP {player['adp']} ·
                     ESPN değeri ${player['auction']}
                 </span>
@@ -693,7 +754,7 @@ def _render_quick_picks(state, filtered, needs, count=5):
             surname = surname[:11] + "…"
         with col:
             st.markdown(
-                f"<div style='font-size:0.72rem;color:#8b8b9a;text-align:center;"
+                f"<div class='hl-quick-cap' style='font-size:0.78rem;color:#8b8b9a;text-align:center;"
                 f"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>"
                 f"{star}{player['pos']} · ADP {player['adp']} · ${player['auction']}</div>",
                 unsafe_allow_html=True,
@@ -955,7 +1016,7 @@ def _render_upcoming(state):
     st.caption("Sıradaki seçimler")
     for item in coming:
         mark = " **← sen**" if item["is_user"] else ""
-        st.markdown(f"<span style='font-size:0.78rem;color:#8b8b9a'>"
+        st.markdown(f"<span style='font-size:0.86rem;color:#8b8b9a'>"
                     f"#{item['overall']} (T{item['round']}) {item['team']}{mark}</span>",
                     unsafe_allow_html=True)
 
