@@ -28,7 +28,10 @@ st.set_page_config(
     page_title="HoopLife NBA",
     layout="wide",
     page_icon="🏀",
-    initial_sidebar_state="expanded"
+    # "auto": dar ekranlarda sidebar kapali baslar. "expanded" ile telefonda
+    # sidebar ekranin %82'sini kapatiyor ve kullanici her acilista kapatmak
+    # zorunda kaliyordu.
+    initial_sidebar_state="auto"
 )
 
 client_js = """JSON.stringify({
@@ -455,6 +458,85 @@ st.markdown(f"""
             }}
         }}
 
+        /* =========================================================
+           MOBIL UYUM (<=768px)
+           Olculen sorunlar: yan yana kolonlar 390px'te okunmuyor,
+           dokunma hedefleri 35-38px (Apple/Google onerisi 44px),
+           bazi etiketler 11px altinda kaliyordu.
+           ========================================================= */
+        @media (max-width: 768px) {{
+            /* Kolonlar alt alta gecsin - 2-3 kolon telefonda sikisiyordu */
+            [data-testid="stHorizontalBlock"] {{
+                flex-wrap: wrap !important;
+                gap: 0.5rem !important;
+            }}
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+                min-width: 100% !important;
+                flex: 1 1 100% !important;
+            }}
+            /* 4+ kolonlu gruplar (hizli secim butonlari gibi) tam genislik
+               yerine ikili grid olsun - 5 buton alt alta gelince ekranin
+               tamamini yiyordu. Kolon sayisina gore esliyoruz; isaretci
+               div'e ve kardes seciciye bagli kalmiyor. */
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(4))
+              > [data-testid="stColumn"] {{
+                min-width: 47% !important;
+                flex: 1 1 47% !important;
+            }}
+
+            /* Dokunma hedefleri en az 44px */
+            [data-testid="stButton"] button,
+            [data-testid="stFormSubmitButton"] button,
+            [data-testid="stDownloadButton"] button {{
+                min-height: 44px !important;
+                font-size: 0.95rem !important;
+            }}
+            [data-testid="stTextInput"] input,
+            [data-testid="stNumberInput"] input,
+            [data-testid="stDateInput"] input,
+            [data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
+                min-height: 44px !important;
+                font-size: 16px !important;  /* iOS'ta 16px alti otomatik zoom yapar */
+            }}
+            [data-testid="stRadio"] label,
+            [data-testid="stCheckbox"] label {{
+                min-height: 34px !important;
+                display: flex !important;
+                align-items: center !important;
+            }}
+
+            /* Okunabilirlik tabani */
+            [data-testid="stMarkdownContainer"] p,
+            [data-testid="stMarkdownContainer"] li,
+            [data-testid="stCaptionContainer"] {{ font-size: 0.9rem !important; }}
+            [data-testid="stMetricValue"] {{ font-size: 1.35rem !important; }}
+            [data-testid="stMetricLabel"] {{ font-size: 0.78rem !important; }}
+
+            /* Sekmeler telefonda tasiyordu - kaydirilabilir olsun */
+            [data-testid="stTabs"] [data-baseweb="tab-list"] {{
+                overflow-x: auto !important;
+                scrollbar-width: none;
+            }}
+            [data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar {{ display: none; }}
+            [data-testid="stTabs"] button[data-baseweb="tab"] {{
+                white-space: nowrap !important;
+                padding: 0.4rem 0.7rem !important;
+            }}
+
+            /* Genis tablolar sayfayi degil kendi kutusunu kaydirsin */
+            [data-testid="stDataFrame"] {{ max-width: 100% !important; }}
+
+            /* Baslik boyutlari */
+            h1 {{ font-size: 1.3rem !important; }}
+            h2 {{ font-size: 1.1rem !important; }}
+            h3 {{ font-size: 1rem !important; }}
+        }}
+
+        /* Cok dar telefonlar */
+        @media (max-width: 400px) {{
+            [data-testid="stSidebar"] {{ max-width: 300px !important; }}
+        }}
+
         {extra_styles}
         {mobile_native_styles}
     </style>
@@ -677,7 +759,8 @@ components.html("""
             if (old) old.remove();
             const trigger = window.parent.document.createElement('div');
             trigger.id = 'hooplife-master-trigger';
-            trigger.style.cssText = `position:fixed;top:20%;left:0;height:60px;width:45px;
+            const mob = window.parent.innerWidth <= 768;
+            trigger.style.cssText = `position:fixed;${mob ? 'bottom:86px;' : 'top:20%;'}left:0;height:60px;width:45px;
                 background:#1a1c24;border:2px solid #ff4b4b;border-left:none;
                 border-radius:0 15px 15px 0;z-index:999999999;cursor:pointer;
                 display:flex;align-items:center;justify-content:center;
@@ -720,8 +803,17 @@ components.html("""
                     trigger.style.display = 'none';
                 }
             } else {
+                // Mobilde ust kisimda durunca basligin uzerine biniyordu;
+                // alt sol koseye alindi (FAB gibi).
                 Object.assign(trigger.style, {
-                    display:'flex', left:'0', top:'20%', width:'45px', height:'60px',
+                    display:'flex', left:'0',
+                    top: isMobile ? 'auto' : '20%',
+                    bottom: isMobile ? '86px' : 'auto',
+                    // Mobilde icerigin uzerinde duruyor; daha kucuk ve
+                    // hafif saydam olsun ki altindaki tabloyu kapatmasin.
+                    opacity: isMobile ? '0.9' : '1',
+                    width: isMobile ? '34px' : '45px',
+                    height: isMobile ? '50px' : '60px',
                     background:'#1a1c24', border:'2px solid #ff4b4b', borderLeft:'none',
                     borderRadius:'0 15px 15px 0'
                 });
@@ -731,8 +823,41 @@ components.html("""
             }
             trigger.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleSidebar(); };
         }
+        // Mobilde sidebar bir gezinme cekmecesi: icindeki bir butona
+        // basildiginda kendiliginden kapanmali, yoksa acilan sayfayi
+        // kapatiyor ve kullanici her seferinde elle kapatmak zorunda kaliyor.
+        function bindMobileAutoClose() {
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar || sidebar.dataset.hlAutoClose === '1') return;
+            sidebar.dataset.hlAutoClose = '1';
+            sidebar.addEventListener('click', (e) => {
+                if (window.parent.innerWidth > 768) return;
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                // Form/girdi kontrolleri sayfayi degistirmiyor, onlarda kapatma.
+                if (btn.closest('[data-testid="stNumberInput"], [data-testid="stSelectbox"], [data-testid="stDateInput"], [data-testid="stSlider"], [data-testid="stExpander"]')) return;
+                // Tiklama Streamlit rerun'u tetikliyor ve bu component
+                // iframe'i bastan kuruluyor; bekleyen bir setTimeout yok
+                // oluyordu. Bu yuzden niyeti hemen localStorage'a yaz -
+                // yeniden yuklenen init() kayitli durumu uygulayip
+                // sidebar'i kapali aciyor. Ayrica aninda da kapat.
+                saveSidebarState(true);
+                const st = getSidebarState();
+                if (st && !st.isClosed) {
+                    const el = st.element;
+                    el.style.transition = 'transform .25s ease, width .25s ease';
+                    el.style.width = '0'; el.style.minWidth = '0';
+                    el.style.transform = 'translateX(-100%)';
+                    el.setAttribute('aria-expanded', 'false');
+                    setTimeout(() => { el.style.display = 'none'; }, 260);
+                }
+            }, true);
+        }
+
         function init() {
             createHoopLifeDock();
+            bindMobileAutoClose();
+            setInterval(bindMobileAutoClose, 1500);
             setTimeout(() => {
                 if (getSavedSidebarState()) {
                     const s = getSidebarState();
@@ -1933,20 +2058,20 @@ def home_page():
                             st.markdown(f"""
                                 <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">
                                     <span class="excitement-badge" style="background-color:{score_color};color:white;
-                                        padding:2px 8px;border-radius:10px;font-weight:bold;font-size:0.78em;">
+                                        padding:3px 9px;border-radius:10px;font-weight:bold;font-size:0.9em;">
                                         ★ {game_score}
                                     </span>
                                 </div>
                             """, unsafe_allow_html=True)
 
-                        st.markdown(f"<div style='text-align:center;color:grey;font-size:0.8em;margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:center;color:grey;font-size:0.9em;margin-bottom:6px;'>{g.get('status')}</div>", unsafe_allow_html=True)
 
                         c_away, c_score, c_home = st.columns([1, 1.2, 1])
                         with c_away:
                             st.markdown(f"""
                             <div style="display:flex;flex-direction:column;align-items:center;">
                                 <img src="{g.get('away_logo')}" style="width:46px;height:46px;object-fit:contain;">
-                                <div style="font-size:0.78em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('away_team')}</div>
+                                <div style="font-size:0.95em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('away_team')}</div>
                             </div>""", unsafe_allow_html=True)
 
                         with c_score:
@@ -1968,7 +2093,7 @@ def home_page():
                             st.markdown(f"""
                             <div style="display:flex;flex-direction:column;align-items:center;">
                                 <img src="{g.get('home_logo')}" style="width:46px;height:46px;object-fit:contain;">
-                                <div style="font-size:0.78em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('home_team')}</div>
+                                <div style="font-size:0.95em;font-weight:bold;margin-top:4px;text-align:center;">{g.get('home_team')}</div>
                             </div>""", unsafe_allow_html=True)
 
                         st.markdown("<hr style='margin:8px 0;'>", unsafe_allow_html=True)
