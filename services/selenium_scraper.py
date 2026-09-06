@@ -50,7 +50,7 @@ def get_team_id_from_matchup_card(card, team_index=0):
             return team_id
         return None
     except Exception as e:
-        print(f"⚠️ Team ID extraction error: {e}")
+        print(f"Team ID extraction error: {e}")
         return None
 
 
@@ -80,7 +80,7 @@ def get_current_scoring_period(league_id: int):
         return 1  # Default
         
     except Exception as e:
-        print(f"⚠️ Scoring period error: {e}")
+        print(f"Scoring period error: {e}")
         if driver:
             driver.quit()
         return 1
@@ -118,7 +118,7 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
                     break
         
         if not roster_table:
-            print(f"⚠️ Roster table not found for team {team_id}")
+            print(f"Roster table not found for team {team_id}")
             driver.quit()
             return 0
         
@@ -160,14 +160,14 @@ def get_team_weekly_games(league_id: int, team_id: str, scoring_period: int = No
                 player_count += 1
                 
                 if games_this_week > 0:
-                    print(f"    👤 {player_name}: {games_this_week} games ({matchup_text})")
+                    print(f"    {player_name}: {games_this_week} games ({matchup_text})")
         
         driver.quit()
-        print(f"  ✅ Team {team_id}: {player_count} players, {total_games} total games")
+        print(f"  Team {team_id}: {player_count} players, {total_games} total games")
         return total_games
         
     except Exception as e:
-        print(f"❌ Error fetching team {team_id} games: {e}")
+        print(f"Error fetching team {team_id} games: {e}")
         if driver:
             driver.quit()
         return 0
@@ -348,7 +348,7 @@ def extract_team_games_count(card, team_index=0):
         return 0
         
     except Exception as e:
-        print(f"⚠️ GP extraction error: {e}")
+        print(f"GP extraction error: {e}")
         return 0
 
 
@@ -375,7 +375,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
     params = get_scoring_period_params(time_filter)
     url = base_url + params
     
-    print(f"🔗 Fetching URL: {url}")
+    print(f"Fetching URL: {url}")
     
     driver = get_driver()
     matchups = []
@@ -391,7 +391,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
 
         # Mevcut scoring period'u al
         current_period = get_current_scoring_period(league_id)
-        print(f"📅 Current Scoring Period: Week {current_period}")
+        print(f"Current Scoring Period: Week {current_period}")
 
         tables = soup.find_all("table")
         stat_tables = []
@@ -404,7 +404,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             if stat_pattern.search(txt):
                 stat_tables.append(table)
 
-        print(f"✅ {len(stat_tables)} stat tablosu bulundu ({time_filter})")
+        print(f"{len(stat_tables)} stat tablosu bulundu ({time_filter})")
 
         for table in stat_tables:
             rows = table.find_all("tr")
@@ -444,7 +444,7 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
         driver.quit()
         
         # PARALEL İŞLEM: Tüm takımların maçlarını aynı anda çek
-        print("\n🔄 Calculating weekly games for each team (PARALLEL)...")
+        print("\nCalculating weekly games for each team (PARALLEL)...")
         
         # Tüm takım bilgilerini topla
         team_tasks = []
@@ -478,11 +478,11 @@ def scrape_matchups(league_id: int, time_filter: str = "week"):
             match['away_team']['weekly_games'] = team_games_dict.get(match['away_team']['name'], 0)
             match['home_team']['weekly_games'] = team_games_dict.get(match['home_team']['name'], 0)
         
-        print(f"\n✅ Toplam {len(matchups)} matchup çekildi")
+        print(f"\nToplam {len(matchups)} matchup çekildi")
         return matchups
 
     except Exception as e:
-        print(f"❌ Hata: {e}")
+        print(f"Hata: {e}")
         if driver:
             driver.quit()
         return []

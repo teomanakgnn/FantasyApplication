@@ -47,22 +47,14 @@
   .logo-mark {
     width: 62px; height: 62px; margin: 0 auto 2px;
     border-radius: 20px;
-    background: linear-gradient(140deg, #F97316, #EF4444 55%, #7C3AED);
+    background: #121A2B;
+    border: 1px solid rgba(255,255,255,.10);
     display: flex; align-items: center; justify-content: center;
-    font-size: 32px;
-    box-shadow: 0 12px 34px rgba(249,115,22,.28);
-    animation: floaty 3.4s ease-in-out infinite;
-  }
-  @keyframes floaty {
-    0%,100% { transform: translateY(0) rotate(-3deg); }
-    50%     { transform: translateY(-7px) rotate(3deg); }
+    font-size: 20px; font-weight: 900; letter-spacing: 1px; color: #93A1BC;
   }
   .lobby-title {
     text-align: center; font-size: 30px; font-weight: 900;
-    letter-spacing: -1px; line-height: 1.05;
-    background: linear-gradient(100deg, #fff 15%, #FDBA74 60%, #A78BFA);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px; line-height: 1.05; color: #F1F5F9;
   }
   .lobby-sub {
     text-align: center; font-size: 13px; color: #7C89A3;
@@ -185,6 +177,12 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; opacity: .55;
   }
+  /* Kapali kart arkasi: emoji yerine sade bir isaret */
+  .opp-card:not(.up)::after {
+    content: ""; width: 11px; height: 11px; border-radius: 2px;
+    border: 1.5px solid rgba(255,255,255,.20);
+    transform: rotate(45deg);
+  }
   .opp-card.think { animation: thinkPulse .7s ease-in-out infinite; }
   @keyframes thinkPulse {
     0%,100% { opacity: .4; transform: translateY(0); }
@@ -294,8 +292,9 @@
   .pts-lo { background: rgba(239,68,68,.13); color: #F87171; }
   .hub-star {
     position: absolute; right: 7px; top: 8px;
-    font-size: 11px; filter: drop-shadow(0 0 6px rgba(251,191,36,.7));
-    animation: bump 1.6s ease-in-out infinite;
+    font-size: 9px; font-weight: 900; letter-spacing: .3px;
+    color: #FBBF24; background: rgba(251,191,36,.14);
+    padding: 2px 5px; border-radius: 6px;
   }
 
   /* ══════════ ORTAK KART HAVUZU ══════════
@@ -489,16 +488,6 @@
   .bd-name { flex: 1; font-size: 12px; font-weight: 800; }
   .bd-val { font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; }
 
-  .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
-  .conf {
-    position: absolute; width: 8px; height: 13px; top: -20px;
-    animation: fall linear forwards;
-  }
-  @keyframes fall {
-    0%   { transform: translateY(0) rotate(0); opacity: 1; }
-    100% { transform: translateY(720px) rotate(760deg); opacity: 0; }
-  }
-
   /* ══════════ PUAN BALONU ══════════ */
   .pop {
     position: absolute; z-index: 15; pointer-events: none;
@@ -524,7 +513,7 @@
 <div id="cc">
   <!-- ══════════ LOBI ══════════ -->
   <div class="screen on" id="lobby">
-    <div class="logo-mark">🏀</div>
+    <div class="logo-mark">CC</div>
     <div class="lobby-title">Court Connect</div>
     <div class="lobby-sub">6 oyuncu topla, aralarindaki<br>en guclu baglantilari kur</div>
     <div class="rules" id="rulesBox"></div>
@@ -568,7 +557,7 @@
     <div id="turnToast"></div>
     <div id="hint">Karta dokun - baglantilarini gor</div>
     <div id="actions">
-      <button class="btn btn-ghost" id="quitBtn" style="flex:0 0 52px;">✕</button>
+      <button class="btn btn-ghost" id="quitBtn" style="flex:0 0 52px;">×</button>
       <button class="btn btn-go" id="lockBtn">ELI KILITLE</button>
     </div>
 
@@ -593,7 +582,6 @@
 
   <!-- ══════════ SONUC ══════════ -->
   <div class="screen" id="result">
-    <div class="res-badge" id="resBadge">🏆</div>
     <div class="res-title" id="resTitle">Kazandin!</div>
     <div class="res-sub" id="resSub"></div>
     <div class="res-scores">
@@ -853,7 +841,7 @@
     var isTrio = !!info.inTrio[i];
     return '<div class="tile" data-i="' + i + '" style="animation-delay:' + (i * 55) + 'ms">' +
       '<div class="tile-stripe" style="background:linear-gradient(90deg,' + c1 + ',' + c2 + ')"></div>' +
-      (isTrio ? '<div class="hub-star">⭐</div>' : '') +
+      (isTrio ? '<div class="hub-star">3x</div>' : '') +
       '<div class="tile-top">' +
         '<div class="av-ring" style="background:linear-gradient(140deg,' + c1 + ',' + c2 + ')">' +
           '<img class="av" src="' + card.headshot_url + '" alt="" ' +
@@ -993,7 +981,7 @@
           JSON.stringify(LOGOMAN).replace(/"/g, "&quot;") + '">' +
           '<span class="opp-up-name">' + lastName(c.name) + '</span></div>';
       } else {
-        out += '<div class="opp-card">🏀</div>';
+        out += '<div class="opp-card"></div>';
       }
     }
     $("oppCards").innerHTML = out;
@@ -1055,7 +1043,7 @@
       h.textContent = "Hakkin bitti - eli kilitle";
     } else if (info && info.trios.length) {
       h.className = "live";
-      h.textContent = "⭐ " + info.trios[0].team + " uclusu +" + (info.trios.length * TRIO_BONUS);
+      h.textContent = info.trios[0].team + " uclusu +" + (info.trios.length * TRIO_BONUS);
     } else {
       h.className = "live";
       h.textContent = "Acik karttan birini al - " + G.myLeft + " hakkin var";
@@ -1339,10 +1327,6 @@
     var bot = analyze(G.botHand).total;
     var win = me > bot, tie = me === bot;
 
-    $("resBadge").textContent = win ? "🏆" : (tie ? "🤝" : "💪");
-    $("resBadge").style.background = win
-      ? "linear-gradient(140deg,#FBBF24,#F59E0B)"
-      : (tie ? "linear-gradient(140deg,#64748B,#475569)" : "linear-gradient(140deg,#475569,#1E293B)");
     $("resTitle").textContent = win ? "Kazandin!" : (tie ? "Berabere" : "Bot kazandi");
     $("resSub").textContent = win
       ? "Baglantilarin botunkinden guclu"
@@ -1374,7 +1358,6 @@
     show("result");
     countUp($("resMe"), me, 900);
     countUp($("resBot"), bot, 900);
-    if (win) confetti();
   }
 
   /** Sonuc ekraninda bir elin acik gosterimi (botun eli dahil). */
@@ -1390,23 +1373,6 @@
         '<div class="rh-p">' + info.per[i].pts + '</div></div>';
     }
     return out;
-  }
-
-  function confetti() {
-    var cols = ["#10B981", "#FBBF24", "#3B82F6", "#A78BFA", "#EF4444", "#F97316"];
-    var wrap = document.createElement("div");
-    wrap.className = "confetti";
-    for (var i = 0; i < 44; i++) {
-      var c = document.createElement("div");
-      c.className = "conf";
-      c.style.left = (Math.random() * 100) + "%";
-      c.style.background = cols[Math.floor(Math.random() * cols.length)];
-      c.style.animationDuration = (1.5 + Math.random() * 1.4) + "s";
-      c.style.animationDelay = (Math.random() * 0.5) + "s";
-      wrap.appendChild(c);
-    }
-    $("cc").appendChild(wrap);
-    setTimeout(function () { wrap.remove(); }, 3600);
   }
 
   function show(id) {

@@ -336,7 +336,7 @@ components.html("""
                 will-change: transform, left, top, width, height, background;
             `;
             
-            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">&rsaquo;</div>`;
             
             trigger.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -436,7 +436,7 @@ components.html("""
                     backdropFilter: 'none'
                 });
                 
-                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">&rsaquo;</div>`;
                 
                 trigger.onmouseenter = () => {
                     if (!isTransitioning) {
@@ -825,7 +825,7 @@ def render_injury_sidebar(df):
     """Sidebar with team filters and stats"""
     
     total_injuries = len(df)
-    st.sidebar.markdown("### 📋 Team Breakdown")
+    st.sidebar.markdown("### Team Breakdown")
     
     team_stats = df.groupby(['team', 'team_name', 'team_logo']).size().reset_index(name='count')
     team_stats = team_stats.sort_values('team')
@@ -864,12 +864,12 @@ def render_injury_sidebar(df):
             st.rerun()
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### ℹ️ Status Legend")
+    st.sidebar.markdown("### Status Legend")
     st.sidebar.markdown("""
-    - 🔴 **Out**: Will not play
-    - 🟡 **Questionable**: Game-time decision
-    - 🟠 **Doubtful**: Unlikely to play
-    - 🔵 **Day-to-Day**: Status pending
+    - **Out**: Will not play
+    - **Questionable**: Game-time decision
+    - **Doubtful**: Unlikely to play
+    - **Day-to-Day**: Status pending
     """)
     
     return st.session_state.selected_injury_team
@@ -940,7 +940,7 @@ def render_injury_page():
     top_col1, top_col2 = st.columns([3, 1])
     
     with top_col2:
-        if st.button("🔄 UPDATE DATA", width='stretch'):
+        if st.button("UPDATE DATA", width='stretch'):
             st.cache_data.clear()
             st.rerun()
 
@@ -1065,7 +1065,7 @@ def render_player_card(player, show_team_in_card=False):
     # HTML oluştur
     if is_recent:
         html = f'''<div class="player-card">
-    <div class="new-badge">🔥 NEW</div>
+    <div class="new-badge">NEW</div>
     <div class="card-top">
         <img src="{photo_url}" class="p-photo">
         <div class="p-info">
@@ -1077,7 +1077,7 @@ def render_player_card(player, show_team_in_card=False):
     <div class="card-details">
         <strong>INJURY:</strong> {injury_type}<br>
         <span style="opacity:0.8">{details}</span>
-        <br><span class="injury-date">📅 Updated: {injury_date_formatted}</span>
+        <br><span class="injury-date">Updated: {injury_date_formatted}</span>
     </div>
 </div>'''
     else:
@@ -1093,12 +1093,12 @@ def render_player_card(player, show_team_in_card=False):
     <div class="card-details">
         <strong>INJURY:</strong> {injury_type}<br>
         <span style="opacity:0.8">{details}</span>
-        <br><span class="injury-date">📅 Updated: {injury_date_formatted}</span>
+        <br><span class="injury-date">Updated: {injury_date_formatted}</span>
     </div>
 </div>'''
     
     st.markdown(html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    st.set_page_config(page_title="NBA Injury Report", layout="wide", page_icon="🏀")
+    st.set_page_config(page_title="NBA Injury Report", layout="wide", page_icon="HoopLifeNBA_logo.png")
     render_injury_page()

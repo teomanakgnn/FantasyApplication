@@ -327,7 +327,7 @@ components.html("""
                 will-change: transform, left, top, width, height, background;
             `;
             
-            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">&rsaquo;</div>`;
             
             trigger.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -427,7 +427,7 @@ components.html("""
                     backdropFilter: 'none'
                 });
                 
-                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">&rsaquo;</div>`;
                 
                 trigger.onmouseenter = () => {
                     if (!isTransitioning) {
@@ -609,13 +609,13 @@ def calculate_threshold_value(df, punt_cats, min_threshold=12.0, penalty_curve=0
             
             # Tier classification
             if raw >= 30:
-                p['tier'] = '⭐ Elite'
+                p['tier'] = 'Elite'
             elif raw >= 22:
-                p['tier'] = '🔹 Solid Starter'
+                p['tier'] = 'Solid Starter'
             elif raw >= 15:
-                p['tier'] = '🔸 Starter'
+                p['tier'] = 'Starter'
             else:
-                p['tier'] = '🟢 Flex'
+                p['tier'] = 'Flex'
                 
         else:
             # EŞİK ALTI: EKSPONANSIYEL CEZA
@@ -627,11 +627,11 @@ def calculate_threshold_value(df, punt_cats, min_threshold=12.0, penalty_curve=0
             p['multiplier'] = multiplier
             
             if raw >= 8:
-                p['tier'] = '🟡 Bench'
+                p['tier'] = 'Bench'
             elif raw >= 4:
-                p['tier'] = '🟠 Deep Bench'
+                p['tier'] = 'Deep Bench'
             else:
-                p['tier'] = '⚪ Streamer'
+                p['tier'] = 'Streamer'
         
         total_adjusted += p['adjusted_fp']
     
@@ -783,7 +783,7 @@ def render_trade_analyzer_page():
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.header("⚙️ Scoring System")
+        st.header("Scoring System")
         
         # SCORING METHOD
         st.subheader("Calculation Method")
@@ -806,7 +806,7 @@ def render_trade_analyzer_page():
         # THRESHOLD AYARLARI (sadece Threshold Smart için)
         if scoring_method == "Threshold Smart":
             st.markdown("---")
-            st.subheader("🎯 Threshold Settings")
+            st.subheader("Threshold Settings")
             
             min_threshold = st.slider(
                 "Minimum FP Threshold",
@@ -826,12 +826,12 @@ def render_trade_analyzer_page():
                 help="Higher value = harsher penalty (lower value players = less value)"
             )
             
-            st.info(f"📊 Threshold: {min_threshold} FP\n⚡ Penalty: {penalty_curve:.1f}")
+            st.info(f"Threshold: {min_threshold} FP\nPenalty: {penalty_curve:.1f}")
         
         st.markdown("---")
         
         # PUNT STRATEGY
-        st.subheader("🎯 Punt Strategy")
+        st.subheader("Punt Strategy")
         punt_cats = st.multiselect(
             "Punt categories",
             ["FG Punt", "FT Punt", "TO Punt"],
@@ -860,7 +860,7 @@ def render_trade_analyzer_page():
         weights_df = weights_df.sort_values(by='Weight', ascending=False)
         st.dataframe(weights_df, hide_index=True, width='stretch')
 
-    st.title("🏀 NBA Trade Analyzer")
+    st.title("NBA Trade Analyzer")
     st.markdown(f"Using **{scoring_method}** method")
     
     # Session State
@@ -869,7 +869,7 @@ def render_trade_analyzer_page():
             st.session_state[k] = [] if "players" in k else None
 
     # --- SETTINGS ---
-    with st.expander("⚙️ Stats Period", expanded=True):
+    with st.expander("Stats Period", expanded=True):
         period = st.selectbox(
             "Time period",
             ["Season Average", "Last 15 Days", "Last 30 Days"],
@@ -1027,7 +1027,7 @@ def render_trade_analyzer_page():
                 
                 missing = [p for p in selected if p not in df_players['PLAYER'].values]
                 if missing:
-                    st.warning(f"⚠️ {len(missing)} player(s) unavailable")
+                    st.warning(f"{len(missing)} player(s) unavailable")
             else:
                 st.info("Select players...")
 
@@ -1087,7 +1087,7 @@ def render_trade_analyzer_page():
     df_2, fp_2, avg_2, details_2 = analyze(side_2)
     
     if df_1.empty or df_2.empty:
-        st.warning("⚠️ Some players unavailable")
+        st.warning("Some players unavailable")
         if df_1.empty and df_2.empty:
             return
 
@@ -1096,7 +1096,7 @@ def render_trade_analyzer_page():
 
     st.markdown("---")
     with st.container(border=True):
-        st.markdown("## 📊 Trade Result")
+        st.markdown("## Trade Result")
         r1, r2, r3 = st.columns([1, 2, 1])
         
         with r1:
@@ -1115,17 +1115,17 @@ def render_trade_analyzer_page():
 
         with r2:
             if abs(diff) < 2:
-                st.success("✅ FAIR TRADE")
+                st.success("FAIR TRADE")
             elif diff > 0:
-                st.success(f"🏆 TEAM 1 WINS")
+                st.success(f"TEAM 1 WINS")
                 st.caption(f"+{diff:.1f} advantage")
             else:
-                st.error(f"🏆 TEAM 2 WINS")
+                st.error(f"TEAM 2 WINS")
                 st.caption(f"+{abs(diff):.1f} advantage")
             st.progress(confidence / 100)
 
     # --- STAT BREAKDOWN ---
-    st.markdown("### 📈 Stat Breakdown")
+    st.markdown("### Stat Breakdown")
     stats_config = [
         ('PTS', 'Points', False), ('REB', 'Rebs', False), ('AST', 'Asts', False),
         ('STL', 'Stls', False), ('BLK', 'Blks', False), ('3PM', '3PM', False), ('TO', 'TO', True)
@@ -1151,7 +1151,7 @@ def render_trade_analyzer_page():
             """, unsafe_allow_html=True)
 
     # --- DETAILED STATS ---
-    st.markdown("### 📋 Detailed Stats")
+    st.markdown("### Detailed Stats")
     
     c_t1, c_t2 = st.columns(2)
     

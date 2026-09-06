@@ -28,7 +28,7 @@ def view_raw_boxscore(game_id):
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     
     print(f"\n{'='*100}")
-    print(f"📡 API REQUEST")
+    print(f"API REQUEST")
     print(f"{'='*100}")
     print(f"URL: {url}")
     print(f"Game ID: {game_id}\n")
@@ -38,7 +38,7 @@ def view_raw_boxscore(game_id):
         data = response.json()
         
         print(f"{'='*100}")
-        print(f"📊 RESPONSE STRUCTURE")
+        print(f"RESPONSE STRUCTURE")
         print(f"{'='*100}")
         print(f"Status Code: {response.status_code}")
         print(f"Top Level Keys: {list(data.keys())}\n")
@@ -50,7 +50,7 @@ def view_raw_boxscore(game_id):
             competitors = competitions.get("competitors", [])
             
             print(f"{'='*100}")
-            print(f"🏀 GAME INFO")
+            print(f"GAME INFO")
             print(f"{'='*100}")
             for comp in competitors:
                 team = comp.get("team", {})
@@ -59,12 +59,12 @@ def view_raw_boxscore(game_id):
         
         # Boxscore yapısı
         if "boxscore" not in data:
-            print("❌ Boxscore bulunamadı!")
+            print("Boxscore bulunamadı!")
             return
         
         boxscore = data["boxscore"]
         print(f"{'='*100}")
-        print(f"📦 BOXSCORE STRUCTURE")
+        print(f"BOXSCORE STRUCTURE")
         print(f"{'='*100}")
         print(f"Boxscore Keys: {list(boxscore.keys())}")
         print(f"Teams Count: {len(boxscore.get('players', []))}\n")
@@ -80,7 +80,7 @@ def view_raw_boxscore(game_id):
             print(f"Statistics Groups: {len(statistics)}\n")
             
             for stat_group in statistics:
-                print(f"  📊 Stat Group: {stat_group.get('name', 'Unknown')}")
+                print(f"  Stat Group: {stat_group.get('name', 'Unknown')}")
                 print(f"  Labels: {stat_group.get('labels', [])}")
                 
                 athletes = stat_group.get("athletes", [])
@@ -107,45 +107,45 @@ def view_raw_boxscore(game_id):
                     player_name = athlete.get('displayName', '')
                     
                     if 'edey' in player_name.lower():
-                        print(f"\n{'🎯'*40}")
+                        print(f"\n{''*40}")
                         print(f"FOUND: {player_name}")
-                        print(f"{'🎯'*40}")
+                        print(f"{''*40}")
                         
                         stats = athlete_data.get("stats", [])
                         labels = stat_group.get('labels', [])
                         
-                        print(f"\n📋 RAW DATA:")
+                        print(f"\nRAW DATA:")
                         print(f"   Athlete Object: {json.dumps(athlete, indent=4)}")
                         print(f"\n   Stats Array: {stats}")
                         print(f"   Labels: {labels}")
                         
                         if labels and stats:
                             stat_dict = dict(zip(labels, stats))
-                            print(f"\n📊 PARSED STATS:")
+                            print(f"\nPARSED STATS:")
                             for key, val in stat_dict.items():
                                 print(f"   {key:15s}: {val}")
                         
-                        print(f"\n{'🎯'*40}\n")
+                        print(f"\n{''*40}\n")
                 
                 print(f"  {'-'*96}\n")
         
         # Tüm JSON'ı dosyaya kaydet (opsiyonel)
-        save = input("\n💾 Tüm JSON'ı dosyaya kaydetmek ister misiniz? (y/n): ")
+        save = input("\nTüm JSON'ı dosyaya kaydetmek ister misiniz? (y/n): ")
         if save.lower() == 'y':
             filename = f"game_{game_id}_raw.json"
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-            print(f"✅ Kaydedildi: {filename}")
+            print(f"Kaydedildi: {filename}")
         
     except Exception as e:
-        print(f"❌ Hata: {e}")
+        print(f"Hata: {e}")
         import traceback
         traceback.print_exc()
 
 def find_edey_games(days=30):
     """Zach Edey'in oynadığı son maçları bulur"""
     print(f"\n{'='*100}")
-    print(f"🔍 ZACH EDEY MAÇ ARAMA (Son {days} gün)")
+    print(f"ZACH EDEY MAÇ ARAMA (Son {days} gün)")
     print(f"{'='*100}\n")
     
     end_date = datetime.now()
@@ -179,7 +179,7 @@ def find_edey_games(days=30):
         
         current_date += timedelta(days=1)
     
-    print(f"✓ {len(mem_games)} Memphis Grizzlies maçı bulundu:\n")
+    print(f"{len(mem_games)} Memphis Grizzlies maçı bulundu:\n")
     
     for idx, game in enumerate(mem_games[:10], 1):
         print(f"{idx:2d}. {game['date']} - {game['teams']} (Game ID: {game['game_id']})")
@@ -195,13 +195,13 @@ def find_edey_games(days=30):
             else:
                 selected_game = mem_games[idx - 1]
             
-            print(f"\n✓ Seçilen maç: {selected_game['date']} - {selected_game['teams']}")
+            print(f"\nSeçilen maç: {selected_game['date']} - {selected_game['teams']}")
             view_raw_boxscore(selected_game['game_id'])
             
         except (ValueError, IndexError):
-            print("❌ Geçersiz seçim!")
+            print("Geçersiz seçim!")
     else:
-        print("❌ Hiç Memphis maçı bulunamadı!")
+        print("Hiç Memphis maçı bulunamadı!")
 
 if __name__ == "__main__":
     print("""
@@ -226,9 +226,9 @@ if __name__ == "__main__":
     elif choice == "3":
         game_id, date = get_recent_game_id()
         if game_id:
-            print(f"\n✓ En son maç bulundu: {date} (ID: {game_id})")
+            print(f"\nEn son maç bulundu: {date} (ID: {game_id})")
             view_raw_boxscore(game_id)
         else:
-            print("❌ Maç bulunamadı!")
+            print("Maç bulunamadı!")
     else:
-        print("❌ Geçersiz seçim!")
+        print("Geçersiz seçim!")

@@ -18,7 +18,7 @@ def render_boxscore_modal():
     st.title(" Box Score")
     
     # Close button
-    if st.button("⬅️ Back to Games", type="primary", width='stretch'):
+    if st.button("Back to Games", type="primary", width='stretch'):
         st.session_state.open_game_id = None
         st.rerun()
     

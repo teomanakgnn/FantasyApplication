@@ -34,7 +34,7 @@ def handle_login(username, password, remember_me=True, fingerprint_hash=None):
         try:
             db.update_session_fingerprint(session_data['token'], fingerprint_hash)
         except Exception as e:
-            print(f"⚠️ Could not store fingerprint: {e}")
+            print(f"Could not store fingerprint: {e}")
             # Continue anyway - fingerprint is optional
 
     # Session state'e kaydet
@@ -55,9 +55,9 @@ def handle_login(username, password, remember_me=True, fingerprint_hash=None):
             (function() {{
                 try {{
                     localStorage.setItem('hooplife_auth_data', JSON.stringify({json.dumps(auth_data)}));
-                    console.log('✅ Session saved to localStorage');
+                    console.log('Session saved to localStorage');
                 }} catch(e) {{
-                    console.error('❌ localStorage save failed:', e);
+                    console.error('localStorage save failed:', e);
                 }}
 
                 // URL param ekleyerek yenile - Streamlit token'ı yakalasın
@@ -175,7 +175,7 @@ def logout_enhanced():
         try:
             db.logout_session(st.session_state.session_token, 'default')
         except Exception as e:
-            print(f"⚠️ DB logout error: {e}")
+            print(f"DB logout error: {e}")
 
     # Session state temizle
     for key in ['authenticated', 'user', 'session_token']:
@@ -187,7 +187,7 @@ def logout_enhanced():
         (function() {
             try {
                 localStorage.removeItem('hooplife_auth_data');
-                console.log('🗑️ localStorage cleared');
+                console.log('localStorage cleared');
             } catch(e) {}
 
             try {
@@ -234,7 +234,7 @@ def render_auth_page_enhanced():
 
     col1, col2, col3 = st.columns([1, 10, 1])
     with col1:
-        if st.button("⬅️", help="Back to Home"):
+        if st.button("", help="Back to Home"):
             st.session_state.page = "home"
             st.rerun()
 
@@ -337,11 +337,11 @@ def render_auth_page_enhanced():
                     success, message = handle_login(username, password, remember_me, fingerprint_hash)
 
                 if success:
-                    st.success(f"✅ Welcome back, {username}!")
+                    st.success(f"Welcome back, {username}.")
                     # remember_me=True ise JS yönlendiriyor, rerun gerekmez.
                     # remember_me=False ise handle_login içinde rerun yapıldı.
                 else:
-                    st.error(f"❌ {message}")
+                    st.error(f"{message}")
 
     # ==================== REGISTER TAB ====================
     with tab2:
@@ -351,18 +351,18 @@ def render_auth_page_enhanced():
             st.markdown("""
                 <div class="plan-container">
                     <span class="plan-title">Starter</span>
-                    <div class="feature-text">✓ Live Scores</div>
-                    <div class="feature-text">✓ Basic Stats</div>
-                    <div class="feature-text">✓ Free Forever</div>
+                    <div class="feature-text">Live Scores</div>
+                    <div class="feature-text">Basic Stats</div>
+                    <div class="feature-text">Free</div>
                 </div>
             """, unsafe_allow_html=True)
         with c2:
             st.markdown("""
                 <div class="plan-container" style="background: linear-gradient(145deg, #262730 0%, #2d2d2d 100%);">
                     <span class="plan-title">Pro <span class="coming-soon-badge">SOON</span></span>
-                    <div class="feature-text">★ Advanced Analytics</div>
-                    <div class="feature-text">★ AI Predictions</div>
-                    <div class="feature-text">★ Export Data</div>
+                    <div class="feature-text">Advanced Analytics</div>
+                    <div class="feature-text">Projections</div>
+                    <div class="feature-text">CSV Export</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -399,10 +399,9 @@ def render_auth_page_enhanced():
                 else:
                     success, message = db.create_user(reg_username, reg_email, reg_password)
                     if success:
-                        st.success("✅ Account created! Please switch to Sign In tab.")
-                        st.balloons()
+                        st.success("Account created. Switch to the Sign In tab to log in.")
                     else:
-                        st.error(f"❌ {message}")
+                        st.error(f"{message}")
 
     st.markdown("""
         <div style="text-align:center; margin-top:1rem; color:#6b7280; font-size:0.8rem;">

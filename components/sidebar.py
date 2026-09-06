@@ -21,7 +21,7 @@ def render_sidebar():
             "FT Punt Build",
             "FG Punt Build",
             "TO Punt Build",
-            "🔒 Other Punt Builds (Pro)"
+            "Other Punt Builds (Pro)"
         ]
     )
 
@@ -57,9 +57,9 @@ def render_sidebar():
         weights = base_weights.copy()
         weights["TO"] = 0.0
 
-    elif build == "🔒 Other Punt Builds (Pro)":
+    elif build == "Other Punt Builds (Pro)":
         st.sidebar.info(
-            "🔓 Unlock all advanced punt builds\n\n"
+            "Unlock all advanced punt builds\n\n"
             "• 9-CAT optimized models\n"
             "• Custom punt combinations\n"
             "• Season-adjusted weights\n\n"

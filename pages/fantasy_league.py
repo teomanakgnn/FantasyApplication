@@ -333,7 +333,7 @@ components.html("""
                 will-change: transform, left, top, width, height, background;
             `;
             
-            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">&rsaquo;</div>`;
             
             trigger.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -433,7 +433,7 @@ components.html("""
                     backdropFilter: 'none'
                 });
                 
-                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">&rsaquo;</div>`;
                 
                 trigger.onmouseenter = () => {
                     if (!isTransitioning) {
@@ -850,7 +850,7 @@ def handle_yahoo_auth():
         from services.yahoo_api import YahooFantasyService, load_yahoo_token
     except ImportError as e:
         st.error("""
-        ❌ **Missing Required Package**
+        **Missing Required Package**
         
         Yahoo integration requires `requests-oauthlib` package.
         
@@ -892,10 +892,10 @@ def render_fantasy_league_page():
             platform = st.session_state.selected_platform
             if platform == 'ESPN':
                 badge_class = 'espn-badge'
-                icon = '🔴'
+                icon = ''
             else:
                 badge_class = 'yahoo-badge'
-                icon = '🟣'
+                icon = ''
             
             time_filter = st.session_state.get('time_filter', 'week')
             filter_display = {"week": "CURRENT WEEK", "month": "LAST MONTH", "season": "FULL SEASON"}
@@ -912,13 +912,13 @@ def render_fantasy_league_page():
     
     # --- SIDEBAR ---
     with st.sidebar:
-        st.markdown("### 🎯 PLATFORM SELECTION")
+        st.markdown("### PLATFORM SELECTION")
         
         # Platform seçimi
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔴 ESPN", width='stretch', 
+            if st.button("ESPN", width='stretch', 
                         type="primary" if st.session_state.get('selected_platform') == 'ESPN' else "secondary"):
                 st.session_state.selected_platform = 'ESPN'
                 st.session_state.pop('df_standings', None)
@@ -926,7 +926,7 @@ def render_fantasy_league_page():
                 st.rerun()
         
         with col2:
-            if st.button("🟣 YAHOO", width='stretch',
+            if st.button("YAHOO", width='stretch',
                         type="primary" if st.session_state.get('selected_platform') == 'YAHOO' else "secondary"):
                 st.session_state.selected_platform = 'YAHOO'
                 st.session_state.pop('df_standings', None)
@@ -937,7 +937,7 @@ def render_fantasy_league_page():
         
         # Platform bazlı input alanları
         if st.session_state.get('selected_platform') == 'ESPN':
-            st.markdown("### 🔴 ESPN CONFIGURATION")
+            st.markdown("### ESPN CONFIGURATION")
             
             league_input = st.text_input("LEAGUE ID", value="987023001", key="espn_league_id")
             if "leagueId=" in league_input:
@@ -954,8 +954,8 @@ def render_fantasy_league_page():
                 options=["week", "month", "season"],
                 format_func=lambda x: {
                     "week": " Current Week",
-                    "month": "🔒 Last Month (PRO)",
-                    "season": "🔒 Full Season (PRO)"
+                    "month": "Last Month (PRO)",
+                    "season": "Full Season (PRO)"
                 }[x],
                 index=0,
                 key="espn_time_filter",
@@ -967,29 +967,29 @@ def render_fantasy_league_page():
             
             st.markdown("---")
             
-            if st.button("⚡ LOAD ESPN DATA", type="primary", width='stretch'):
+            if st.button("LOAD ESPN DATA", type="primary", width='stretch'):
                 with st.spinner("CONNECTING TO ESPN SERVERS..."):
                     df_standings, matchups, error = load_espn_data(league_id, time_filter)
                     
                     if error:
-                        st.error(f"❌ ESPN ERROR: {error}")
+                        st.error(f"ESPN ERROR: {error}")
                     else:
                         st.session_state['df_standings'] = df_standings
                         st.session_state['matchups'] = matchups
                         st.session_state['current_league_id'] = league_id
-                        st.success("✅ ESPN data loaded successfully!")
+                        st.success("ESPN data loaded.")
                         st.rerun()
         
         elif st.session_state.get('selected_platform') == 'YAHOO':
-            st.markdown("### 🟣 YAHOO CONFIGURATION")
+            st.markdown("### YAHOO CONFIGURATION")
             
             # Yahoo authentication kontrolü
             is_authenticated = handle_yahoo_auth()
             
             if not is_authenticated:
-                st.warning("🔐 Authentication Required")
+                st.warning("Authentication Required")
                 
-                if st.button("🔗 Get Authorization URL", width='stretch'):
+                if st.button("Get Authorization URL", width='stretch'):
                     auth_url = st.session_state.yahoo_service.get_authorization_url()
                     st.session_state.auth_url = auth_url
                 
@@ -1000,21 +1000,21 @@ def render_fantasy_league_page():
                     
                     auth_code = st.text_input("Authorization Code", type="password", key="yahoo_auth_code")
                     
-                    if st.button("✅ Complete Auth", width='stretch') and auth_code:
+                    if st.button("Complete Auth", width='stretch') and auth_code:
                         try:
                             from services.yahoo_api import save_yahoo_token
                             token = st.session_state.yahoo_service.fetch_token(auth_code)
                             save_yahoo_token(token)
                             st.session_state.yahoo_authenticated = True
-                            st.success("✅ Authentication successful!")
+                            st.success("Authenticated.")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"❌ Auth failed: {str(e)}")
+                            st.error(f"Auth failed: {str(e)}")
             else:
-                st.success("✅ Authenticated")
+                st.success("Authenticated")
                 
                 # League listesi yükle
-                if st.button("🔄 Load My Leagues", width='stretch'):
+                if st.button("Load My Leagues", width='stretch'):
                     with st.spinner("Fetching leagues..."):
                         try:
                             leagues = st.session_state.yahoo_service.get_user_leagues('nba')
@@ -1037,29 +1037,29 @@ def render_fantasy_league_page():
                 st.markdown("---")
                 
                 # 1. LOAD DATA BUTONU
-                if st.button("⚡ LOAD YAHOO DATA", type="primary", width='stretch'):
+                if st.button("LOAD YAHOO DATA", type="primary", width='stretch'):
                     if league_key:
                         with st.spinner("CONNECTING TO YAHOO SERVERS..."):
                             df_standings, matchups, error = load_yahoo_data(league_key, week_number)
                             
                             if error:
-                                st.error(f"❌ YAHOO ERROR: {error}")
+                                st.error(f"YAHOO ERROR: {error}")
                             else:
                                 st.session_state['df_standings'] = df_standings
                                 st.session_state['matchups'] = matchups
                                 st.session_state['current_league_key'] = league_key
-                                st.success("✅ Yahoo data loaded successfully!")
+                                st.success("Yahoo data loaded.")
                                 st.rerun()
 
                 # 2. LOAD ROSTERS BUTONU (YENİ EKLENEN KISIM)
-                if st.button("👥 Load Rosters (For Trade)", width='stretch'):
+                if st.button("Load Rosters (For Trade)", width='stretch'):
                     if league_key:
                         with st.spinner("Fetching all rosters..."):
                             try:
                                 # yahoo_api.py içindeki get_league_rosters fonksiyonunu çağırıyoruz
                                 rosters = st.session_state.yahoo_service.get_league_rosters(league_key)
                                 st.session_state['rosters'] = rosters
-                                st.success(f"✅ Loaded {len(rosters)} teams!")
+                                st.success(f"Loaded {len(rosters)} teams.")
                             except Exception as e:
                                 st.error(f"Error loading rosters: {str(e)}")
                     else:
@@ -1097,7 +1097,7 @@ def render_fantasy_league_page():
             # Görsel Kısım (HTML)
             st.markdown("""
             <div class='platform-selector' style='text-align: center; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;'>
-                <div style='font-size: 48px; margin-bottom: 10px;'>🔴</div>
+                <div style='font-size: 48px; margin-bottom: 10px;'></div>
                 <h3 style='color: #ef4444; margin: 0 0 10px 0;'>ESPN</h3>
                 <p style='font-size: 14px; color: #94a3b8; line-height: 1.6;'>
                     • Easy setup with League ID<br>
@@ -1119,7 +1119,7 @@ def render_fantasy_league_page():
             # Görsel Kısım (HTML)
             st.markdown("""
             <div class='platform-selector' style='text-align: center; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;'>
-                <div style='font-size: 48px; margin-bottom: 10px;'>🟣</div>
+                <div style='font-size: 48px; margin-bottom: 10px;'></div>
                 <h3 style='color: #8b5cf6; margin: 0 0 10px 0;'>YAHOO</h3>
                 <p style='font-size: 14px; color: #94a3b8; line-height: 1.6;'>
                     • OAuth authentication<br>
@@ -1141,7 +1141,7 @@ def render_fantasy_league_page():
     # Platform seçilmiş ama veri yüklenmemişse bilgilendirme mesajı
     if df_standings is None and matchups is None:
         platform_name = "ESPN" if selected_platform == "ESPN" else "Yahoo"
-        icon = "🔴" if selected_platform == "ESPN" else "🟣"
+        icon = "" if selected_platform == "ESPN" else ""
         
         st.markdown(f"""
         <div style='text-align: center; padding: 60px 20px;'>
@@ -1152,7 +1152,7 @@ def render_fantasy_league_page():
             </p>
             <div style='background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; max-width: 500px; margin: 0 auto;'>
                 <p style='font-size: 14px; color: #94a3b8; margin: 0;'>
-                    👈 Check the sidebar for configuration options
+                    Check the sidebar for configuration options
                 </p>
             </div>
         </div>
@@ -1160,7 +1160,7 @@ def render_fantasy_league_page():
         return
     
     # Veri yüklendiyse tabs göster
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 STANDINGS", "⚔️ MATCHUPS", "💪 H2H POWER RANK", "🎯 ROTO SIMULATION", "TRADE ANALYZER"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["STANDINGS", "MATCHUPS", "H2H POWER RANK", "ROTO SIMULATION", "TRADE ANALYZER"])
     
     # TAB 1: STANDINGS
     with tab1:
@@ -1173,18 +1173,18 @@ def render_fantasy_league_page():
     with tab2:
         if matchups:
             # --- DEBUG BAŞLANGIÇ (Sorun çözülünce silin) ---
-            with st.expander("🛠️ DEBUG: Raw Matchup Data Check"):
+            with st.expander("DEBUG: Raw Matchup Data Check"):
                 st.write("First Matchup Stats:", matchups[0]['home_team']['stats'])
                 
                 required_cats = ['FG%', 'FT%', '3PTM', 'PTS', 'REB', 'AST', 'ST', 'BLK', 'TO']
                 missing = [cat for cat in required_cats if cat not in matchups[0]['home_team']['stats']]
                 
                 if missing:
-                    st.error(f"⚠️ Missing Categories for Simulation: {missing}")
+                    st.error(f"Missing Categories for Simulation: {missing}")
                     st.info("Yahoo API'den bu kategoriler gelmiyor. Lig ayarlarınız standart 9-cat olmayabilir veya Stat ID'ler farklıdır.")
                 else:
-                    st.success("✅ All required stats are present!")
-            st.markdown(f"### ⚔️ WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
+                    st.success("All required stats are present.")
+            st.markdown(f"### WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")
             
             for match in matchups:
                 games_away = match['away_team'].get('weekly_games', 0)
@@ -1198,7 +1198,7 @@ def render_fantasy_league_page():
                         st.markdown(f"""
                         <div style='display:flex; justify-content:flex-end; margin-bottom:5px;'>
                             <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                                📅 WEEKLY GAMES: {games_away}
+                                WEEKLY GAMES: {games_away}
                             </span>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1212,7 +1212,7 @@ def render_fantasy_league_page():
                         st.markdown(f"""
                         <div style='display:flex; justify-content:flex-start; margin-bottom:5px;'>
                             <span style='background:#10b981; color:white; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold;'>
-                                📅 WEEKLY GAMES: {games_home}
+                                WEEKLY GAMES: {games_home}
                             </span>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1233,12 +1233,12 @@ def render_fantasy_league_page():
             if best_teams:
                 for t in best_teams:
                     st.markdown(f"""<div style='background: rgba(34, 197, 94, 0.2); border-left: 4px solid #22c55e; padding: 10px; margin-bottom: 10px;'>
-                    👑 <b>DOMINATION ALERT:</b> {t['team']} beats everyone!</div>""", unsafe_allow_html=True)
+                    <b>DOMINATION ALERT:</b> {t['team']} beats everyone!</div>""", unsafe_allow_html=True)
             
             if worst_teams:
                 for t in worst_teams:
                     st.markdown(f"""<div style='background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 10px;'>
-                    💀 <b>CRITICAL:</b> {t['team']} loses to everyone.</div>""", unsafe_allow_html=True)
+                    <b>CRITICAL:</b> {t['team']} loses to everyone.</div>""", unsafe_allow_html=True)
             
             st.divider()
             
@@ -1248,7 +1248,7 @@ def render_fantasy_league_page():
             
             st.divider()
             
-            st.subheader("🕵️ Detailed Matchup Analysis")
+            st.subheader("Detailed Matchup Analysis")
             selected_team = st.selectbox("Select a team to analyze:", [t['team'] for t in sim_data])
             
             if selected_team:
@@ -1333,12 +1333,12 @@ def render_fantasy_league_page():
 
     # TAB 5: TRADE ANALYZER
     with tab5:
-        st.markdown("### 🔄 TRADE ANALYZER")
+        st.markdown("### TRADE ANALYZER")
         
         rosters = st.session_state.get('rosters')
         
         if not rosters:
-            st.info("⚠️ Please click '👥 Load Rosters' in the sidebar to use the Trade Analyzer.")
+            st.info("Please click 'Load Rosters' in the sidebar to use the Trade Analyzer.")
         else:
             # Takım Seçimi
             team_names = list(rosters.keys())
@@ -1370,7 +1370,7 @@ def render_fantasy_league_page():
             st.markdown("---")
             
             # Analyze Butonu
-            if st.button("🚀 Analyze Trade Impact", type="primary", width='stretch'):
+            if st.button("Analyze Trade Impact", type="primary", width='stretch'):
                 if not trade_p_a and not trade_p_b:
                     st.warning("Please select at least one player to trade.")
                 else:
@@ -1401,17 +1401,17 @@ def render_fantasy_league_page():
                             with res_c1:
                                 st.markdown(f"**{team_a_name} Receives:**")
                                 for p in stats_b:
-                                    st.write(f"🔹 {p['name']}")
+                                    st.write(f"{p['name']}")
                                     st.dataframe(pd.DataFrame([p['stats']]), hide_index=True)
 
                             with res_c2:
                                 st.markdown(f"**{team_b_name} Receives:**")
                                 for p in stats_a:
-                                    st.write(f"🔸 {p['name']}")
+                                    st.write(f"{p['name']}")
                                     st.dataframe(pd.DataFrame([p['stats']]), hide_index=True)
                             
                             # Net Impact Tablosu (Basit toplama)
-                            st.markdown("#### 📊 Net Statistical Impact (Season Average)")
+                            st.markdown("#### Net Statistical Impact (Season Average)")
                             
                             # Basit bir impact hesaplama (Gelen - Giden)
                             impact_stats = {}

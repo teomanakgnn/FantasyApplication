@@ -24,7 +24,7 @@ def mark_trivia_shown():
     today = date.today().isoformat()
     st.session_state.last_trivia_date = today
 
-@st.dialog("🏀 Daily NBA Trivia", width="large")
+@st.dialog("Daily NBA Trivia", width="large")
 def show_trivia_popup(trivia_data, user_id, db):
     """Trivia pop-up'ını göster"""
     
@@ -64,7 +64,7 @@ def show_trivia_popup(trivia_data, user_id, db):
     already_answered = db.has_user_answered_today(user_id, trivia_id) if user_id else False
     
     if already_answered:
-        st.success("✅ You've already answered today's trivia!")
+        st.success("You have already answered today's trivia.")
         
         # İstatistikleri göster
         if user_id:
@@ -123,7 +123,7 @@ def show_trivia_popup(trivia_data, user_id, db):
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        if st.button("✅ Submit Answer", width='stretch', type="primary"):
+        if st.button("Submit Answer", width='stretch', type="primary"):
             is_correct = selected == trivia_data['correct_answer']
             
             # Cevabı kaydet (user_id varsa)
@@ -153,12 +153,12 @@ def show_trivia_popup(trivia_data, user_id, db):
         st.markdown("---")
         
         if result['is_correct']:
-            st.success("🎉 Correct! Well done!")
+            st.success("Correct.")
         else:
-            st.error(f"❌ Incorrect. The correct answer was: {result['correct']}) {options[result['correct']]}")
+            st.error(f"Incorrect. The correct answer was: {result['correct']}) {options[result['correct']]}")
         
         if result['explanation']:
-            st.info(f"💡 **Explanation:** {result['explanation']}")
+            st.info(f"**Explanation:** {result['explanation']}")
         
         # İstatistikleri göster
         if user_id:

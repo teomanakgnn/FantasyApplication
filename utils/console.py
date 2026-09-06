@@ -2,7 +2,7 @@
 Konsol çıktısı için güvenli kodlama ayarı.
 
 Windows'ta terminal varsayılan olarak cp1252/cp1254 gibi tek baytlık bir
-kod sayfası kullanıyor. Kod tabanındaki log satırlarında ✓, ❌, 📊 gibi
+kod sayfası kullanıyor. Kod tabanındaki log satırlarında , , gibi
 karakterler var ve bunlar print edilince UnicodeEncodeError fırlatıp
 uygulamayı komple düşürüyor (sadece logu bozmakla kalmıyor).
 

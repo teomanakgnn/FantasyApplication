@@ -866,7 +866,7 @@ CONNECTION_TYPES = {
         "color": "#10b981",       # green
         "bg_color": "rgba(16, 185, 129, 0.15)",
         "points": 5,
-        "icon": "🟢",
+        "icon": "",
         "description": "Same current NBA team"
     },
     "country": {
@@ -874,7 +874,7 @@ CONNECTION_TYPES = {
         "color": "#3b82f6",       # blue
         "bg_color": "rgba(59, 130, 246, 0.15)",
         "points": 3,
-        "icon": "🔵",
+        "icon": "",
         "description": "Same nationality"
     },
     "former_team": {
@@ -882,7 +882,7 @@ CONNECTION_TYPES = {
         "color": "#f59e0b",       # yellow/amber
         "bg_color": "rgba(245, 158, 11, 0.15)",
         "points": 2,
-        "icon": "🟡",
+        "icon": "",
         "description": "Shared a former team"
     },
     "draft_year": {
@@ -890,7 +890,7 @@ CONNECTION_TYPES = {
         "color": "#f97316",       # orange
         "bg_color": "rgba(249, 115, 22, 0.15)",
         "points": 1,
-        "icon": "🟠",
+        "icon": "",
         "description": "Same draft year"
     },
 }
@@ -932,7 +932,7 @@ def _live_team_map():
         from services.espn_api import get_current_team_rosters
         rosters = get_current_team_rosters()
     except Exception as exc:
-        print(f"⚠️ Kart oyunu icin canli kadro alinamadi: {exc}")
+        print(f"Kart oyunu icin canli kadro alinamadi: {exc}")
         return {}
 
     out = {}
@@ -971,7 +971,7 @@ def get_all_players():
         players.append(card)
 
     if duzeltilen:
-        print(f"✓ Kart oyunu: {duzeltilen} oyuncunun takimi canli kadrodan güncellendi")
+        print(f"Kart oyunu: {duzeltilen} oyuncunun takimi canli kadrodan güncellendi")
     return players
 
 

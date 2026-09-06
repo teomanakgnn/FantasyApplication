@@ -399,7 +399,7 @@ def get_nba_season_stats_official(season_year=None, season_type=SEASON_TYPE_REGU
             print(f"   · {candidate} sezonu çekilemedi: {exc}")
 
     if not payload:
-        print("❌ Sezon istatistiği bulunamadı.")
+        print("Sezon istatistiği bulunamadı.")
         return pd.DataFrame(columns=_SEASON_STATS_COLUMNS)
 
     athletes = list(payload["athletes"])
@@ -416,7 +416,7 @@ def get_nba_season_stats_official(season_year=None, season_type=SEASON_TYPE_REGU
             print(f"   · sayfa {page} alınamadı: {exc}")
             break
 
-    print(f"✓ {get_season_label(used_season)} sezonu: {len(athletes)} oyuncu")
+    print(f"{get_season_label(used_season)} sezonu: {len(athletes)} oyuncu")
 
     index_map = _build_category_index_map(payload)
     rows = []
@@ -526,7 +526,7 @@ def get_current_team_rosters():
             if result:
                 player_team_map.update(result)
 
-    print(f"✓ Toplam {len(player_team_map)} oyuncu haritalandı.")
+    print(f"Toplam {len(player_team_map)} oyuncu haritalandı.")
     return player_team_map
 # =================================================================
 # FANTASY LEAGUE FONKSİYONLARI - Basitleştirilmiş
@@ -559,7 +559,7 @@ def call_espn_api(league_id: int, views: list = None):
             data = response.json()
             # leagueHistory bir dizi döndürür, en son sezonu al
             if isinstance(data, list) and data:
-                print(f"✓ leagueHistory: {len(data)} sezon bulundu, en yenisi kullanılıyor")
+                print(f"leagueHistory: {len(data)} sezon bulundu, en yenisi kullanılıyor")
                 return data[0]
     except Exception as e:
         print(f"leagueHistory başarısız: {e}")
@@ -579,7 +579,7 @@ def call_espn_api(league_id: int, views: list = None):
             if response.status_code == 200:
                 data = response.json()
                 if 'teams' in data:
-                    print(f"✓ {get_season_label(season)} sezonu - {len(data['teams'])} takım")
+                    print(f"{get_season_label(season)} sezonu - {len(data['teams'])} takım")
                     return data
         except PermissionError:
             raise
@@ -631,7 +631,7 @@ def get_teams(league_id: int, season: int = None) -> Dict:
                 "points_against": record.get('pointsAgainst', 0),
             }
         
-        print(f"✓ Successfully retrieved {len(teams)} teams\n")
+        print(f"Successfully retrieved {len(teams)} teams\n")
         return teams
         
     except PermissionError:
@@ -695,7 +695,7 @@ def get_current_matchups(league_id: int, season: int = None) -> List[Dict]:
                 "away_score": away_data.get('totalPoints', 0)
             })
         
-        print(f"✓ Found {len(matchups)} matchups for week {current_week}")
+        print(f"Found {len(matchups)} matchups for week {current_week}")
         return matchups
         
     except Exception as e:
@@ -737,10 +737,10 @@ def get_active_players_stats(days=None, season_stats=True):
         if start_date > end_date:
             # Sezon henüz başlamadı; bir önceki sezonun verisini göster.
             start_date = get_season_start_date(get_current_season_year() - 1)
-        print(f"📊 Sezon istatistikleri: {start_date:%Y-%m-%d} - {end_date:%Y-%m-%d}")
+        print(f"Sezon istatistikleri: {start_date:%Y-%m-%d} - {end_date:%Y-%m-%d}")
     else:
         start_date = end_date - timedelta(days=days)
-        print(f"📊 Son {days} gün istatistikleri")
+        print(f"Son {days} gün istatistikleri")
 
     # GÜNCEL ROSTER BİLGİSİNİ ÇEK
     current_rosters = get_current_team_rosters()
@@ -900,7 +900,7 @@ def get_active_players_stats(days=None, season_stats=True):
             '3P%': three_pct,
         })
     
-    print(f"✓ {len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
+    print(f"{len(final_list)} aktif oyuncu bulundu (10+ dakika ortalaması)")
 
     if not final_list:
         # Seçilen aralıkta hiç maç yoksa (ör. sezon arası) boş ama

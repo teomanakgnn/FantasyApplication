@@ -169,7 +169,7 @@ def render_mvp_lvp_section(date_range, weights, label):
     }
 
     with col1:
-        st.markdown("### 🏆 Most MVP Appearances")
+        st.markdown("### Most MVP Appearances")
         if not top_df.empty:
             st.dataframe(
                 top_df, 
@@ -181,7 +181,7 @@ def render_mvp_lvp_section(date_range, weights, label):
             st.info("No MVP data available")
 
     with col2:
-        st.markdown("### 💀 Most LVP Appearances")
+        st.markdown("### Most LVP Appearances")
         if not worst_df.empty:
             st.dataframe(
                 worst_df, 

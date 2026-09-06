@@ -106,7 +106,7 @@ class Database:
     def create_session(self, user_id, browser_id=None, ip_address=None, user_agent=None):
         conn = self.get_connection()
         if not conn:
-            print("❌ Database connection failed")
+            print("Database connection failed")
             return None
         try:
             session_token = secrets.token_urlsafe(32)
@@ -125,13 +125,13 @@ class Database:
                 cursor.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s", (user_id,))
                 conn.commit()
                 cursor.close()
-                print(f"✅ Session created for user_id: {user_id}")
+                print(f"Session created for user_id: {user_id}")
                 return {'token': session_token, 'session_id': session_id}
             cursor.close()
             return None
         except Exception as e:
             conn.rollback()
-            print(f"❌ Session create error: {e}")
+            print(f"Session create error: {e}")
             return None
     
     def update_session_fingerprint(self, session_token, fingerprint_hash):
@@ -150,7 +150,7 @@ class Database:
             return True
         except Exception as e:
             conn.rollback()
-            print(f"❌ Update fingerprint error: {e}")
+            print(f"Update fingerprint error: {e}")
             return False
         
     def validate_session_by_fingerprint(self, fingerprint):
@@ -228,7 +228,7 @@ class Database:
             cursor.close()
             return dict(result) if result else None
         except Exception as e:
-            print(f"❌ Session validation error: {e}")
+            print(f"Session validation error: {e}")
             return None
 
     def validate_session_by_id(self, session_id, browser_id=None):
@@ -259,7 +259,7 @@ class Database:
             cursor.close()
             return dict(result) if result else None
         except Exception as e:
-            print(f"❌ Session ID validation error: {e}")
+            print(f"Session ID validation error: {e}")
             return None
 
     def logout_session(self, session_token, browser_id=None):
@@ -277,11 +277,11 @@ class Database:
                 cursor.execute("DELETE FROM sessions WHERE session_token = %s", (session_token,))
             conn.commit()
             cursor.close()
-            print("✅ Session logged out")
+            print("Session logged out")
             return True
         except Exception as e:
             conn.rollback()
-            print(f"❌ Logout error: {e}")
+            print(f"Logout error: {e}")
             return False
 
     def logout_session_by_id(self, session_id, browser_id=None):
@@ -302,7 +302,7 @@ class Database:
             return True
         except Exception as e:
             conn.rollback()
-            print(f"❌ Logout error: {e}")
+            print(f"Logout error: {e}")
             return False
 
     # ==================== USER PREFERENCES ====================
@@ -476,7 +476,7 @@ class Database:
                 }
             return None
         except Exception as e:
-            print(f"❌ Trivia fetch error: {e}")
+            print(f"Trivia fetch error: {e}")
             try: 
                 conn.rollback()
             except: 
@@ -493,7 +493,7 @@ class Database:
             conn.commit()
             return row[0] if row else 0
         except Exception as e:
-            print(f"❌ Get streak error: {e}")
+            print(f"Get streak error: {e}")
             return 0
 
     def mark_user_trivia_played(self, user_id):
@@ -510,7 +510,7 @@ class Database:
             cursor.close()
             return True
         except Exception as e:
-            print(f"❌ Mark trivia error: {e}")
+            print(f"Mark trivia error: {e}")
             try: 
                 conn.rollback()
             except: 
@@ -531,7 +531,7 @@ class Database:
             conn.commit()
             return count > 0
         except Exception as e:
-            print(f"❌ Check trivia error: {e}")
+            print(f"Check trivia error: {e}")
             return False
 
     # ==================== USER ====================
@@ -554,7 +554,7 @@ class Database:
                 return user
             return None
         except Exception as e:
-            print(f"❌ get_user_by_id error: {e}")
+            print(f"get_user_by_id error: {e}")
             return None
 
     # ==================== MOCK DRAFTS ====================
@@ -626,7 +626,7 @@ class Database:
             return row[0] if row else None
         except Exception as e:
             conn.rollback()
-            print(f"❌ save_mock_draft error: {e}")
+            print(f"save_mock_draft error: {e}")
             return None
 
     def list_mock_drafts(self, user_id, limit=25):

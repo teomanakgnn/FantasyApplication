@@ -77,9 +77,9 @@ def aggregate_player_stats(all_game_data, weights):
     # Get current roster info
     try:
         current_rosters = get_current_team_rosters()
-        print(f"✓ Roster info received: {len(current_rosters)} players")
+        print(f"Roster info received: {len(current_rosters)} players")
     except Exception as e:
-        print(f"❌ Roster could not be fetched: {e}")
+        print(f"Roster could not be fetched: {e}")
         current_rosters = {}
     
     # Create normalized roster dictionary
@@ -101,7 +101,7 @@ def aggregate_player_stats(all_game_data, weights):
             'original_name': player_name
         }
     
-    print(f"✓ Normalized roster: {len(normalized_rosters)} players")
+    print(f"Normalized roster: {len(normalized_rosters)} players")
     
     player_totals = {}
     matched_count = 0
@@ -141,7 +141,7 @@ def aggregate_player_stats(all_game_data, weights):
                     try:
                         date_diff = (datetime.now() - pd.to_datetime(game_date)).days
                         if date_diff < 7 and unmatched_count <= 5:
-                            print(f"⚠️ Not found in roster: {raw_name}")
+                            print(f"Not found in roster: {raw_name}")
                     except:
                         pass
             
@@ -249,10 +249,10 @@ def aggregate_player_stats(all_game_data, weights):
     
     # Debug summary
     print(f"\n{'='*60}")
-    print(f"📊 AGGREGATE SUMMARY")
+    print(f"AGGREGATE SUMMARY")
     print(f"{'='*60}")
-    print(f"✓ Total {len(df)} player rows created")
-    print(f"✓ Roster match: {matched_count} records")
+    print(f"Total {len(df)} player rows created")
+    print(f"Roster match: {matched_count} records")
     print(f"{'='*60}\n")
     
     return df
@@ -501,43 +501,43 @@ def show_player_analysis(player_row, weights):
             if score >= 60:
                 return {
                     'rating': 'elite',
-                    'title': '🔥 Historic Performance',
+                    'title': 'Historic Performance',
                     'text': f'{score:.1f} fantasy points is an absolute monster game. Generational performance that wins you the week.'
                 }
             elif score >= 45:
                 return {
                     'rating': 'elite',
-                    'title': '⭐ Elite Production',
+                    'title': 'Elite Production',
                     'text': f'{score:.1f} fantasy points is elite-tier output. When healthy and involved, this player can carry your team.'
                 }
             elif score >= 35:
                 return {
                     'rating': 'good',
-                    'title': '✅ Strong Performance',
+                    'title': 'Strong Performance',
                     'text': f'{score:.1f} fantasy points is exactly what you want from a starter. Consistent production at this level makes them reliable.'
                 }
             elif score >= 25:
                 return {
                     'rating': 'good',
-                    'title': '👍 Solid Contributor',
+                    'title': 'Solid Contributor',
                     'text': f'{score:.1f} fantasy points is solid production. Dependable role player who provides steady value.'
                 }
             elif score >= 18:
                 return {
                     'rating': 'neutral',
-                    'title': '⚖️ Decent Output',
+                    'title': 'Decent Output',
                     'text': f'{score:.1f} fantasy points is acceptable. Streaming option or flex play in deeper leagues.'
                 }
             elif score >= 10:
                 return {
                     'rating': 'warning',
-                    'title': '⚠️ Below Expectations',
+                    'title': 'Below Expectations',
                     'text': f'{score:.1f} fantasy points is underwhelming. Only valuable if this is an off-game and they typically produce more.'
                 }
             else:
                 return {
                     'rating': 'poor',
-                    'title': '❌ Poor Output',
+                    'title': 'Poor Output',
                     'text': f'Only {score:.1f} fantasy points. Not rosterable unless circumstances drastically change.'
                 }
         else:
@@ -545,43 +545,43 @@ def show_player_analysis(player_row, weights):
             if score >= 50:
                 return {
                     'rating': 'elite',
-                    'title': '🏆 MVP Caliber',
+                    'title': 'MVP Caliber',
                     'text': f'{score:.1f} FP per game over {games} games is MVP-level production. First round talent and centerpiece of any fantasy team.'
                 }
             elif score >= 40:
                 return {
                     'rating': 'elite',
-                    'title': '🌟 All-Star Level',
+                    'title': 'All-Star Level',
                     'text': f'{score:.1f} FP per game is elite consistency. Top-20 player who delivers night in and night out.'
                 }
             elif score >= 32:
                 return {
                     'rating': 'good',
-                    'title': '💪 High-End Starter',
+                    'title': 'High-End Starter',
                     'text': f'{score:.1f} FP average over {games} games is strong production. Reliable starter who rarely disappoints.'
                 }
             elif score >= 25:
                 return {
                     'rating': 'good',
-                    'title': '✅ Solid Starter',
+                    'title': 'Solid Starter',
                     'text': f'{score:.1f} FP per game shows consistent value. Safe option who provides a stable floor with upside.'
                 }
             elif score >= 18:
                 return {
                     'rating': 'neutral',
-                    'title': '🔄 Flex/Streamer',
+                    'title': 'Flex/Streamer',
                     'text': f'{score:.1f} FP average is useful in 12+ team leagues. Good for streaming or as injury replacement.'
                 }
             elif score >= 12:
                 return {
                     'rating': 'warning',
-                    'title': '📉 Deep League Only',
+                    'title': 'Deep League Only',
                     'text': f'{score:.1f} FP average has limited appeal. Only relevant in 14+ team formats or desperate times.'
                 }
             else:
                 return {
                     'rating': 'poor',
-                    'title': '🚫 Not Fantasy Relevant',
+                    'title': 'Not Fantasy Relevant',
                     'text': f'{score:.1f} FP per game is not enough. Waiver wire fodder in all but the deepest leagues.'
                 }
 
@@ -735,7 +735,7 @@ def show_player_analysis(player_row, weights):
         """, unsafe_allow_html=True)
         
         if not is_single_game:
-            st.caption(f"📊 Stats averaged over {games} games")
+            st.caption(f"Stats averaged over {games} games")
     
     with header_col3:
         st.markdown(f"""
@@ -776,7 +776,7 @@ def show_player_analysis(player_row, weights):
     col_left, col_right = st.columns([1.4, 1])
     
     with col_left:
-        st.markdown("### 📊 Performance Analysis")
+        st.markdown("### Performance Analysis")
         
         insights = generate_performance_analysis()
         
@@ -793,7 +793,7 @@ def show_player_analysis(player_row, weights):
             st.info("Standard performance - no significant highlights.")
         
         # INJURY CONTEXT
-        st.markdown("### 🩺 Team Context")
+        st.markdown("### Team Context")
         all_injuries = get_injuries()
         team_injuries = [
             inj for inj in all_injuries 
@@ -812,7 +812,7 @@ def show_player_analysis(player_row, weights):
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.success("✅ Team at full strength - role is established")
+            st.success("Team at full strength; role is established.")
 
     with col_right:
         st.markdown("###  Box Score")
@@ -839,7 +839,7 @@ def show_player_analysis(player_row, weights):
         
         st.markdown("---")
         
-        st.markdown("### 🔮 Fantasy Outlook")
+        st.markdown("### Fantasy Outlook")
         
         outlook = generate_fantasy_outlook()
         
@@ -951,10 +951,10 @@ def render_tables(today_df, weights, default_period="Today"):
                     # Update TEAM and PLAYER_ID columns at once
                     season_df[['TEAM', 'PLAYER_ID']] = season_df.apply(update_player_info, axis=1)
                     
-                    print(f"✓ {len(season_df)} player team and ID info updated")
+                    print(f"{len(season_df)} player team and ID info updated")
                     
                 except Exception as e:
-                    print(f"⚠️ Error in roster matching: {e}")
+                    print(f"Error in roster matching: {e}")
                     if 'TEAM' not in season_df.columns:
                         season_df['TEAM'] = 'UNK'
                     season_df['PLAYER_ID'] = None # Pass empty on error
@@ -1110,7 +1110,7 @@ def render_tables(today_df, weights, default_period="Today"):
     }
 
     st.markdown("---")
-    st.caption("💡 **Tip:** Click on a player row to see **Context & Injury Analysis**.")
+    st.caption("Click a player row for context and injury analysis.")
 
     # --- 1. TOP 10 PERFORMANCES ---
     st.markdown(f"## Top 10 Performances ({current_period})")

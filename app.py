@@ -1,5 +1,5 @@
 # EN BAŞTA: konsol kodlamasını UTF-8'e sabitle. Windows'un cp1254 kod
-# sayfasında log satırlarındaki ✓/❌/📊 karakterleri UnicodeEncodeError
+# sayfasında log satırlarındaki //karakterleri UnicodeEncodeError
 # fırlatıp sayfayı komple düşürüyordu.
 from utils.console import configure_console_encoding
 configure_console_encoding()
@@ -27,7 +27,7 @@ from services.database import db
 st.set_page_config(
     page_title="HoopLife NBA",
     layout="wide",
-    page_icon="🏀",
+    page_icon="HoopLifeNBA_logo.png",
     # "auto": dar ekranlarda sidebar kapali baslar. "expanded" ile telefonda
     # sidebar ekranin %82'sini kapatiyor ve kullanici her acilista kapatmak
     # zorunda kaliyordu.
@@ -803,7 +803,7 @@ components.html("""
                 display:flex;align-items:center;justify-content:center;
                 box-shadow:5px 0 15px rgba(0,0,0,0.4);
                 transition:all 0.25s cubic-bezier(0.4,0,0.2,1);`;
-            trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;filter:drop-shadow(0 0 5px rgba(255,75,75,0.3));">🏀</div>';
+            trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;filter:drop-shadow(0 0 5px rgba(255,75,75,0.3));">&rsaquo;</div>';
             trigger.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggleSidebar(); });
             trigger.addEventListener('mouseenter', () => {
                 if (!isTransitioning && getSidebarState()?.isClosed) {
@@ -848,7 +848,7 @@ components.html("""
                     background:'#1a1c24', border:'2px solid #ff4b4b', borderLeft:'none',
                     borderRadius:'0 15px 15px 0'
                 });
-                trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;">🏀</div>';
+                trigger.innerHTML = '<div id="hl-icon" style="font-size:26px;transition:transform 0.4s ease;">&rsaquo;</div>';
                 trigger.onmouseenter = () => { trigger.style.width='60px'; trigger.style.background='#ff4b4b'; };
                 trigger.onmouseleave = () => { trigger.style.width='45px'; trigger.style.background='#1a1c24'; };
             }
@@ -1087,13 +1087,12 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
     st.session_state.active_dialog = 'trivia'
 
     if st.session_state.get('trivia_success_state', False):
-        st.balloons()
-        st.success("Correct Answer!")
+        st.success("Correct.")
         st.info(f"{question.get('explanation', '')}")
         if user_id:
             new_streak = db.get_user_streak(user_id)
-            st.markdown(f"### Current Streak: {new_streak} days!")
-        st.caption("See you tomorrow! 👋")
+            st.markdown(f"### Current streak: {new_streak} days")
+        st.caption("See you tomorrow.")
         if st.button("Close", type="primary", key="close_success"):
             st.session_state.pop('trivia_success_state', None)
             st.session_state.pop('trivia_force_open', None)
@@ -1107,8 +1106,8 @@ def show_trivia_modal(question, user_id=None, current_streak=0):
         if error_info.get('explanation'):
             st.info(f"{error_info.get('explanation')}")
         if user_id:
-            st.warning("💔 Your streak has been reset.")
-        st.caption("Better luck tomorrow! 👋")
+            st.warning("Your streak has been reset.")
+        st.caption("Come back tomorrow to start a new streak.")
         if st.button("Close", type="primary", key="close_error"):
             st.session_state.pop('trivia_error_state', None)
             st.session_state.pop('trivia_error_info', None)
@@ -1231,7 +1230,7 @@ with st.sidebar:
     st.markdown("---")
 
     # Mock Draft - herkese açık
-    if st.button("🏀 Mock Draft", width='stretch', type="secondary", key="sidebar_mock_draft_btn"):
+    if st.button("Mock Draft", width='stretch', type="secondary", key="sidebar_mock_draft_btn"):
         st.session_state.page = "mock_draft"
         st.rerun()
 
@@ -1268,8 +1267,8 @@ with st.sidebar:
         st.markdown("""
             <div style='background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);
                         padding:1rem;border-radius:10px;margin-bottom:1rem;text-align:center;'>
-                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>Get More Features</div>
-                <div style='color:rgba(255,255,255,0.9);font-size:0.85rem;'>Login to unlock PRO features</div>
+                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>Pro account</div>
+                <div style='color:rgba(255,255,255,0.9);font-size:0.85rem;'>Log in to use Pro features</div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -1332,7 +1331,7 @@ if st.session_state.page == "watchlist":
                 st.session_state.page = "login"
                 st.rerun()
         with col2:
-            if st.button("⬅️ Back to Home", width='stretch'):
+            if st.button("Back to Home", width='stretch'):
                 st.session_state.page = "home"
                 st.rerun()
         st.stop()
@@ -1439,16 +1438,15 @@ def show_boxscore_dialog(game_info):
             with col2:
                 st.write("")
                 st.write("")
-                if st.button("➕ Add Selected", disabled=not selected_players):
+                if st.button("Add Selected", disabled=not selected_players):
                     added = sum(1 for p in selected_players if db.add_to_watchlist(user['id'], p, f"Added from {game_info.get('away_team')} vs {game_info.get('home_team')}"))
                     if added:
-                        st.success(f"Added {added} player(s)!")
-                        st.balloons()
+                        st.success(f"Added {added} player(s).")
         else:
-            st.info("All players already in your watchlist!")
+            st.info("All selected players are already in your watchlist.")
         st.markdown("---")
     elif not is_pro:
-        st.info("Login with a PRO account to add players to your watchlist!")
+        st.info("Log in with a Pro account to add players to your watchlist.")
 
     if "TEAM" in df.columns:
         teams = df["TEAM"].unique()
@@ -1462,8 +1460,8 @@ def show_boxscore_dialog(game_info):
                     if is_pro and user:
                         wl = db.get_watchlist(user['id'])
                         wl_names = [w['player_name'] for w in wl]
-                        team_df['⭐'] = team_df['PLAYER'].apply(lambda x: '⭐' if x in wl_names else '')
-                        cols_show = ['⭐'] + final_cols
+                        team_df['•'] = team_df['PLAYER'].apply(lambda x: '•' if x in wl_names else '')
+                        cols_show = ['•'] + final_cols
                     else:
                         cols_show = final_cols
                     st.dataframe(team_df[cols_show], width='stretch', hide_index=True, height=400)
@@ -1481,7 +1479,7 @@ def show_boxscore_dialog(game_info):
 
 
 # ==================== 14. PLAYOFF BRACKET DIALOG ====================
-@st.dialog("🏆 NBA Playoff Bracket Predictions", width="large")
+@st.dialog("NBA Playoff Bracket Predictions", width="large")
 def show_playoff_bracket_dialog():
     st.session_state.active_dialog = 'playoff_bracket'
 
@@ -1683,8 +1681,8 @@ def show_playoff_bracket_dialog():
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown(f'<div class="bracket-title">🏆 {bracket_year} NBA Playoff Bracket</div>', unsafe_allow_html=True)
-    st.markdown('<div class="bracket-subtitle">Make your predictions — download or share with friends!</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="bracket-title">{bracket_year} NBA Playoff Bracket</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bracket-subtitle">Pick every round, then download or share your bracket.</div>', unsafe_allow_html=True)
 
     shared_param = st.query_params.get("bracket", "")
 
@@ -1835,8 +1833,8 @@ body {{ background: transparent; font-family: 'Segoe UI', system-ui, sans-serif;
     <div id="west-section" class="conf-section"></div>
   </div>
   <div class="btn-row">
-    <button class="action-btn btn-download" onclick="downloadBracket()">⬇ Download Image</button>
-    <button class="action-btn btn-share" onclick="shareBracket()">🔗 Share Link</button>
+    <button class="action-btn btn-download" onclick="downloadBracket()">Download Image</button>
+    <button class="action-btn btn-share" onclick="shareBracket()">Share Link</button>
     <button class="action-btn btn-reset" onclick="resetBracket()">↺ Reset</button>
   </div>
   <div id="share-url" class="share-url" onclick="copyUrl()"></div>
@@ -1881,7 +1879,7 @@ function loadShared() {{
     const parsed = JSON.parse(decoded);
     if (parsed && parsed.east && parsed.west) {{
       state = parsed;
-      showToast('📋 Shared bracket loaded!');
+      showToast('Shared bracket loaded!');
     }}
   }} catch(e) {{}}
 }}
@@ -2009,16 +2007,16 @@ function renderFinals() {{
       if(!t) return '';
       const cls = w === t ? 'winner' : (w && w !== t ? 'loser' : '');
       const conf = isEast ? 'east_finals' : 'west_finals';
-      return `<div class="team-pick ${{cls}}" onclick="pickWinner('',3,0,'${{t.replace(/'/g,"\\'")}}');event.stopPropagation();"><div class="seed">🏆</div><span>${{t}}</span></div>`;
+      return `<div class="team-pick ${{cls}}" onclick="pickWinner('',3,0,'${{t.replace(/'/g,"\\'")}}');event.stopPropagation();"><div class="seed"></div><span>${{t}}</span></div>`;
     }};
     champSection = `
-      <div class="round-header">🏀 NBA Finals</div>
+      <div class="round-header">NBA Finals</div>
       <div class="matchup">${{r1(ef,true)}}<div class="div-line"></div>${{r1(wf,false)}}</div>
     `;
     if (champ) {{
       champSection += `
         <div class="champion-box" style="margin-top:10px">
-          <div class="champion-label">🏆 Your NBA Champion</div>
+          <div class="champion-label">Your NBA Champion</div>
           <div class="champion-name">${{champ}}</div>
         </div>
       `;
@@ -2052,7 +2050,7 @@ function resetBracket() {{
 
 function downloadBracket() {{
   const el = document.getElementById('capture-area');
-  showToast('⏳ Preparing image...');
+  showToast('Preparing image...');
   html2canvas(el, {{
     scale: 2.5,
     backgroundColor: '#0f0f1a',
@@ -2063,8 +2061,8 @@ function downloadBracket() {{
     link.download = 'my-nba-bracket-{bracket_year}.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
-    showToast('✅ Image downloaded!');
-  }}).catch(() => showToast('❌ Download failed. Try again.'));
+    showToast('Image downloaded!');
+  }}).catch(() => showToast('Download failed. Try again.'));
 }}
 
 function shareBracket() {{
@@ -2077,13 +2075,13 @@ function shareBracket() {{
   box.style.display = 'block';
   hint.style.display = 'block';
   copyToClipboard(url);
-  showToast('🔗 Link copied to clipboard!');
+  showToast('Link copied to clipboard!');
 }}
 
 function copyUrl() {{
   const url = document.getElementById('share-url').textContent;
   copyToClipboard(url);
-  showToast('✅ Copied to clipboard!');
+  showToast('Copied to clipboard!');
 }}
 
 function copyToClipboard(text) {{
@@ -2167,7 +2165,7 @@ def home_page():
         season_start = get_season_start_date()
         days_to_tipoff = (season_start.date() - datetime.now().date()).days
         if days_to_tipoff > 0:
-            st.info(f"🏀 {get_season_label()} season tips off in {days_to_tipoff} days "
+            st.info(f"{get_season_label()} season tips off in {days_to_tipoff} days "
                     f"({season_start.strftime('%B %d, %Y')}). Showing the most recent "
                     f"completed games — meanwhile, try the Mock Draft to prep.")
 
@@ -2182,7 +2180,7 @@ def home_page():
 </div>
 """, height=0)
         if st.button(
-            "🏆  NBA Playoff Bracket Predictions",
+            " NBA Playoff Bracket Predictions",
             width='stretch',
             type="primary",
             key="open_bracket_btn",
@@ -2233,7 +2231,7 @@ def home_page():
                                 <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">
                                     <span class="excitement-badge" style="background-color:{score_color};color:white;
                                         padding:3px 9px;border-radius:10px;font-weight:bold;font-size:0.9em;">
-                                        ★ {game_score}
+                                        {game_score}
                                     </span>
                                 </div>
                             """, unsafe_allow_html=True)
@@ -2257,7 +2255,7 @@ def home_page():
                                                 style='font-size:1.25em;font-weight:800;line-height:2;white-space:nowrap;'>
                                                 {g.get('away_score')}&nbsp;-&nbsp;{g.get('home_score')}
                                             </div>
-                                            <div class="spoiler-icon" id="icon_{game_id}">🔒</div>
+                                            <div class="spoiler-icon" id="icon_{game_id}">SHOW</div>
                                         </div>
                                     </div>""", unsafe_allow_html=True)
                             else:
@@ -2317,15 +2315,15 @@ def home_page():
                     with col2:
                         st.write("")
                         st.write("")
-                        if st.button("➕ Add", disabled=not quick_add_players, key="quick_add_btn"):
+                        if st.button("Add", disabled=not quick_add_players, key="quick_add_btn"):
                             for player in quick_add_players:
                                 db.add_to_watchlist(user['id'], player, f"Added from Daily Stats - {resolved_date.strftime('%Y-%m-%d')}")
-                            st.success(f"Added {len(quick_add_players)} player(s)!")
+                            st.success(f"Added {len(quick_add_players)} player(s).")
                             st.rerun()
                 else:
-                    st.info("All players are already in your watchlist!")
+                    st.info("All selected players are already in your watchlist.")
         elif not is_pro:
-            st.info("**PRO Feature:** Login with a PRO account to add players to your watchlist!")
+            st.info("Pro feature. Log in with a Pro account to add players to your watchlist.")
 
         render_tables(df, weights=weights)
     else:

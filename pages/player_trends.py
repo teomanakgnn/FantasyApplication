@@ -309,7 +309,7 @@ components.html("""
                 will-change: transform, left, top, width, height, background;
             `;
             
-            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">🏀</div>`;
+            trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 5px rgba(255, 75, 75, 0.3));">&rsaquo;</div>`;
             
             trigger.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -406,7 +406,7 @@ components.html("""
                     backdropFilter: 'none'
                 });
                 
-                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">🏀</div>`;
+                trigger.innerHTML = `<div id="hl-icon" style="font-size: 26px; transition: transform 0.4s ease; filter: drop-shadow(0 0 8px rgba(255, 75, 75, 0.5));">&rsaquo;</div>`;
                 
                 trigger.onmouseenter = () => {
                     if (!isTransitioning) {
@@ -591,7 +591,7 @@ def fetch_rss_rumors() -> List[Dict]:
             try:
                 feed = feedparser.parse(rss_source['url'])
                 if getattr(feed, 'bozo', 0) and not feed.entries:
-                    print(f"⚠️ RSS okunamadı: {rss_source['source']}")
+                    print(f"RSS okunamadı: {rss_source['source']}")
                     continue
 
                 for entry in feed.entries[:8]:
@@ -1134,22 +1134,22 @@ def render_player_trends_page():
             rumor = filtered_rumors[idx]
             
             likelihood_config = {
-                'High': {'emoji': '🟢', 'badge': 'success'},
-                'Medium-High': {'emoji': '🟡', 'badge': 'warning'},
-                'Medium': {'emoji': '🟠', 'badge': 'warning'},
-                'Low': {'emoji': '🔴', 'badge': 'error'}
+                'High': {'badge': 'success'},
+                'Medium-High': {'badge': 'warning'},
+                'Medium': {'badge': 'warning'},
+                'Low': {'badge': 'error'}
             }
             
-            config = likelihood_config.get(rumor['likelihood'], {'emoji': '⚪', 'badge': 'info'})
+            config = likelihood_config.get(rumor['likelihood'], {'badge': 'info'})
             
             if rumor['days_ago'] == 0:
-                time_badge = "🆕 Today"
+                time_badge = "Today"
             elif rumor['days_ago'] == 1:
-                time_badge = "🕐 Yesterday"
+                time_badge = "Yesterday"
             elif rumor['days_ago'] < 7:
-                time_badge = f"🕐 {rumor['days_ago']} days ago"
+                time_badge = f"{rumor['days_ago']} days ago"
             else:
-                time_badge = f"📅 {rumor['date']}"
+                time_badge = f"{rumor['date']}"
             
             with st.container():
                 title_col, badge_col = st.columns([4, 1])
@@ -1158,7 +1158,7 @@ def render_player_trends_page():
                     st.markdown(f"### {idx+1}. {rumor['title']}")
                 
                 with badge_col:
-                    st.markdown(f"{config['emoji']} **{rumor['likelihood']}**")
+                    st.markdown(f"**{rumor['likelihood']}**")
                 
                 info_col1, info_col2 = st.columns(2)
                 
@@ -1189,22 +1189,22 @@ def render_player_trends_page():
                     rumor = filtered_rumors[idx]
                     
                     likelihood_config = {
-                        'High': {'emoji': '🟢', 'badge': 'success'},
-                        'Medium-High': {'emoji': '🟡', 'badge': 'warning'},
-                        'Medium': {'emoji': '🟠', 'badge': 'warning'},
-                        'Low': {'emoji': '🔴', 'badge': 'error'}
+                        'High': {'badge': 'success'},
+                        'Medium-High': {'badge': 'warning'},
+                        'Medium': {'badge': 'warning'},
+                        'Low': {'badge': 'error'}
                     }
                     
-                    config = likelihood_config.get(rumor['likelihood'], {'emoji': '⚪', 'badge': 'info'})
+                    config = likelihood_config.get(rumor['likelihood'], {'badge': 'info'})
                     
                     if rumor['days_ago'] == 0:
-                        time_badge = "🆕 Today"
+                        time_badge = "Today"
                     elif rumor['days_ago'] == 1:
-                        time_badge = "🕐 Yesterday"
+                        time_badge = "Yesterday"
                     elif rumor['days_ago'] < 7:
-                        time_badge = f"🕐 {rumor['days_ago']} days ago"
+                        time_badge = f"{rumor['days_ago']} days ago"
                     else:
-                        time_badge = f"📅 {rumor['date']}"
+                        time_badge = f"{rumor['date']}"
                     
                     with st.container():
                         title_col, badge_col = st.columns([4, 1])
@@ -1213,7 +1213,7 @@ def render_player_trends_page():
                             st.markdown(f"### {idx+1}. {rumor['title']}")
                         
                         with badge_col:
-                            st.markdown(f"{config['emoji']} **{rumor['likelihood']}**")
+                            st.markdown(f"**{rumor['likelihood']}**")
                         
                         info_col1, info_col2 = st.columns(2)
                         

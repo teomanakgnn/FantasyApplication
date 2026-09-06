@@ -108,7 +108,7 @@ def _fetch_espn_calendar():
         if current:
             return _season_dict(current, "espn:statistics")
     except Exception as exc:
-        print(f"⚠️ İstatistik takvimi alınamadı ({exc}); scoreboard deneniyor.")
+        print(f"İstatistik takvimi alınamadı ({exc}); scoreboard deneniyor.")
 
     url = f"https://{SITE_API_HOST}/apis/site/v2/sports/basketball/nba/scoreboard"
     resp = espn_get(url, timeout=10)
@@ -169,7 +169,7 @@ def get_season_info(force_refresh=False):
     try:
         info = _fetch_espn_calendar()
     except Exception as exc:  # ağ/parse hatası -> takvime düş
-        print(f"⚠️ Sezon takvimi ESPN'den alınamadı ({exc}); tahmine düşülüyor.")
+        print(f"Sezon takvimi ESPN'den alınamadı ({exc}); tahmine düşülüyor.")
         info = _fallback_calendar(now)
 
     _SEASON_CACHE["data"] = info

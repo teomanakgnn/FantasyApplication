@@ -301,7 +301,7 @@ def _pos_tag(pos):
 def _render_setup(board):
     st.markdown(f"""
         <div class="draft-hero">
-            <h1>🏀 Mock Draft Simülatörü</h1>
+            <h1>Mock Draft Simülatörü</h1>
             <p>{get_season_label()} sezonu ESPN draft sıralamasıyla — gerçek draftından
             önce istediğin kadar prova yap.</p>
         </div>
@@ -311,7 +311,7 @@ def _render_setup(board):
         st.error("Draft havuzu şu anda alınamadı — ESPN'in fantasy API'si "
                  "ara ara bağlantıyı kesiyor.")
         st.caption("Genelde tek denemede düzeliyor.")
-        if st.button("🔄 Tekrar dene", type="primary", width='stretch',
+        if st.button("Tekrar dene", type="primary", width='stretch',
                      key="draft_pool_retry"):
             get_draft_board.clear()
             fetch_draft_rankings.clear()
@@ -381,7 +381,7 @@ def _render_setup(board):
         return
 
     st.markdown("")
-    if st.button("🚀 Draftı Başlat", type="primary", width='stretch',
+    if st.button("Draftı Başlat", type="primary", width='stretch',
                  key="draft_start_btn"):
         state = create_draft(
             board, team_count=int(team_count), rounds=int(rounds),
@@ -415,7 +415,7 @@ def _render_saved_drafts(board):
     for row in saved:
         c1, c2, c3, c4 = st.columns([4, 2, 1, 1])
         with c1:
-            status = "✅ Tamamlandı" if row["complete"] else "⏳ Devam ediyor"
+            status = "Tamamlandı" if row["complete"] else "Devam ediyor"
             st.markdown(f"**{row['name']}**  \n"
                         f"<span style='font-size:0.86rem;color:#888'>"
                         f"{row['format'].title()} · {row['team_count']} takım · "
@@ -553,7 +553,7 @@ def _advance_ai(state):
         with placeholder.container():
             st.markdown(_feed_html(state, fresh_overalls=fresh), unsafe_allow_html=True)
         price = f" (${entry['price']})" if entry["price"] is not None else ""
-        status.caption(f"🟢 {entry['team']} → **{entry['player']}**{price}")
+        status.caption(f"{entry['team']} → **{entry['player']}**{price}")
         time.sleep(0.32)
 
     placeholder.empty()
@@ -709,7 +709,7 @@ def _pool_dataframe(state, players, needs):
         rows.append({
             "_id": p["id"],
             "": get_headshot_url(p["id"]),
-            "İHT": "⭐" if fills else "",
+            "İHT": "•" if fills else "",
             "Oyuncu": p["name"],
             "Poz": "/".join(p["positions"]),
             "Takım": p["team"],
@@ -745,7 +745,7 @@ def _render_quick_picks(state, filtered, needs, count=5):
     cols = st.columns(len(top))
     for col, player in zip(cols, top):
         positions = set(player.get("positions") or [player["pos"]])
-        star = "⭐ " if any(positions & SLOT_ELIGIBILITY.get(s, set())
+        star = "• " if any(positions & SLOT_ELIGIBILITY.get(s, set())
                            for s in needs
                            if s in ("PG", "SG", "SF", "PF", "C", "G", "F")) else ""
         # Uzun soyadlar butonu iki satıra bölüp yükseklikleri bozuyor.
@@ -847,7 +847,7 @@ def _render_pool(state):
         key=table_key,
         column_config={
             "": st.column_config.ImageColumn("", width="small"),
-            "İHT": st.column_config.TextColumn("★", width="small",
+            "İHT": st.column_config.TextColumn("•", width="small",
                                                help="Kadrondaki açık pozisyona uyuyor"),
             "Oyuncu": st.column_config.TextColumn("Oyuncu", width="medium"),
             "ADP": st.column_config.NumberColumn("ADP", format="%d", width="small"),
@@ -856,7 +856,7 @@ def _render_pool(state):
         },
     )
 
-    st.caption(f"{len(filtered)} oyuncu · ★ kadrondaki açık pozisyona uyanları gösterir · "
+    st.caption(f"{len(filtered)} oyuncu · • kadrondaki açık pozisyona uyanları gösterir · "
                f"seçmek için satıra tıkla")
 
     rows = (event.selection.rows if event and getattr(event, "selection", None) else [])
@@ -900,11 +900,11 @@ def _render_selected_player(state, player):
         return
 
     if state["format"] == "auction":
-        if st.button(f"🔨 {player['name']} için açık artırma başlat", type="primary",
+        if st.button(f"{player['name']} için açık artırma başlat", type="primary",
                      width='stretch', key="confirm_nominate"):
             _commit_player(state, player)
     else:
-        if st.button(f"✅ {player['name']} oyuncusunu seç", type="primary",
+        if st.button(f"{player['name']} oyuncusunu seç", type="primary",
                      width='stretch', key="confirm_pick"):
             _commit_player(state, player)
 
@@ -1028,7 +1028,7 @@ def _render_results(state):
     user = user_team(state)
     my_grade = grades.get(user["slot"], {}) if user else {}
 
-    st.success(f"Draft tamamlandı! Takımın **{my_grade.get('grade', '-')}** aldı "
+    st.success(f"Draft tamamlandı. Takımın **{my_grade.get('grade', '-')}** aldı "
                f"— {len(state['teams'])} takım arasında **{my_grade.get('rank', '-')}.** sırada.")
 
     rows = []
@@ -1065,7 +1065,7 @@ def _render_save(state):
         name = st.text_input("Draft adı", value=default_name, key="draft_save_name",
                              label_visibility="collapsed")
     with c2:
-        if st.button("💾 Kaydet", type="primary", width='stretch', key="draft_save_btn"):
+        if st.button("Kaydet", type="primary", width='stretch', key="draft_save_btn"):
             db.ensure_draft_table()
             draft_id = db.save_mock_draft(
                 user["id"], name or default_name, serialize(state),
@@ -1117,7 +1117,7 @@ def render_mock_draft_page():
         opp = "yapay zekâ" if state["opponent_mode"] == "ai" else "manuel"
         st.markdown(f"""
             <div class="draft-hero">
-                <h1>🏀 Mock Draft — {mode}</h1>
+                <h1>Mock Draft — {mode}</h1>
                 <p>{state['team_count']} takım · {state['rounds']} tur · {opp} rakipler
                    · {get_season_label()} sıralaması</p>
             </div>
@@ -1155,7 +1155,7 @@ def render_mock_draft_page():
         _render_save(state)
         st.markdown("---")
         tab_board, tab_teams, tab_log = st.tabs(
-            ["📋 Draft Board", "Takımlar", "Akış"])
+            ["Draft Board", "Takımlar", "Akış"])
         with tab_board:
             _render_draft_board(state)
         with tab_teams:
@@ -1184,7 +1184,7 @@ def render_mock_draft_page():
             _render_all_teams(state)
 
     st.markdown("---")
-    tab_board, tab_log, tab_save = st.tabs(["📋 Draft Board", "Tüm seçimler", "Kaydet"])
+    tab_board, tab_log, tab_save = st.tabs(["Draft Board", "Tüm seçimler", "Kaydet"])
     with tab_board:
         _render_draft_board(state)
     with tab_log:

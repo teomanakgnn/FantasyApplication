@@ -78,14 +78,14 @@ class YahooFantasyService:
             
         headers = {'Accept': 'application/json'}
         
-        print(f"📡 Requesting: {url}") # Terminalde URL'i görmek için
+        print(f"Requesting: {url}") # Terminalde URL'i görmek için
         
         response = self.oauth.get(url, headers=headers)
         
         # Eğer hata varsa (400, 401, 500 vs.)
         if response.status_code != 200:
-            print(f"❌ API Error Status: {response.status_code}")
-            print(f"❌ API Error Body: {response.text}")
+            print(f"API Error Status: {response.status_code}")
+            print(f"API Error Body: {response.text}")
             
             # Token süresi dolmuş olabilir
             if response.status_code == 401:
@@ -97,7 +97,7 @@ class YahooFantasyService:
         try:
             return response.json()
         except json.JSONDecodeError:
-            print("❌ JSON Decode Error. Raw Response:")
+            print("JSON Decode Error. Raw Response:")
             print(response.text)
             raise Exception("Yahoo API JSON döndürmedi. Terminali kontrol edin.")
     
@@ -145,7 +145,7 @@ class YahooFantasyService:
             standings_wrapper = next((x for x in league_data if isinstance(x, dict) and 'standings' in x), None)
             
             if not standings_wrapper:
-                print("❌ Standings verisi JSON içinde bulunamadı.")
+                print("Standings verisi JSON içinde bulunamadı.")
                 return pd.DataFrame()
 
             standings = standings_wrapper['standings'][0]['teams']
@@ -163,7 +163,7 @@ class YahooFantasyService:
                 stats_payload = next((item for item in team_payload if isinstance(item, dict) and 'team_standings' in item), None)
                 
                 if not stats_payload:
-                    print(f"⚠️ {key} id'li takım için istatistik bulunamadı.")
+                    print(f"{key} id'li takım için istatistik bulunamadı.")
                     continue
 
                 ts = stats_payload['team_standings']
@@ -195,7 +195,7 @@ class YahooFantasyService:
                 })
                 
         except Exception as e:
-            print(f"❌ Error parsing standings: {e}")
+            print(f"Error parsing standings: {e}")
             # Hata ayıklama için ham veriyi bas (terminalden kontrol edebilirsin)
             import json
             # print(json.dumps(data, indent=2))
@@ -218,7 +218,7 @@ class YahooFantasyService:
             scoreboard_wrapper = next((x for x in league_data if isinstance(x, dict) and 'scoreboard' in x), None)
             
             if not scoreboard_wrapper or 'matchups' not in scoreboard_wrapper['scoreboard']['0']:
-                print("❌ Matchups verisi bulunamadı veya hafta henüz başlamadı.")
+                print("Matchups verisi bulunamadı veya hafta henüz başlamadı.")
                 return []
 
             scoreboard = scoreboard_wrapper['scoreboard']['0']['matchups']
@@ -279,7 +279,7 @@ class YahooFantasyService:
                 })
                 
         except Exception as e:
-            print(f"❌ Error parsing matchups: {e}")
+            print(f"Error parsing matchups: {e}")
             # Hata durumunda yapıyı görmek için açabilirsin:
             # import json
             # print(json.dumps(data, indent=2))
@@ -405,7 +405,7 @@ class YahooFantasyService:
             teams_wrapper = next((x for x in league_data if isinstance(x, dict) and 'teams' in x), None)
             
             if not teams_wrapper:
-                print("❌ API Yanıtında 'teams' verisi bulunamadı.")
+                print("API Yanıtında 'teams' verisi bulunamadı.")
                 return {}
             
             league_teams = teams_wrapper['teams']
@@ -508,7 +508,7 @@ class YahooFantasyService:
             players_wrapper_parent = next((item for item in league_data if isinstance(item, dict) and 'players' in item), None)
             
             if not players_wrapper_parent:
-                print("❌ Player data wrapper not found.")
+                print("Player data wrapper not found.")
                 return []
                 
             players_wrapper = players_wrapper_parent['players']
@@ -532,7 +532,7 @@ class YahooFantasyService:
                 
                 if not stats_data:
                     # Bazen doğrudan 'stats' listesi olarak gelebilir mi? Kontrol edelim
-                    print(f"⚠️ No stats found for {full_name}")
+                    print(f"No stats found for {full_name}")
                     parsed_stats = {}
                 else:
                     # Parse fonksiyonuna 'player_stats' wrapper'ını gönder

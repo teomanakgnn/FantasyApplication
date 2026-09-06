@@ -50,7 +50,7 @@ def get_pro_team_map(season_year=None):
         teams = (resp.json().get("settings") or {}).get("proTeams") or []
         return {int(t["id"]): t.get("abbrev", "FA") for t in teams if t.get("id") is not None}
     except Exception as exc:
-        print(f"⚠️ proTeam haritası alınamadı: {exc}")
+        print(f"proTeam haritası alınamadı: {exc}")
         return {0: "FA"}
 
 
@@ -88,7 +88,7 @@ def _save_rank_cache(season, rows):
         with open(_rank_cache_path(season), "w", encoding="utf-8") as fh:
             json.dump({"saved_at": time.time(), "rows": rows}, fh)
     except Exception as exc:
-        print(f"⚠️ Draft sıralaması diske yazılamadı: {exc}")
+        print(f"Draft sıralaması diske yazılamadı: {exc}")
 
 
 def _load_rank_cache(season):
@@ -154,11 +154,11 @@ def _fetch_rank_payload(season, attempts=3):
                 last_problem = f"{exc.__class__.__name__}"
         if attempt < attempts - 1:
             wait = 1.5 * (attempt + 1)
-            print(f"⚠️ Draft sıralaması alınamadı ({last_problem}), "
+            print(f"Draft sıralaması alınamadı ({last_problem}), "
                   f"{wait:.1f}s sonra tekrar denenecek")
             time.sleep(wait)
 
-    print(f"❌ Draft sıralaması çekilemedi: {last_problem}")
+    print(f"Draft sıralaması çekilemedi: {last_problem}")
     return None
 
 
@@ -207,7 +207,7 @@ def fetch_draft_rankings(season_year=None):
     df = df.reset_index(drop=True)
     df["ADP"] = df.index + 1
 
-    print(f"✓ {get_season_label(season)} draft havuzu: {len(df)} sıralı oyuncu")
+    print(f"{get_season_label(season)} draft havuzu: {len(df)} sıralı oyuncu")
     return df
 
 
