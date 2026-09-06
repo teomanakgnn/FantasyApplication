@@ -38,13 +38,30 @@
       /* overflow:hidden YOK - kaydirmayi engellemiyoruz */
     }
 
-    /* iframe kaydirilabilir bir sarmalayicinin icinde.
-       - iOS duzlestirirse: iframe uzar, sarmalayici kaydirir
-       - duzlestirmezse   : iframe viewport boyunda, kendi icinde kayar
-       Iki durumda da calisir. */
-    #app-scroll {
+    /* Streamlit Community Cloud embed modunda uygulamanin etrafina kendi
+       kabugunu koyuyor. Olculdu:
+         - altta 36px, position:fixed, bottom:0, rgb(240,242,246) acik gri
+           "Built with Streamlit / Fullscreen" cubugu
+         - uygulamayi her yandan 2px iceri alan acik renkli cerceve
+       embed_options ile kaldirilamiyor (hide_footer / dark_theme denendi,
+       ucu de degistirmedi). Bu yuzden kirpiliyor:
+         #clip  -> gorunur alani sabitler ve tasani gizler
+         #app-scroll -> her yandan 2px, alttan 44px disari tasar,
+                        boylece cerceve ve rozet gorunur alanin disinda kalir
+       Kaydirma korunuyor: #app-scroll hala overflow-y:auto. */
+    #clip {
       position: fixed;
       inset: 0;
+      overflow: hidden;
+      background: #0B0E14;
+    }
+
+    #app-scroll {
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -44px;
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
@@ -91,12 +108,14 @@
     <div class="s">Uygulama uzun süredir kullanılmadıysa uyanması yarım dakikayı bulabilir.</div>
   </div>
 
-  <div id="app-scroll">
+  <div id="clip">
+   <div id="app-scroll">
     <iframe id="app"
             src="https://fantasyapplication.streamlit.app/?embed=true"
             title="HoopLife NBA"
             scrolling="yes"
             allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+   </div>
   </div>
 
   <script>
@@ -107,10 +126,13 @@
       function hide() {
         if (done) return;
         done = true;
+        // iframe'in 'load' olayi Streamlit Cloud kabugu gelince tetikleniyor;
+        // uygulamanin kendisi biraz daha gec boyaniyor ve o arada Cloud'un
+        // ACIK RENKLI kabugu goruluyor. Bekleme ekranini biraz daha tut.
         setTimeout(function () {
           s.classList.add('hidden');
           setTimeout(function () { s.style.display = 'none'; }, 500);
-        }, 800);
+        }, 2600);
       }
       a.addEventListener('load', hide);
       setTimeout(hide, 20000);
