@@ -14,3 +14,7 @@ mobile/android/app/release/
 # Jekyll (GitHub Pages gereksiz build engelle)
 _site/
 .jekyll-cache/
+
+# Sirlar: bunlar depoya ASLA girmemeli
+.streamlit/secrets.toml
+yahoo_token.json
