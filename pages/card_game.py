@@ -316,11 +316,13 @@ def _inject_card_game_css():
         /* Jersey number watermark */
         .gc-jersey-watermark {
             position:absolute;
-            top:-10px; right:-4px;
-            font-size:6rem;
+            /* Negatif konumda kart kenarindan kirpiliyor, yarim kalan
+               rakam kaza gibi gorunuyordu. */
+            top:4px; right:10px;
+            font-size:5rem;
             font-weight:950;
-            opacity:0.05;
-            line-height:1;
+            opacity:0.055;
+            line-height:0.85;
             pointer-events:none;
             font-family:'Inter','Segoe UI',sans-serif;
             user-select:none;
@@ -368,9 +370,10 @@ def _inject_card_game_css():
             font-weight:800; font-size:0.9rem;
             color:#f1f5f9; line-height:1.2;
             letter-spacing:-0.3px;
-            /* Uzun isimler (or. "Tyrese Haliburton") kart govdesi
-               overflow:hidden oldugu icin harfin ortasindan kesiliyordu. */
-            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            /* Dar mobil kartlarda "Dennis Schr..." diye kesiliyordu;
+               artik iki satira sariyor, ucuncu satirda kirpiliyor. */
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+            overflow:hidden; overflow-wrap:anywhere;
         }
         .gc-team-name {
             font-size:0.82rem; font-weight:600;
@@ -417,12 +420,14 @@ def _inject_card_game_css():
         }
 
         /* Contribution badge */
+        /* Rozet daha once position:absolute idi ve eski takim
+           etiketlerinin uzerine biniyordu ("LA La|+25"). Artik
+           etiket satirinin sonunda, akisin icinde duruyor. */
         .gc-contrib {
-            position:absolute; bottom:12px; right:12px;
+            margin-left:auto; align-self:center;
             font-size:0.75rem; font-weight:800;
             padding:4px 10px; border-radius:10px;
-            z-index:1;
-            backdrop-filter:blur(8px);
+            white-space:nowrap;
             transition:all .2s ease;
         }
         .gc-contrib.high {
@@ -448,9 +453,12 @@ def _inject_card_game_css():
             width:26px; height:26px; border-radius:50%;
             border:2px solid rgba(255,255,255,0.12);
             display:flex; align-items:center; justify-content:center;
-            font-size:11px; background:rgba(0,0,0,0.5);
+            font-size:11px;
+            /* Onceden rgba(0,0,0,.5) idi: koyu kartta ici bos siyah bir
+               delik gibi duruyordu. Artik bos bir secim halkasi gibi. */
+            background:rgba(255,255,255,0.05);
+            border-color:rgba(255,255,255,0.26);
             z-index:3; transition:all .22s cubic-bezier(.4,0,.2,1);
-            backdrop-filter:blur(6px);
         }
         .gc-select-ind.on {
             background:var(--cg-red);
@@ -495,6 +503,47 @@ def _inject_card_game_css():
            kart kendi kolonunda, checkbox da o kolonun tamamini kaplayan
            gorunmez bir katman. Boylece kartin herhangi bir yerine
            dokunmak secim yapiyor. */
+        /* ───── EL IZGARASI ─────
+           Streamlit kolonlari flex-wrap ile sariyordu: mobilde 5'lik
+           satir 2+2+1 olup tek kalan kart iki katina yayiliyor, ayrica
+           kartlar kolonlarindan tasip birbirine biniyordu. Satiri
+           izgaraya cevirince hem her kart esit genislikte hem de satir
+           yuksekligi en uzun karta gore ayarlaniyor. */
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot) {
+            display:grid !important;
+            grid-template-columns:repeat(5, minmax(0,1fr));
+            gap:12px; align-items:stretch;
+        }
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            > [data-testid="stColumn"] {
+            width:auto !important; min-width:0; flex:none; height:100%;
+        }
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stVerticalBlock"] { height:100%; gap:0; }
+        /* height:100% zinciri stMarkdown katmaninda kopunca kartlar
+           satirin en uzununa uzamiyor, kisa kartin altinda bosluk
+           kaliyordu. Aradaki tum katmanlara yukseklik veriliyor. */
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stElementContainer"]:has(.gc-card-slot),
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stMarkdown"]:has(.gc-card-slot),
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stMarkdown"]:has(.gc-card-slot) > div,
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stMarkdownContainer"]:has(.gc-card-slot) { height:100%; }
+        /* Streamlit markdown kabina margin-bottom:-15px veriyor; kart
+           kutusundan tasip alttaki satira biniyordu. */
+        [data-testid="stHorizontalBlock"]:has(.gc-card-slot)
+            [data-testid="stMarkdownContainer"] { margin-bottom:0; }
+        .gc-card-slot { height:100%; }
+        .gc-card-slot .gc-card { height:100%; min-height:210px; }
+        @media (max-width: 700px) {
+            [data-testid="stHorizontalBlock"]:has(.gc-card-slot) {
+                grid-template-columns:repeat(2, minmax(0,1fr));
+                gap:10px;
+            }
+        }
+
         [data-testid="stColumn"]:has(.gc-card-slot) { position:relative; }
         /* Streamlit checkbox'i kendi stElementContainer'ina sariyor ve o
            kapsayici position:relative + 15x0px. Sadece checkbox'a inset:0
@@ -822,18 +871,23 @@ def _inject_card_game_css():
         /* ───── MOBILE ───── */
         @media (max-width:768px) {
             .cg-lobby-title { font-size:2.4rem!important; letter-spacing:-1px; }
-            .cg-network-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
-            .cg-network-grid.staggered { margin-left:12%; margin-right:-2%; }
+            /* Rakip eli bilgi tasimayan 10 kapali karttan olusuyor;
+               2'li dizilimde 330px yer kapliyordu. 5'li kompakt
+               seride inince ~140px'e dusuyor. */
+            .cg-network-grid { grid-template-columns:repeat(5,1fr); gap:8px; }
+            .cg-network-grid.staggered { margin-left:0; margin-right:0; }
             .gc-card { min-height:215px; }
-            .gc-avatar-ring { width:54px; height:54px; }
-            .gc-avatar { width:48px; height:48px; }
+            /* Dar kartta metne yer acmak icin avatar kuculuyor */
+            .gc-avatar-ring { width:46px; height:46px; }
+            .gc-avatar { width:41px; height:41px; }
+            .gc-header { gap:8px; padding-right:26px; }
             .gc-name { font-size:0.8rem; letter-spacing:-0.4px; }
             .gc-team-name { font-size:0.82rem; }
-            .gc-jersey-watermark { font-size:4.5rem; }
+            .gc-jersey-watermark { font-size:3.6rem; top:6px; right:8px; }
             .cg-scoreboard { padding:.8rem 1rem; border-radius:16px; }
             .cg-score-value { font-size:1.8rem!important; }
             .cg-result-title { font-size:1.8rem!important; }
-            .gc-bot-card { min-height:58px; }
+            .gc-bot-card { min-height:52px; border-radius:12px; }
             .cg-result-scores { gap:1rem; }
             .cg-result-score-box { padding:0.5rem 1.2rem; }
             .cg-result-score-number { font-size:1.5rem; }
@@ -845,6 +899,21 @@ def _inject_card_game_css():
 # ════════════════════════════════════════════════════════════════════
 #  CARD HTML BUILDER
 # ════════════════════════════════════════════════════════════════════
+
+def _short_team_name(team):
+    """Kart basligindaki takim adini kisaltir.
+
+    Dar mobil kartta "Minnesota Timberwolves" ellipsis'e takilip
+    "Minnesota ..." diye kesiliyordu; sehir adi kirpilinca takim
+    belirsiz kaliyordu. NBA'de takma adlar benzersiz oldugu icin
+    sadece takma adi gostermek hem kisa hem net.
+    """
+    if not team:
+        return ""
+    if team.endswith("Trail Blazers"):
+        return "Trail Blazers"
+    return team.rsplit(" ", 1)[-1]
+
 
 def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib=0):
     """Build premium game-card HTML."""
@@ -871,10 +940,9 @@ def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib
             tier = "mid"
         else:
             tier = "low"
-        contrib_html = f'<div class="gc-contrib {tier}">+{contrib}</div>'
+        contrib_html = f'<span class="gc-contrib {tier}">+{contrib}</span>'
 
-    # Determine team name short
-    team_short = team  # could shorten for mobile
+    team_short = _short_team_name(team)
 
     return _collapse_html(f"""
     <div class="gc-card {sel_cls}" id="gc-{index}">
@@ -896,8 +964,9 @@ def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib
                              alt="{card['name']}">
                     </div>
                     <div>
-                        <div class="gc-name">{card['name']}</div>
-                        <div class="gc-team-name" style="color:{c2};">{team_short}</div>
+                        <div class="gc-name" title="{card['name']}">{card['name']}</div>
+                        <div class="gc-team-name" style="color:{c2};"
+                             title="{team}">{team_short}</div>
                     </div>
                 </div>
                 <div class="gc-attrs">
@@ -905,8 +974,8 @@ def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib
                     <span class="gc-attr country">{card['country']}</span>
                     <span class="gc-attr draft">'{str(card['draft_year'])[2:]}</span>
                     {former_html}
+                    {contrib_html}
                 </div>
-                {contrib_html}
             </div>
         </div>
     </div>
@@ -1107,9 +1176,10 @@ def _render_game_screen(game):
                 else:
                     selected.discard(idx)
 
-    _render_hand_row(hand[:5], 0)
-    if len(hand) > 5:
-        _render_hand_row(hand[5:10], 5)
+    # Tek blok: izgara masaustunde 5, mobilde 2 kart/satir yapiyor.
+    # Iki ayri st.columns(5) kullanilirsa mobilde her blok kendi
+    # icinde 2+2+1 sariyor ve tek kalan kart iki kat genis kaliyor.
+    _render_hand_row(hand[:10], 0)
 
     st.session_state.cg_selected_cards = selected
     # "Ne atildi/ne cekildi" seridi ve dagitim animasyonu bir kez oynar.
