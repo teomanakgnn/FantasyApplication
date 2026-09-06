@@ -1359,7 +1359,6 @@ if st.session_state.page == "card_game":
     if st.sidebar.button("Back to Home", width='stretch', key="cg_sidebar_back"):
         st.session_state.page = "home"
         st.session_state.pop("card_game", None)
-        st.session_state.pop("cg_selected_cards", None)
         st.rerun()
     st.stop()
 

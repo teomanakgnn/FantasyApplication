@@ -1,0 +1,1083 @@
+<!--
+  Court Connect - HoopLife NBA kart oyunu.
+
+  Oyunun tamami bu dosyada calisir: eli dagitmak, baglantilari bulmak,
+  puanlamak, botu oynatmak. Streamlit sadece oyuncu havuzunu JSON olarak
+  veriyor. Boylece her dokunusta sunucuya gidip sayfayi yeniden cizmek
+  gerekmiyor; animasyonlar kesilmiyor ve oyun gercek bir mobil oyun gibi
+  aninda tepki veriyor.
+
+  Yerlesim tek ekrana sigar; hicbir yerde kaydirma yok.
+-->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #070A12; color: #E8ECF4;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+  #cc {
+    position: relative;
+    height: 100%; width: 100%;
+    max-width: 460px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    background:
+      radial-gradient(120% 70% at 50% -10%, #16204010 0%, transparent 60%),
+      radial-gradient(90% 50% at 50% 110%, #2a154010 0%, transparent 60%),
+      #070A12;
+    overflow: hidden;
+  }
+
+  /* ══════════ EKRANLAR ══════════ */
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none;
+    transition: opacity .28s ease;
+  }
+  .screen.on { opacity: 1; pointer-events: auto; }
+
+  /* ══════════ LOBI ══════════ */
+  #lobby { padding: 22px 18px 20px; justify-content: center; gap: 14px; }
+  .logo-mark {
+    width: 62px; height: 62px; margin: 0 auto 2px;
+    border-radius: 20px;
+    background: linear-gradient(140deg, #F97316, #EF4444 55%, #7C3AED);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 12px 34px rgba(249,115,22,.28);
+    animation: floaty 3.4s ease-in-out infinite;
+  }
+  @keyframes floaty {
+    0%,100% { transform: translateY(0) rotate(-3deg); }
+    50%     { transform: translateY(-7px) rotate(3deg); }
+  }
+  .lobby-title {
+    text-align: center; font-size: 30px; font-weight: 900;
+    letter-spacing: -1px; line-height: 1.05;
+    background: linear-gradient(100deg, #fff 15%, #FDBA74 60%, #A78BFA);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .lobby-sub {
+    text-align: center; font-size: 13px; color: #7C89A3;
+    margin-top: -6px; line-height: 1.45;
+  }
+  .rules { display: flex; flex-direction: column; gap: 7px; }
+  .rule {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 12px; border-radius: 14px;
+    background: rgba(255,255,255,.035);
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .rule-pts {
+    flex: 0 0 auto; min-width: 38px; text-align: center;
+    font-size: 12px; font-weight: 900; padding: 5px 0;
+    border-radius: 9px; color: #08111F;
+  }
+  .rule-txt { min-width: 0; }
+  .rule-name { font-size: 13px; font-weight: 800; }
+  .rule-desc { font-size: 11px; color: #7C89A3; margin-top: 1px; }
+
+  .diff-row { display: flex; gap: 8px; }
+  .diff {
+    flex: 1; padding: 11px 0; border-radius: 13px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    font-size: 12.5px; font-weight: 800; color: #93A1BC;
+    text-align: center; cursor: pointer;
+    transition: all .16s ease;
+  }
+  .diff.on {
+    background: linear-gradient(135deg, rgba(249,115,22,.22), rgba(239,68,68,.16));
+    border-color: rgba(249,115,22,.55); color: #FDBA74;
+  }
+
+  /* ══════════ BUTONLAR ══════════ */
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; min-height: 52px; padding: 0 16px;
+    border: 0; border-radius: 16px;
+    font-size: 15px; font-weight: 900; letter-spacing: .2px;
+    font-family: inherit; cursor: pointer;
+    transition: transform .12s ease, filter .16s ease, opacity .16s ease;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, #F97316, #EF4444);
+    color: #fff; box-shadow: 0 10px 26px rgba(239,68,68,.3);
+  }
+  .btn-go {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: #fff; box-shadow: 0 10px 26px rgba(16,185,129,.28);
+  }
+  .btn-ghost {
+    background: rgba(255,255,255,.05); color: #B9C4D8;
+    border: 1px solid rgba(255,255,255,.1);
+  }
+  .btn[disabled] { opacity: .38; pointer-events: none; box-shadow: none; }
+
+  /* ══════════ HUD ══════════ */
+  #hud {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 10px;
+    /* Uygulamanin sabit ust bari oyunun ilk satirini kirpiyordu. */
+    padding: 14px 14px 8px;
+  }
+  .hud-box {
+    flex: 1; min-width: 0;
+    display: flex; align-items: baseline; gap: 7px;
+    padding: 7px 11px; border-radius: 13px;
+    background: rgba(255,255,255,.045);
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .hud-box.me { border-color: rgba(16,185,129,.3); }
+  .hud-lbl { font-size: 9.5px; font-weight: 900; letter-spacing: 1.2px; color: #6B7893; }
+  .hud-val { font-size: 21px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+  .hud-box.me .hud-val { color: #34D399; }
+  .hud-box.bot .hud-val { color: #94A3B8; }
+  .hud-val.bump { animation: bump .42s cubic-bezier(.34,1.6,.64,1); }
+  @keyframes bump { 0%{transform:scale(1)} 45%{transform:scale(1.28)} 100%{transform:scale(1)} }
+
+  #swapWrap {
+    flex: 0 0 auto; text-align: center;
+    padding: 6px 10px; border-radius: 13px;
+    background: rgba(255,255,255,.045);
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .swap-dots { display: flex; gap: 4px; justify-content: center; }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #FBBF24; transition: all .3s ease;
+  }
+  .dot.used { background: rgba(255,255,255,.14); transform: scale(.72); }
+  .swap-lbl { font-size: 8.5px; font-weight: 900; letter-spacing: .9px; color: #6B7893; margin-top: 4px; }
+
+  /* ══════════ RAKIP SERIDI ══════════ */
+  #oppRow {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 2px 14px 8px;
+  }
+  .opp-lbl {
+    font-size: 9.5px; font-weight: 900; letter-spacing: 1px;
+    color: #5D6A85; flex: 0 0 auto;
+  }
+  .opp-cards { display: flex; gap: 5px; flex: 1; }
+  .opp-card {
+    flex: 1; height: 30px; border-radius: 8px;
+    background: linear-gradient(150deg, #1B2338, #131A2C);
+    border: 1px solid rgba(255,255,255,.075);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; opacity: .55;
+  }
+  .opp-card.think { animation: thinkPulse .7s ease-in-out infinite; }
+  @keyframes thinkPulse {
+    0%,100% { opacity: .4; transform: translateY(0); }
+    50%     { opacity: .95; transform: translateY(-3px); }
+  }
+
+  /* ══════════ TAHTA ══════════ */
+  #board {
+    flex: 1 1 auto; position: relative;
+    margin: 0 12px; min-height: 0;
+  }
+  #web { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #web line { transition: opacity .22s ease, stroke-width .22s ease; }
+  #tiles {
+    position: absolute; inset: 0;
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr; gap: 9px;
+  }
+
+  .tile {
+    position: relative; min-width: 0;
+    border-radius: 16px; overflow: hidden;
+    background: linear-gradient(150deg, #141B2D, #0D1322);
+    border: 1px solid rgba(255,255,255,.075);
+    padding: 8px 9px;
+    display: flex; flex-direction: column; gap: 5px;
+    cursor: pointer;
+    transition: transform .16s cubic-bezier(.34,1.5,.64,1),
+                border-color .2s ease, box-shadow .2s ease;
+    animation: dealIn .42s cubic-bezier(.22,1.1,.36,1) both;
+  }
+  @keyframes dealIn {
+    0%   { opacity: 0; transform: translateY(26px) scale(.86) rotate(-4deg); }
+    100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+  }
+  .tile:active { transform: scale(.965); }
+  .tile.picked {
+    border-color: rgba(251,191,36,.75);
+    box-shadow: 0 0 0 1.5px rgba(251,191,36,.5), 0 10px 26px rgba(251,191,36,.16);
+    transform: translateY(-3px);
+  }
+  .tile.dim { opacity: .34; }
+  .tile.out { animation: flyOut .42s cubic-bezier(.55,.06,.68,.19) forwards; }
+  @keyframes flyOut {
+    0%   { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+    100% { opacity: 0; transform: translateY(-120px) scale(.6) rotate(16deg); }
+  }
+  .tile.in { animation: flipIn .5s cubic-bezier(.22,1.1,.36,1) both; }
+  @keyframes flipIn {
+    0%   { opacity: 0; transform: rotateY(85deg) scale(.8); }
+    60%  { opacity: 1; transform: rotateY(-8deg) scale(1.04); }
+    100% { opacity: 1; transform: rotateY(0) scale(1); }
+  }
+
+  .tile-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .tile-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .av-ring {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%;
+    padding: 2px; display: flex;
+  }
+  .av { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #0A0F1C; }
+  .tile-id { min-width: 0; flex: 1; }
+  .tile-name {
+    font-size: 12.5px; font-weight: 800; line-height: 1.15;
+    letter-spacing: -.2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tile-team {
+    font-size: 10.5px; font-weight: 700; margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tile-meta { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip {
+    font-size: 9px; font-weight: 800; letter-spacing: .3px;
+    padding: 2.5px 6px; border-radius: 6px;
+    background: rgba(255,255,255,.06); color: #9FADC6;
+    white-space: nowrap;
+  }
+  .tile-links {
+    flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 2px;
+    justify-content: center;   /* az baglantili kartta bosluk dengelensin */
+    margin-top: 1px; overflow: hidden;
+  }
+  .tl {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9.5px; line-height: 1.25; min-width: 0;
+  }
+  .tl-dot { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; }
+  .tl-who {
+    flex: 1; min-width: 0; color: #A9B6CE; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tl-p { font-weight: 900; flex: 0 0 auto; }
+  .tl-more { font-size: 9px; color: #5D6A85; font-weight: 800; padding-left: 10px; }
+  .tile-none {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #F87171; font-weight: 800; text-align: center;
+    line-height: 1.3; opacity: .85;
+  }
+  .tile-pts {
+    position: absolute; right: 7px; bottom: 7px;
+    font-size: 10.5px; font-weight: 900;
+    padding: 2.5px 7px; border-radius: 8px;
+  }
+  .pts-hi { background: rgba(16,185,129,.18); color: #34D399; }
+  .pts-mid { background: rgba(251,191,36,.15); color: #FBBF24; }
+  .pts-lo { background: rgba(239,68,68,.13); color: #F87171; }
+  .hub-star {
+    position: absolute; right: 7px; top: 8px;
+    font-size: 11px; filter: drop-shadow(0 0 6px rgba(251,191,36,.7));
+    animation: bump 1.6s ease-in-out infinite;
+  }
+
+  /* ══════════ ALT AKSIYON ══════════ */
+  #actions {
+    flex: 0 0 auto; display: flex; gap: 9px;
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  #actions .btn { min-height: 50px; }
+  #hint {
+    flex: 0 0 auto; text-align: center;
+    font-size: 11.5px; font-weight: 700; color: #6B7893;
+    padding: 0 14px 2px; min-height: 15px;
+  }
+  #hint.live { color: #FBBF24; }
+
+  /* ══════════ ALT SAYFA (kart detayi) ══════════ */
+  #sheetBack {
+    position: absolute; inset: 0; background: rgba(4,7,14,.62);
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+    backdrop-filter: blur(2px); z-index: 8;
+  }
+  #sheetBack.on { opacity: 1; pointer-events: auto; }
+  #sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 9;
+    background: #0E1524;
+    border-top: 1px solid rgba(255,255,255,.1);
+    border-radius: 22px 22px 0 0;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(102%);
+    transition: transform .3s cubic-bezier(.22,1,.36,1);
+    box-shadow: 0 -18px 44px rgba(0,0,0,.5);
+    max-height: 78%; display: flex; flex-direction: column;
+  }
+  #sheet.on { transform: translateY(0); }
+  .grab { width: 38px; height: 4px; border-radius: 3px; background: rgba(255,255,255,.16); margin: 4px auto 12px; }
+  .sheet-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .sheet-av { width: 54px; height: 54px; border-radius: 50%; padding: 2.5px; flex: 0 0 auto; display: flex; }
+  .sheet-name { font-size: 17px; font-weight: 900; letter-spacing: -.3px; }
+  .sheet-team { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+  .sheet-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; }
+  .link-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 10px; border-radius: 11px; margin-bottom: 6px;
+  }
+  .link-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .link-txt { flex: 1; min-width: 0; }
+  .link-who { font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .link-det { font-size: 10.5px; color: #8C99B2; margin-top: 1px; }
+  .link-pts { font-size: 11.5px; font-weight: 900; flex: 0 0 auto; }
+  .empty-note { font-size: 12px; color: #6B7893; text-align: center; padding: 14px 0 18px; }
+
+  /* ══════════ SONUC ══════════ */
+  #result { padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px)); justify-content: center; gap: 12px; }
+  .res-badge {
+    width: 74px; height: 74px; margin: 0 auto; border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px; animation: popIn .5s cubic-bezier(.34,1.6,.64,1) both;
+  }
+  @keyframes popIn { 0%{opacity:0;transform:scale(.4) rotate(-14deg)} 100%{opacity:1;transform:scale(1) rotate(0)} }
+  .res-title { text-align: center; font-size: 26px; font-weight: 900; letter-spacing: -.7px; }
+  .res-sub { text-align: center; font-size: 12.5px; color: #7C89A3; margin-top: -6px; }
+  .res-scores { display: flex; align-items: stretch; gap: 10px; }
+  .res-box {
+    flex: 1; padding: 12px 8px; border-radius: 16px; text-align: center;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+  }
+  /* Kazanan kutusu once yesildi ama yesil ayni zamanda "sen" rengi;
+     bot kazandiginda hangi kutunun kazandigi karisiyordu. Altin. */
+  .res-box.win {
+    border-color: rgba(251,191,36,.55); background: rgba(251,191,36,.09);
+    box-shadow: 0 0 22px rgba(251,191,36,.12);
+  }
+  .res-box.win::after {
+    content: "KAZANAN"; display: block; margin-top: 6px;
+    font-size: 8.5px; font-weight: 900; letter-spacing: 1.2px; color: #FBBF24;
+  }
+  .res-num { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1px; }
+  .res-cap { font-size: 9.5px; font-weight: 900; letter-spacing: 1.2px; color: #6B7893; margin-top: 5px; }
+  .bd-row { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border-radius: 11px; margin-bottom: 5px; }
+  .bd-name { flex: 1; font-size: 12px; font-weight: 800; }
+  .bd-val { font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+  .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
+  .conf {
+    position: absolute; width: 8px; height: 13px; top: -20px;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    0%   { transform: translateY(0) rotate(0); opacity: 1; }
+    100% { transform: translateY(720px) rotate(760deg); opacity: 0; }
+  }
+
+  /* ══════════ PUAN BALONU ══════════ */
+  .pop {
+    position: absolute; z-index: 15; pointer-events: none;
+    font-size: 20px; font-weight: 900; letter-spacing: -.5px;
+    animation: popUp 1s cubic-bezier(.22,1,.36,1) forwards;
+    text-shadow: 0 3px 12px rgba(0,0,0,.6);
+  }
+  @keyframes popUp {
+    0%   { opacity: 0; transform: translate(-50%, 6px) scale(.6); }
+    22%  { opacity: 1; transform: translate(-50%, -10px) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -54px) scale(1); }
+  }
+
+  /* Cok kisa ekranlarda sikistir */
+  @media (max-height: 620px) {
+    .tile-meta { display: none; }
+    .av-ring { width: 34px; height: 34px; }
+    #oppRow { padding-bottom: 5px; }
+    .opp-card { height: 24px; }
+  }
+</style>
+
+<div id="cc">
+  <!-- ══════════ LOBI ══════════ -->
+  <div class="screen on" id="lobby">
+    <div class="logo-mark">🏀</div>
+    <div class="lobby-title">Court Connect</div>
+    <div class="lobby-sub">6 oyuncu topla, aralarindaki<br>en guclu baglantilari kur</div>
+    <div class="rules" id="rulesBox"></div>
+    <div>
+      <div class="swap-lbl" style="text-align:left;margin:2px 0 7px 2px;">BOT ZORLUGU</div>
+      <div class="diff-row" id="diffRow">
+        <div class="diff" data-d="easy">Kolay</div>
+        <div class="diff on" data-d="normal">Normal</div>
+        <div class="diff" data-d="hard">Zor</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="startBtn">OYUNU BASLAT</button>
+  </div>
+
+  <!-- ══════════ OYUN ══════════ -->
+  <div class="screen" id="play">
+    <div id="hud">
+      <div class="hud-box me"><span class="hud-lbl">SEN</span><span class="hud-val" id="myScore">0</span></div>
+      <div id="swapWrap">
+        <div class="swap-dots" id="swapDots"></div>
+        <div class="swap-lbl">DEGISIM</div>
+      </div>
+      <div class="hud-box bot"><span class="hud-lbl">BOT</span><span class="hud-val" id="botScore">?</span></div>
+    </div>
+    <div id="oppRow">
+      <span class="opp-lbl">RAKIP</span>
+      <div class="opp-cards" id="oppCards"></div>
+    </div>
+    <div id="board">
+      <svg id="web"></svg>
+      <div id="tiles"></div>
+    </div>
+    <div id="hint">Karta dokun - baglantilarini gor</div>
+    <div id="actions">
+      <button class="btn btn-ghost" id="quitBtn" style="flex:0 0 52px;">✕</button>
+      <button class="btn btn-go" id="lockBtn">ELI KILITLE</button>
+    </div>
+
+    <div id="sheetBack"></div>
+    <div id="sheet">
+      <div class="grab"></div>
+      <div class="sheet-head">
+        <div class="sheet-av" id="shAv"><img class="av" id="shImg" alt=""></div>
+        <div style="min-width:0;flex:1;">
+          <div class="sheet-name" id="shName"></div>
+          <div class="sheet-team" id="shTeam"></div>
+        </div>
+        <div style="text-align:right;flex:0 0 auto;">
+          <div class="hud-val" id="shPts" style="font-size:24px;">0</div>
+          <div class="swap-lbl">PUAN</div>
+        </div>
+      </div>
+      <div class="sheet-scroll" id="shLinks"></div>
+      <button class="btn btn-primary" id="swapBtn" style="margin-top:12px;">BU KARTI DEGISTIR</button>
+    </div>
+  </div>
+
+  <!-- ══════════ SONUC ══════════ -->
+  <div class="screen" id="result">
+    <div class="res-badge" id="resBadge">🏆</div>
+    <div class="res-title" id="resTitle">Kazandin!</div>
+    <div class="res-sub" id="resSub"></div>
+    <div class="res-scores">
+      <div class="res-box" id="resMeBox">
+        <div class="res-num" id="resMe" style="color:#34D399;">0</div>
+        <div class="res-cap">SEN</div>
+      </div>
+      <div class="res-box" id="resBotBox">
+        <div class="res-num" id="resBot" style="color:#94A3B8;">0</div>
+        <div class="res-cap">BOT</div>
+      </div>
+    </div>
+    <div id="resBreak"></div>
+    <button class="btn btn-primary" id="againBtn">TEKRAR OYNA</button>
+    <button class="btn btn-ghost" id="lobbyBtn">ANA MENU</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var DATA = __GAME_DATA__;
+  var PLAYERS = DATA.players;
+  var TEAM_COLORS = DATA.team_colors;
+
+  var HAND = 6;          // el buyuklugu - telefon ekranina 2x3 sigar
+  var SWAPS = 4;         // degisim hakki
+  var TRIO_BONUS = 8;    // ayni takimi paylasan uclu
+
+  /* Puanlar NBA gercegine gore dengelendi: oyuncularin buyuk cogunlugu
+     ABD'li oldugu icin "ayni ulke" her ciftte tetikleniyor ve oyunu
+     anlamsizlastiriyordu (bot 98 - oyuncu 31 gibi skorlar). ABD esleri
+     sembolik 1 puan, nadir ulkeler 4 puan aliyor. */
+  var CONN = {
+    team:    { label: "Ayni takim",    color: "#10B981", pts: 6, desc: "Su an ayni takimda" },
+    country: { label: "Ayni ulke",     color: "#3B82F6", pts: 4, desc: "Ayni ulkeden (ABD esleri 1 puan)" },
+    former:  { label: "Eski takimdas", color: "#F59E0B", pts: 3, desc: "Ayni takimda oynamislar" },
+    draft:   { label: "Draft sinifi",  color: "#F97316", pts: 2, desc: "Ayni yil draft edilmis" }
+  };
+  var COMMON_COUNTRY = "USA";
+  var COMMON_COUNTRY_PTS = 1;
+  var ORDER = ["team", "country", "former", "draft"];
+
+  // ══════════ OYUN MANTIGI ══════════
+  /* LOGIC-START */
+
+  function teamColor(t, i) {
+    var c = TEAM_COLORS[t];
+    return c ? c[i] : (i ? "#A78BFA" : "#6366F1");
+  }
+
+  function nick(team) {
+    if (!team) return "";
+    if (team.indexOf("Trail Blazers") >= 0) return "Trail Blazers";
+    var p = team.split(" ");
+    return p[p.length - 1];
+  }
+
+  /** Iki kart arasindaki tum baglantilar. */
+  function linksOf(a, b) {
+    var out = [];
+    var sameTeam = a.current_team === b.current_team;
+    if (sameTeam) out.push({ k: "team", d: a.current_team, p: CONN.team.pts });
+    if (a.country === b.country) {
+      out.push({
+        k: "country", d: a.country,
+        p: a.country === COMMON_COUNTRY ? COMMON_COUNTRY_PTS : CONN.country.pts
+      });
+    }
+
+    var setA = {}, i;
+    var aAll = (a.former_teams || []).concat([a.current_team]);
+    var bAll = (b.former_teams || []).concat([b.current_team]);
+    for (i = 0; i < aAll.length; i++) setA[aAll[i]] = 1;
+    var seen = {};
+    for (i = 0; i < bAll.length; i++) {
+      var t = bAll[i];
+      if (!setA[t] || seen[t]) continue;
+      if (sameTeam && t === a.current_team) continue;  // ayni takim zaten sayildi
+      seen[t] = 1;
+      out.push({ k: "former", d: t, p: CONN.former.pts });
+    }
+    if (a.draft_year === b.draft_year) out.push({ k: "draft", d: "" + a.draft_year, p: CONN.draft.pts });
+    return out;
+  }
+
+  /** Elin tum ciftleri, kart basina puan ve toplam. */
+  function analyze(hand) {
+    var pairs = [], per = [], i, j;
+    for (i = 0; i < hand.length; i++) per.push({ pts: 0, deg: 0 });
+    var total = 0;
+    for (i = 0; i < hand.length; i++) {
+      for (j = i + 1; j < hand.length; j++) {
+        var ls = linksOf(hand[i], hand[j]);
+        if (!ls.length) continue;
+        var p = 0;
+        for (var k = 0; k < ls.length; k++) p += ls[k].p;
+        pairs.push({ a: i, b: j, links: ls, pts: p });
+        per[i].pts += p; per[j].pts += p;
+        per[i].deg++; per[j].deg++;
+        total += p;
+      }
+    }
+    /* Merkez-kart bonusu, ABD baglantisi yuzunden neredeyse her elde
+       tetikleniyordu. Yerine gercek bir basari olan "ayni takimi
+       paylasan uclu" bonusu geldi. */
+    var trios = findTrios(hand);
+    total += trios.length * TRIO_BONUS;
+    var inTrio = {};
+    for (i = 0; i < trios.length; i++)
+      for (j = 0; j < trios[i].idx.length; j++) inTrio[trios[i].idx[j]] = 1;
+    return { pairs: pairs, per: per, trios: trios, inTrio: inTrio, total: total };
+  }
+
+  /** Ayni takimi (guncel ya da eski) paylasan uclu gruplar. */
+  function findTrios(hand) {
+    var byTeam = {}, i, j, t;
+    for (i = 0; i < hand.length; i++) {
+      var all = (hand[i].former_teams || []).concat([hand[i].current_team]);
+      var seen = {};
+      for (j = 0; j < all.length; j++) {
+        t = all[j];
+        if (!t || seen[t]) continue;
+        seen[t] = 1;
+        (byTeam[t] = byTeam[t] || []).push(i);
+      }
+    }
+    var out = [];
+    for (t in byTeam) {
+      if (byTeam[t].length >= 3) out.push({ team: t, idx: byTeam[t].slice(0, 3) });
+    }
+    return out;
+  }
+
+  function breakdown(hand) {
+    var res = { team: 0, country: 0, former: 0, draft: 0, trio: 0 };
+    var a = analyze(hand);
+    for (var i = 0; i < a.pairs.length; i++) {
+      var ls = a.pairs[i].links;
+      for (var j = 0; j < ls.length; j++) res[ls[j].k] += ls[j].p;
+    }
+    res.trio = a.trios.length * TRIO_BONUS;
+    return res;
+  }
+
+  function shuffle(arr) {
+    var a = arr.slice(), i, j, t;
+    for (i = a.length - 1; i > 0; i--) {
+      j = Math.floor(Math.random() * (i + 1));
+      t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  /** Bot: en zayif karti, desteden gelen adaylarin en iyisiyle degistirir. */
+  function botPlay(hand, deck, difficulty) {
+    var looks = difficulty === "hard" ? 6 : (difficulty === "easy" ? 1 : 3);
+    var swaps = difficulty === "easy" ? SWAPS - 2 : SWAPS;
+    var h = hand.slice();
+    for (var s = 0; s < swaps && deck.length; s++) {
+      var cur = analyze(h);
+      var worst = 0;
+      for (var i = 1; i < h.length; i++) if (cur.per[i].pts < cur.per[worst].pts) worst = i;
+      var best = null, bestScore = cur.total, bestIdx = -1;
+      for (var c = 0; c < looks && c < deck.length; c++) {
+        var cand = deck[c];
+        var trial = h.slice(); trial[worst] = cand;
+        var sc = analyze(trial).total;
+        if (sc > bestScore) { bestScore = sc; best = cand; bestIdx = c; }
+      }
+      if (best === null) break;          // iyilestiremiyorsa durur
+      h[worst] = best;
+      deck.splice(bestIdx, 1);
+    }
+    return h;
+  }
+
+  /* LOGIC-END */
+
+  // ══════════ DURUM ══════════
+
+  var G = null;
+  var picked = -1;
+  var difficulty = "normal";
+
+  function $(id) { return document.getElementById(id); }
+
+  function newGame() {
+    var d = shuffle(PLAYERS);
+    G = {
+      hand: d.slice(0, HAND),
+      botHand: d.slice(HAND, HAND * 2),
+      deck: d.slice(HAND * 2),
+      swaps: SWAPS,
+      over: false
+    };
+    picked = -1;
+  }
+
+  function buzz(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+
+  // ══════════ CIZIM ══════════
+
+  function tileHTML(card, i, info) {
+    var c1 = teamColor(card.current_team, 0), c2 = teamColor(card.current_team, 1);
+    var pts = info.per[i].pts;
+    var cls = pts >= 12 ? "pts-hi" : (pts >= 5 ? "pts-mid" : "pts-lo");
+    var isTrio = !!info.inTrio[i];
+    return '<div class="tile" data-i="' + i + '" style="animation-delay:' + (i * 55) + 'ms">' +
+      '<div class="tile-stripe" style="background:linear-gradient(90deg,' + c1 + ',' + c2 + ')"></div>' +
+      (isTrio ? '<div class="hub-star">⭐</div>' : '') +
+      '<div class="tile-top">' +
+        '<div class="av-ring" style="background:linear-gradient(140deg,' + c1 + ',' + c2 + ')">' +
+          '<img class="av" src="' + card.headshot_url + '" alt="" ' +
+          'onerror="this.src=\'https://cdn.nba.com/headshots/nba/latest/1040x760/logoman.png\'">' +
+        '</div>' +
+        '<div class="tile-id">' +
+          '<div class="tile-name">' + shortName(card.name) + '</div>' +
+          '<div class="tile-team" style="color:' + c2 + '">' + nick(card.current_team) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tile-meta">' +
+        '<span class="chip">' + card.position + '</span>' +
+        '<span class="chip">' + card.country + '</span>' +
+        '<span class="chip">’' + String(card.draft_year).slice(2) + '</span>' +
+      '</div>' +
+      linkListHTML(i, info) +
+      '<div class="tile-pts ' + cls + '">' + pts + '</div>' +
+    '</div>';
+  }
+
+  /** Kartin icinde, neden puan aldigini gosteren kisa baglanti listesi.
+      Kart kutusunun geri kalani bos kaliyordu ve oyuncu baglantilari
+      gormek icin her karta tek tek dokunmak zorundaydi. */
+  function linkListHTML(i, info) {
+    /* Baglantilar oyuncu bazinda gruplaniyor: ayni rakip icin ayri ayri
+       satir yazmak ("Fox +3", "Fox +1") kart icini tekrarla dolduruyordu.
+       Ayrica ABD ulke esleri (1 puan) listelenmiyor - oyuncularin
+       neredeyse hepsi ABD'li oldugu icin her karta yaziliyor ve gercek
+       baglantilari gorunmez kiliyordu. */
+    var byOther = {}, order = [];
+    for (var p = 0; p < info.pairs.length; p++) {
+      var pr = info.pairs[p];
+      if (pr.a !== i && pr.b !== i) continue;
+      var oi = pr.a === i ? pr.b : pr.a;
+      for (var l = 0; l < pr.links.length; l++) {
+        var ln = pr.links[l];
+        if (ln.p < 2) continue;                 // ABD ulke esi: gosterme
+        if (!byOther[oi]) { byOther[oi] = { pts: 0, best: ln }; order.push(oi); }
+        byOther[oi].pts += ln.p;
+        if (ln.p > byOther[oi].best.p) byOther[oi].best = ln;
+      }
+    }
+    if (!order.length)
+      return '<div class="tile-none">zayif kart<br>degistirmeyi dusun</div>';
+
+    order.sort(function (x, y) { return byOther[y].pts - byOther[x].pts; });
+    var max = window.innerHeight < 620 ? 2 : 4;
+    var out = '<div class="tile-links">';
+    for (var r = 0; r < order.length && r < max; r++) {
+      var g = byOther[order[r]], m = CONN[g.best.k];
+      out += '<div class="tl"><span class="tl-dot" style="background:' + m.color + '"></span>' +
+        '<span class="tl-who">' + shortName(G.hand[order[r]].name) + '</span>' +
+        '<span class="tl-p" style="color:' + m.color + '">+' + g.pts + '</span></div>';
+    }
+    if (order.length > max)
+      out += '<div class="tl-more">+' + (order.length - max) + ' oyuncu daha</div>';
+    return out + '</div>';
+  }
+
+  /** Uzun isimleri kisaltir: "Shai Gilgeous-Alexander" -> "S. Gilgeous-Alexander" */
+  function shortName(name) {
+    if (name.length <= 15) return name;
+    var i = name.indexOf(" ");
+    if (i < 1) return name;
+    return name.charAt(0) + ". " + name.slice(i + 1);
+  }
+
+  function drawWeb(info) {
+    var board = $("board"), svg = $("web"), tiles = $("tiles");
+    var br = board.getBoundingClientRect();
+    svg.setAttribute("viewBox", "0 0 " + br.width + " " + br.height);
+    var els = tiles.querySelectorAll(".tile");
+    if (els.length < HAND) return;
+    var mid = [];
+    for (var i = 0; i < els.length; i++) {
+      var r = els[i].getBoundingClientRect();
+      mid.push({ x: r.left - br.left + r.width / 2, y: r.top - br.top + r.height / 2 });
+    }
+    var s = "";
+    for (var p = 0; p < info.pairs.length; p++) {
+      var pr = info.pairs[p];
+      if (pr.pts < 2) continue;   // sadece-ABD cifti: ag'i gurultuye bogyordu
+      var strongest = pr.links[0];
+      for (var q = 1; q < pr.links.length; q++)
+        if (pr.links[q].p > strongest.p) strongest = pr.links[q];
+      var col = CONN[strongest.k].color;
+      var on = picked < 0 || picked === pr.a || picked === pr.b;
+      s += '<line x1="' + mid[pr.a].x + '" y1="' + mid[pr.a].y +
+           '" x2="' + mid[pr.b].x + '" y2="' + mid[pr.b].y +
+           '" stroke="' + col + '" stroke-width="' + (1.2 + pr.pts * 0.22).toFixed(2) +
+           '" stroke-linecap="round" opacity="' + (on ? (picked < 0 ? 0.42 : 0.95) : 0.07) + '"/>';
+    }
+    svg.innerHTML = s;
+  }
+
+  function setScore(el, val, animate) {
+    el.textContent = val;
+    if (animate) {
+      el.classList.remove("bump");
+      void el.offsetWidth;
+      el.classList.add("bump");
+    }
+  }
+
+  function renderBoard(animateScore) {
+    var info = analyze(G.hand);
+    var html = "";
+    for (var i = 0; i < G.hand.length; i++) html += tileHTML(G.hand[i], i, info);
+    $("tiles").innerHTML = html;
+
+    setScore($("myScore"), info.total, !!animateScore);
+
+    var dots = "";
+    for (var d = 0; d < SWAPS; d++)
+      dots += '<span class="dot' + (d < SWAPS - G.swaps ? " used" : "") + '"></span>';
+    $("swapDots").innerHTML = dots;
+
+    var opp = "";
+    for (var o = 0; o < HAND; o++) opp += '<div class="opp-card">🏀</div>';
+    $("oppCards").innerHTML = opp;
+
+    var tiles = $("tiles").querySelectorAll(".tile");
+    for (var t = 0; t < tiles.length; t++) tiles[t].addEventListener("click", onTile);
+
+    requestAnimationFrame(function () { drawWeb(info); });
+    updateHint(info);
+    return info;
+  }
+
+  function updateHint(info) {
+    var h = $("hint");
+    if (G.swaps > 0) {
+      h.className = "live";
+      h.textContent = G.swaps + " degisim hakkin var - zayif karta dokun";
+    } else {
+      h.className = "";
+      h.textContent = "Degisim bitti - eli kilitle";
+    }
+    if (info && info.trios.length) {
+      h.className = "live";
+      h.textContent = "⭐ " + info.trios[0].team + " uclusu +" + (info.trios.length * TRIO_BONUS);
+    }
+  }
+
+  function onTile(e) {
+    var i = +e.currentTarget.getAttribute("data-i");
+    picked = i;
+    buzz(8);
+    var tiles = $("tiles").querySelectorAll(".tile");
+    for (var t = 0; t < tiles.length; t++) {
+      tiles[t].classList.toggle("picked", t === i);
+      tiles[t].classList.toggle("dim", t !== i);
+    }
+    drawWeb(analyze(G.hand));
+    openSheet(i);
+  }
+
+  function openSheet(i) {
+    var card = G.hand[i];
+    var info = analyze(G.hand);
+    var c1 = teamColor(card.current_team, 0), c2 = teamColor(card.current_team, 1);
+    $("shAv").style.background = "linear-gradient(140deg," + c1 + "," + c2 + ")";
+    $("shImg").src = card.headshot_url;
+    $("shName").textContent = card.name;
+    $("shTeam").textContent = card.current_team;
+    $("shTeam").style.color = c2;
+    $("shPts").textContent = info.per[i].pts;
+
+    // Guclu baglantilar once gelsin; 1 puanlik ABD esleri en altta.
+    var items = [];
+    for (var p = 0; p < info.pairs.length; p++) {
+      var pr = info.pairs[p];
+      if (pr.a !== i && pr.b !== i) continue;
+      var other = G.hand[pr.a === i ? pr.b : pr.a];
+      for (var l = 0; l < pr.links.length; l++)
+        items.push({ other: other, ln: pr.links[l] });
+    }
+    items.sort(function (x, y) { return y.ln.p - x.ln.p; });
+
+    var rows = "";
+    for (var q = 0; q < items.length; q++) {
+      (function () {
+        var other = items[q].other, ln = items[q].ln, meta = CONN[ln.k];
+        rows += '<div class="link-row" style="background:' + hexA(meta.color, .1) + '">' +
+          '<span class="link-dot" style="background:' + meta.color + '"></span>' +
+          '<div class="link-txt">' +
+            '<div class="link-who">' + other.name + '</div>' +
+            '<div class="link-det">' + meta.label + " - " + ln.d + '</div>' +
+          '</div>' +
+          '<span class="link-pts" style="color:' + meta.color + '">+' + ln.p + '</span>' +
+        '</div>';
+      })();
+    }
+    if (!rows) rows = '<div class="empty-note">Bu kartin hicbir baglantisi yok.<br>Degistirmek iyi bir fikir olabilir.</div>';
+    $("shLinks").innerHTML = rows;
+
+    var sw = $("swapBtn");
+    if (G.swaps > 0 && G.deck.length) {
+      sw.disabled = false;
+      sw.textContent = "BU KARTI DEGISTIR (" + G.swaps + ")";
+    } else {
+      sw.disabled = true;
+      sw.textContent = "DEGISIM HAKKIN KALMADI";
+    }
+    $("sheet").classList.add("on");
+    $("sheetBack").classList.add("on");
+  }
+
+  function closeSheet() {
+    $("sheet").classList.remove("on");
+    $("sheetBack").classList.remove("on");
+    picked = -1;
+    var tiles = $("tiles").querySelectorAll(".tile");
+    for (var t = 0; t < tiles.length; t++) { tiles[t].classList.remove("picked", "dim"); }
+    drawWeb(analyze(G.hand));
+  }
+
+  function hexA(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+  }
+
+  function floatPop(text, color, el) {
+    var board = $("board"), br = board.getBoundingClientRect();
+    var r = el ? el.getBoundingClientRect() : br;
+    var d = document.createElement("div");
+    d.className = "pop";
+    d.textContent = text;
+    d.style.color = color;
+    d.style.left = (r.left - br.left + r.width / 2) + "px";
+    d.style.top = (r.top - br.top + r.height / 2) + "px";
+    board.appendChild(d);
+    setTimeout(function () { d.remove(); }, 1000);
+  }
+
+  // ══════════ AKIS ══════════
+
+  function doSwap() {
+    if (picked < 0 || G.swaps <= 0 || !G.deck.length) return;
+    var idx = picked;
+    var before = analyze(G.hand).total;
+    buzz(14);
+    closeSheet();
+
+    var el = $("tiles").querySelector('.tile[data-i="' + idx + '"]');
+    if (el) el.classList.add("out");
+
+    setTimeout(function () {
+      G.hand[idx] = G.deck.shift();
+      G.swaps--;
+      var info = renderBoard(true);
+      var fresh = $("tiles").querySelector('.tile[data-i="' + idx + '"]');
+      if (fresh) { fresh.style.animation = "none"; void fresh.offsetWidth; fresh.classList.add("in"); }
+      var diff = info.total - before;
+      if (diff !== 0) {
+        floatPop((diff > 0 ? "+" : "") + diff, diff > 0 ? "#34D399" : "#F87171", fresh);
+      }
+      if (G.swaps === 0) $("lockBtn").classList.add("btn-primary");
+    }, 400);
+  }
+
+  function lockIn() {
+    if (G.over) return;
+    G.over = true;
+    buzz(20);
+    closeSheet();
+    $("lockBtn").disabled = true;
+    $("hint").className = "live";
+    $("hint").textContent = "Bot oynuyor...";
+
+    var cards = $("oppCards").querySelectorAll(".opp-card");
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.add("think");
+      cards[i].style.animationDelay = (i * 90) + "ms";
+    }
+
+    setTimeout(function () {
+      G.botHand = botPlay(G.botHand, G.deck, difficulty);
+      showResult();
+    }, 1500);
+  }
+
+  function countUp(el, to, ms) {
+    var from = 0, t0 = performance.now();
+    function step(t) {
+      var k = Math.min(1, (t - t0) / ms);
+      el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function showResult() {
+    var me = analyze(G.hand).total;
+    var bot = analyze(G.botHand).total;
+    var win = me > bot, tie = me === bot;
+
+    $("resBadge").textContent = win ? "🏆" : (tie ? "🤝" : "💪");
+    $("resBadge").style.background = win
+      ? "linear-gradient(140deg,#FBBF24,#F59E0B)"
+      : (tie ? "linear-gradient(140deg,#64748B,#475569)" : "linear-gradient(140deg,#475569,#1E293B)");
+    $("resTitle").textContent = win ? "Kazandin!" : (tie ? "Berabere" : "Bot kazandi");
+    $("resSub").textContent = win
+      ? "Baglantilarin botunkinden guclu"
+      : (tie ? "Tam esitlik - nadir gorulur" : "Fark " + (bot - me) + " puan");
+    $("resMeBox").className = "res-box" + (win ? " win" : "");
+    $("resBotBox").className = "res-box" + (!win && !tie ? " win" : "");
+
+    var bMe = breakdown(G.hand), bBot = breakdown(G.botHand);
+    var rows = "";
+    for (var i = 0; i < ORDER.length; i++) {
+      var k = ORDER[i], meta = CONN[k];
+      rows += '<div class="bd-row" style="background:' + hexA(meta.color, .09) + '">' +
+        '<span class="link-dot" style="background:' + meta.color + '"></span>' +
+        '<span class="bd-name">' + meta.label + '</span>' +
+        '<span class="bd-val" style="color:' + meta.color + '">' + bMe[k] + " - " + bBot[k] + '</span>' +
+      '</div>';
+    }
+    if (bMe.trio || bBot.trio) {
+      rows += '<div class="bd-row" style="background:rgba(251,191,36,.09)">' +
+        '<span class="link-dot" style="background:#FBBF24"></span>' +
+        '<span class="bd-name">Ayni takim uclusu</span>' +
+        '<span class="bd-val" style="color:#FBBF24">' + bMe.trio + " - " + bBot.trio + '</span>' +
+      '</div>';
+    }
+    $("resBreak").innerHTML = rows;
+
+    show("result");
+    countUp($("resMe"), me, 900);
+    countUp($("resBot"), bot, 900);
+    if (win) confetti();
+  }
+
+  function confetti() {
+    var cols = ["#10B981", "#FBBF24", "#3B82F6", "#A78BFA", "#EF4444", "#F97316"];
+    var wrap = document.createElement("div");
+    wrap.className = "confetti";
+    for (var i = 0; i < 44; i++) {
+      var c = document.createElement("div");
+      c.className = "conf";
+      c.style.left = (Math.random() * 100) + "%";
+      c.style.background = cols[Math.floor(Math.random() * cols.length)];
+      c.style.animationDuration = (1.5 + Math.random() * 1.4) + "s";
+      c.style.animationDelay = (Math.random() * 0.5) + "s";
+      wrap.appendChild(c);
+    }
+    $("cc").appendChild(wrap);
+    setTimeout(function () { wrap.remove(); }, 3600);
+  }
+
+  function show(id) {
+    var s = document.querySelectorAll(".screen");
+    for (var i = 0; i < s.length; i++) s[i].classList.toggle("on", s[i].id === id);
+  }
+
+  function startGame() {
+    newGame();
+    $("lockBtn").disabled = false;
+    $("lockBtn").className = "btn btn-go";
+    show("play");
+    renderBoard(false);
+  }
+
+  // ══════════ BAGLAMA ══════════
+
+  var rules = "";
+  for (var i = 0; i < ORDER.length; i++) {
+    var k = ORDER[i], m = CONN[k];
+    rules += '<div class="rule">' +
+      '<span class="rule-pts" style="background:' + m.color + '">' + m.pts + "p" + '</span>' +
+      '<div class="rule-txt"><div class="rule-name">' + m.label + '</div>' +
+      '<div class="rule-desc">' + m.desc + '</div></div></div>';
+  }
+  rules += '<div class="rule">' +
+    '<span class="rule-pts" style="background:#FBBF24">+' + TRIO_BONUS + '</span>' +
+    '<div class="rule-txt"><div class="rule-name">Ayni takim uclusu</div>' +
+    '<div class="rule-desc">Ayni takimi paylasan 3 oyuncu</div></div></div>';
+  $("rulesBox").innerHTML = rules;
+
+  var diffs = $("diffRow").querySelectorAll(".diff");
+  for (var dI = 0; dI < diffs.length; dI++) {
+    diffs[dI].addEventListener("click", function (e) {
+      for (var j = 0; j < diffs.length; j++) diffs[j].classList.remove("on");
+      e.currentTarget.classList.add("on");
+      difficulty = e.currentTarget.getAttribute("data-d");
+      buzz(6);
+    });
+  }
+
+  $("startBtn").addEventListener("click", startGame);
+  $("againBtn").addEventListener("click", startGame);
+  $("lobbyBtn").addEventListener("click", function () { show("lobby"); });
+  $("quitBtn").addEventListener("click", function () { show("lobby"); });
+  $("lockBtn").addEventListener("click", lockIn);
+  $("swapBtn").addEventListener("click", doSwap);
+  $("sheetBack").addEventListener("click", closeSheet);
+
+  var rt;
+  window.addEventListener("resize", function () {
+    clearTimeout(rt);
+    rt = setTimeout(function () { if (G && !G.over) drawWeb(analyze(G.hand)); }, 120);
+  });
+})();
+</script>
