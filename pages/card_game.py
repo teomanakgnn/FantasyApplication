@@ -2,10 +2,24 @@
 Card Connections - NBA Card Game UI
 Premium game-card design with network layout.
 """
+import re
+
 import streamlit as st
 import streamlit.components.v1 as components
 from services.card_game_engine import GameState, ConnectionChecker
 from services.nba_players_data import CONNECTION_TYPES
+
+
+def _collapse_html(html):
+    """
+    Cok satirli HTML'i tek satira indirir.
+
+    st.markdown(..., unsafe_allow_html=True) icine 4+ bosluk girintili
+    satirlar verilince Markdown bunlari KOD BLOGU sayip kaciriyordu;
+    oyun ekraninda ham "</div>" ve "<div class=...>" metinleri
+    goruluyordu. Girintiyi silince HTML olarak islenip duzgun cizilyor.
+    """
+    return re.sub(r"\s*\n\s*", " ", html).strip()
 
 
 # ── Team colour palette ────────────────────────────────────────────
@@ -342,15 +356,25 @@ def _inject_card_game_css():
         .gc-header {
             display:flex; align-items:center; gap:11px;
             margin-bottom:12px; position:relative; z-index:1;
+            /* Sag ust kosedeki secim dairesi 26px + 10px kenar bosluk;
+               uzun isimler onun altina giriyordu. Kart govdesinin kendi
+               14px dolgusu dusulunce 30px yetiyor. */
+            padding-right:30px;
         }
+        /* Isim/takim bloğu esnek daralabilsin ki ellipsis calissin */
+        .gc-header > div:last-child { min-width:0; flex:1; }
         .gc-name {
             font-weight:800; font-size:0.9rem;
             color:#f1f5f9; line-height:1.2;
             letter-spacing:-0.3px;
+            /* Uzun isimler (or. "Tyrese Haliburton") kart govdesi
+               overflow:hidden oldugu icin harfin ortasindan kesiliyordu. */
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
         }
         .gc-team-name {
             font-size:0.82rem; font-weight:600;
             margin-top:2px; opacity:.85;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
             letter-spacing:0.2px;
         }
 
@@ -453,6 +477,12 @@ def _inject_card_game_css():
             gap:14px 12px;
             margin-bottom:6px;
         }
+        /* Grid hucreleri varsayilan olarak icerigin min genisliginden
+           kucuk olamiyor. Isimlerde white-space:nowrap kullandigimiz icin
+           uzun bir isim kolonu genisletip karti ekrandan tasiriyordu.
+           min-width:0 hucrelerin daralmasina izin verir, boylece
+           .gc-name uzerindeki ellipsis devreye girer. */
+        .cg-network-grid > * { min-width:0; }
         .cg-network-grid.staggered {
             margin-left:5%;
             margin-right:-2%;
@@ -663,7 +693,8 @@ def _inject_card_game_css():
             .gc-card { min-height:215px; }
             .gc-avatar-ring { width:54px; height:54px; }
             .gc-avatar { width:48px; height:48px; }
-            .gc-name { font-size:0.82rem; }
+            .gc-name { font-size:0.8rem; letter-spacing:-0.4px; }
+            .gc-team-name { font-size:0.82rem; }
             .gc-jersey-watermark { font-size:4.5rem; }
             .cg-scoreboard { padding:.8rem 1rem; border-radius:16px; }
             .cg-score-value { font-size:1.8rem!important; }
@@ -710,7 +741,7 @@ def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib
     # Determine team name short
     team_short = team  # could shorten for mobile
 
-    return f"""
+    return _collapse_html(f"""
     <div class="gc-card {sel_cls}" id="gc-{index}">
         <div class="gc-card-inner"
              style="background:linear-gradient(135deg,{c1}40 0%,{c2}22 50%,{c1}12 100%);">
@@ -744,7 +775,7 @@ def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib
             </div>
         </div>
     </div>
-    """
+    """)
 
 
 def _build_bot_card_html(index):
@@ -752,7 +783,7 @@ def _build_bot_card_html(index):
     c2 = "#8b5cf6"
     icons = ["🏀", "🃏", "⭐", "🏀", "🃏", "⭐", "🏀", "🃏", "⭐", "🏀"]
     icon = icons[index % len(icons)]
-    return f"""
+    return _collapse_html(f"""
     <div class="gc-bot-card"
          style="background:linear-gradient(135deg,{c1}25,{c2}12);
                 border:1px solid {c1}20;">
@@ -760,7 +791,7 @@ def _build_bot_card_html(index):
             <div class="gc-bot-card-icon">{icon}</div>
         </div>
     </div>
-    """
+    """)
 
 
 # ════════════════════════════════════════════════════════════════════
