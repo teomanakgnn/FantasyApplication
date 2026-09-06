@@ -93,6 +93,11 @@
     text-align: center; cursor: pointer;
     transition: all .16s ease;
   }
+  .diff span {
+    display: block; font-size: 9px; font-weight: 700;
+    color: #6B7893; margin-top: 2px; letter-spacing: .2px;
+  }
+  .diff.on span { color: #FDBA74; opacity: .8; }
   .diff.on {
     background: linear-gradient(135deg, rgba(249,115,22,.22), rgba(239,68,68,.16));
     border-color: rgba(249,115,22,.55); color: #FDBA74;
@@ -167,6 +172,10 @@
   .opp-lbl {
     font-size: 9.5px; font-weight: 900; letter-spacing: 1px;
     color: #5D6A85; flex: 0 0 auto;
+  }
+  .opp-left {
+    font-size: 9px; font-weight: 900; letter-spacing: .4px;
+    color: #FBBF24; flex: 0 0 auto; opacity: .85;
   }
   .opp-cards { display: flex; gap: 5px; flex: 1; }
   .opp-card {
@@ -289,6 +298,114 @@
     animation: bump 1.6s ease-in-out infinite;
   }
 
+  /* ══════════ ORTAK KART HAVUZU ══════════
+     Oyuncu ve bot ayni 3 acik karttan seciyor: bir karti almak onu
+     rakibe kaptirmamak demek. Karar mekanik olmaktan cikiyor. */
+  #marketWrap { flex: 0 0 auto; padding: 0 12px 7px; }
+  .mk-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 0 2px 5px;
+  }
+  .mk-title { font-size: 9.5px; font-weight: 900; letter-spacing: 1px; color: #5D6A85; }
+  .mk-turn { font-size: 10px; font-weight: 900; letter-spacing: .4px; }
+  .mk-turn.you { color: #34D399; }
+  .mk-turn.bot { color: #FBBF24; }
+  #market { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+  .mk {
+    position: relative; min-width: 0; border-radius: 13px;
+    background: linear-gradient(150deg, #172034, #101728);
+    border: 1px solid rgba(255,255,255,.09);
+    padding: 6px 7px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: transform .14s ease, border-color .2s ease, box-shadow .2s ease;
+    animation: dealIn .35s cubic-bezier(.22,1.1,.36,1) both;
+  }
+  .mk:active { transform: scale(.96); }
+  .mk.gain { border-color: rgba(16,185,129,.45); }
+  .mk.taken { animation: flyOut .4s cubic-bezier(.55,.06,.68,.19) forwards; }
+  .mk-av { width: 28px; height: 28px; border-radius: 50%; padding: 1.5px; flex: 0 0 auto; display: flex; }
+  .mk-id { min-width: 0; flex: 1; }
+  .mk-name {
+    font-size: 10.5px; font-weight: 800; line-height: 1.1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mk-team {
+    font-size: 9px; font-weight: 700; margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mk-gain {
+    position: absolute; top: -6px; right: -4px;
+    font-size: 9.5px; font-weight: 900; padding: 2px 6px; border-radius: 8px;
+    background: #10B981; color: #06251A;
+    box-shadow: 0 3px 10px rgba(16,185,129,.4);
+  }
+  .mk-gain.zero { background: rgba(255,255,255,.12); color: #7C89A3; box-shadow: none; }
+  #marketWrap.locked .mk { opacity: .45; pointer-events: none; }
+
+  /* Botun aldigi kartlar acik kaliyor: nasil kazandigi gorunur olsun */
+  .opp-card.up {
+    opacity: 1; background: linear-gradient(150deg, #24304D, #161F35);
+    border-color: rgba(251,191,36,.4);
+    flex-direction: column; gap: 1px; padding: 2px;
+    animation: flipIn .45s cubic-bezier(.22,1.1,.36,1) both;
+  }
+  .opp-card.up img { width: 17px; height: 17px; border-radius: 50%; object-fit: cover; }
+  .opp-up-name {
+    font-size: 6.5px; font-weight: 800; color: #C7D2E4; line-height: 1;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Bot hamlesi bildirimi */
+  #turnToast {
+    position: absolute; left: 50%; top: 50%; z-index: 16;
+    transform: translate(-50%, -50%) scale(.85);
+    padding: 11px 18px; border-radius: 15px;
+    background: rgba(16,22,38,.96);
+    border: 1px solid rgba(251,191,36,.35);
+    box-shadow: 0 16px 40px rgba(0,0,0,.55);
+    font-size: 13px; font-weight: 800; text-align: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease, transform .28s cubic-bezier(.34,1.5,.64,1);
+    max-width: 78%;
+  }
+  #turnToast.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #turnToast b { color: #FBBF24; }
+
+  /* Alt sayfada secim satirlari */
+  .pick {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 11px; border-radius: 12px; margin-bottom: 6px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    cursor: pointer; transition: transform .12s ease, border-color .18s ease;
+  }
+  .pick:active { transform: scale(.98); }
+  .pick.best { border-color: rgba(16,185,129,.5); background: rgba(16,185,129,.08); }
+  .pick-av { width: 32px; height: 32px; border-radius: 50%; padding: 1.5px; flex: 0 0 auto; display: flex; }
+  .pick-id { flex: 1; min-width: 0; }
+  .pick-name { font-size: 12.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick-sub { font-size: 10.5px; color: #8C99B2; margin-top: 1px; }
+  .pick-d { font-size: 14px; font-weight: 900; flex: 0 0 auto; }
+  .sheet-lbl {
+    font-size: 9.5px; font-weight: 900; letter-spacing: 1px;
+    color: #5D6A85; margin: 10px 2px 7px;
+  }
+
+  /* Sonuc: iki elin acik gosterimi */
+  .res-hand { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 5px; }
+  .rh {
+    border-radius: 10px; padding: 5px 4px; text-align: center; min-width: 0;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+  }
+  .rh img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+  .rh-n {
+    font-size: 8px; font-weight: 800; color: #C7D2E4; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rh-t { font-size: 7.5px; font-weight: 700; margin-top: 1px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rh-p { font-size: 8.5px; font-weight: 900; color: #FBBF24; }
+
   /* ══════════ ALT AKSIYON ══════════ */
   #actions {
     flex: 0 0 auto; display: flex; gap: 9px;
@@ -340,6 +457,9 @@
 
   /* ══════════ SONUC ══════════ */
   #result { padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px)); justify-content: center; gap: 12px; }
+  /* Son satir butonlarin altinda kalmasin */
+  #resScroll { padding-bottom: 8px; }
+  #resScroll::after { content: ""; display: block; height: 4px; }
   .res-badge {
     width: 74px; height: 74px; margin: 0 auto; border-radius: 24px;
     display: flex; align-items: center; justify-content: center;
@@ -411,9 +531,9 @@
     <div>
       <div class="swap-lbl" style="text-align:left;margin:2px 0 7px 2px;">BOT ZORLUGU</div>
       <div class="diff-row" id="diffRow">
-        <div class="diff" data-d="easy">Kolay</div>
-        <div class="diff on" data-d="normal">Normal</div>
-        <div class="diff" data-d="hard">Zor</div>
+        <div class="diff" data-d="easy">Kolay<span>bot 3 hak</span></div>
+        <div class="diff on" data-d="normal">Normal<span>bot 4 hak</span></div>
+        <div class="diff" data-d="hard">Zor<span>bot once secer</span></div>
       </div>
     </div>
     <button class="btn btn-primary" id="startBtn">OYUNU BASLAT</button>
@@ -431,12 +551,21 @@
     </div>
     <div id="oppRow">
       <span class="opp-lbl">RAKIP</span>
+      <span class="opp-left" id="botLeftLbl">4 hak</span>
       <div class="opp-cards" id="oppCards"></div>
+    </div>
+    <div id="marketWrap">
+      <div class="mk-head">
+        <span class="mk-title">ACIK KARTLAR</span>
+        <span class="mk-turn you" id="turnLbl">SIRA SENDE</span>
+      </div>
+      <div id="market"></div>
     </div>
     <div id="board">
       <svg id="web"></svg>
       <div id="tiles"></div>
     </div>
+    <div id="turnToast"></div>
     <div id="hint">Karta dokun - baglantilarini gor</div>
     <div id="actions">
       <button class="btn btn-ghost" id="quitBtn" style="flex:0 0 52px;">✕</button>
@@ -458,7 +587,7 @@
         </div>
       </div>
       <div class="sheet-scroll" id="shLinks"></div>
-      <button class="btn btn-primary" id="swapBtn" style="margin-top:12px;">BU KARTI DEGISTIR</button>
+      <button class="btn btn-ghost" id="sheetClose" style="margin-top:10px;min-height:44px;">KAPAT</button>
     </div>
   </div>
 
@@ -477,7 +606,13 @@
         <div class="res-cap">BOT</div>
       </div>
     </div>
-    <div id="resBreak"></div>
+    <div class="sheet-scroll" id="resScroll">
+      <div id="resBreak"></div>
+      <div class="sheet-lbl">BOTUN ELI</div>
+      <div class="res-hand" id="resBotHand"></div>
+      <div class="sheet-lbl">SENIN ELIN</div>
+      <div class="res-hand" id="resMyHand"></div>
+    </div>
     <button class="btn btn-primary" id="againBtn">TEKRAR OYNA</button>
     <button class="btn btn-ghost" id="lobbyBtn">ANA MENU</button>
   </div>
@@ -490,6 +625,9 @@
   var DATA = __GAME_DATA__;
   var PLAYERS = DATA.players;
   var TEAM_COLORS = DATA.team_colors;
+
+  // Yuklenemeyen fotograflarin yerine gececek NBA logosu
+  var LOGOMAN = "https://cdn.nba.com/headshots/nba/latest/1040x760/logoman.png";
 
   var HAND = 6;          // el buyuklugu - telefon ekranina 2x3 sigar
   var SWAPS = 4;         // degisim hakki
@@ -620,27 +758,54 @@
     return a;
   }
 
-  /** Bot: en zayif karti, desteden gelen adaylarin en iyisiyle degistirir. */
-  function botPlay(hand, deck, difficulty) {
-    var looks = difficulty === "hard" ? 6 : (difficulty === "easy" ? 1 : 3);
-    var swaps = difficulty === "easy" ? SWAPS - 2 : SWAPS;
-    var h = hand.slice();
-    for (var s = 0; s < swaps && deck.length; s++) {
-      var cur = analyze(h);
-      var worst = 0;
-      for (var i = 1; i < h.length; i++) if (cur.per[i].pts < cur.per[worst].pts) worst = i;
-      var best = null, bestScore = cur.total, bestIdx = -1;
-      for (var c = 0; c < looks && c < deck.length; c++) {
-        var cand = deck[c];
-        var trial = h.slice(); trial[worst] = cand;
-        var sc = analyze(trial).total;
-        if (sc > bestScore) { bestScore = sc; best = cand; bestIdx = c; }
-      }
-      if (best === null) break;          // iyilestiremiyorsa durur
-      h[worst] = best;
-      deck.splice(bestIdx, 1);
+  /** Bir karti baska bir kartla degistirince skor ne olur. */
+  function deltaOf(hand, myIdx, card) {
+    var trial = hand.slice();
+    trial[myIdx] = card;
+    return analyze(trial).total - analyze(hand).total;
+  }
+
+  /** Elin herhangi bir karti yerine bu karti alsam en fazla ne kazanirim. */
+  function bestGain(hand, card) {
+    var best = -999, at = -1;
+    for (var i = 0; i < hand.length; i++) {
+      var d = deltaOf(hand, myIdx_(i), card);
+      if (d > best) { best = d; at = i; }
     }
-    return h;
+    return { gain: best, at: at };
+  }
+  function myIdx_(i) { return i; }
+
+  /**
+   * Botun tek hamlesi: acik kartlardan birini alip kendi bir kartiyla
+   * degistirir. Sirali oynandigi icin artik gorunur bir hamle.
+   *   kolay  - sadece tek bir acik karta bakar
+   *   normal - tum acik kartlar x tum el kombinasyonlarini dener
+   *   zor    - ayrica karti rakibe kaptirmamayi da hesaba katar
+   */
+  function botMove(botHand, market, difficulty, playerHand) {
+    var look = difficulty === "easy"
+      ? [Math.floor(Math.random() * market.length)]
+      : market.map(function (_, i) { return i; });
+
+    var best = null;
+    for (var k = 0; k < look.length; k++) {
+      var m = look[k], card = market[m];
+      if (!card) continue;
+      /* Engelleme agirligi 0.5 iken bot kendi skorunu bozup rakibi
+         engellemeyi tercih ediyordu ve "zor" bot normalden zayif
+         kaliyordu. Artik sadece esitlik bozucu. */
+      var deny = 0;
+      if (difficulty === "hard" && playerHand)
+        deny = Math.max(0, bestGain(playerHand, card).gain) * 0.15;
+      for (var i = 0; i < botHand.length; i++) {
+        var d = deltaOf(botHand, i, card);
+        var value = d + deny;
+        if (!best || value > best.value) best = { value: value, gain: d, mk: m, idx: i };
+      }
+    }
+    if (!best || best.value <= 0) return null;   // faydasizsa pas gecer
+    return best;
   }
 
   /* LOGIC-END */
@@ -653,13 +818,25 @@
 
   function $(id) { return document.getElementById(id); }
 
+  var MARKET = 3;   // ortak acik kart sayisi
+
   function newGame() {
     var d = shuffle(PLAYERS);
     G = {
       hand: d.slice(0, HAND),
       botHand: d.slice(HAND, HAND * 2),
-      deck: d.slice(HAND * 2),
-      swaps: SWAPS,
+      deck: d.slice(HAND * 2 + MARKET),
+      market: d.slice(HAND * 2, HAND * 2 + MARKET),
+      myLeft: SWAPS,
+      /* Zorluk gizli bir avantaj degil, gorunur iki koldan veriliyor:
+         kolay botun bir hakki eksik, zor bot her turda ONCE seciyor
+         (yani iyi karti senden once kapiyor). Ekstra hak vermek ise
+         ise yaramiyordu: bot iyilestiremeyince zaten duruyor. */
+      botLeft: difficulty === "easy" ? SWAPS - 1 : SWAPS,
+      botFirst: difficulty === "hard",
+      turn: "you",
+      botShown: {},    // botun aldigi kartlar acik kaliyor
+      busy: false,
       over: false
     };
     picked = -1;
@@ -791,12 +968,11 @@
 
     var dots = "";
     for (var d = 0; d < SWAPS; d++)
-      dots += '<span class="dot' + (d < SWAPS - G.swaps ? " used" : "") + '"></span>';
+      dots += '<span class="dot' + (d < SWAPS - G.myLeft ? " used" : "") + '"></span>';
     $("swapDots").innerHTML = dots;
 
-    var opp = "";
-    for (var o = 0; o < HAND; o++) opp += '<div class="opp-card">🏀</div>';
-    $("oppCards").innerHTML = opp;
+    renderOpp();
+    renderMarket(info);
 
     var tiles = $("tiles").querySelectorAll(".tile");
     for (var t = 0; t < tiles.length; t++) tiles[t].addEventListener("click", onTile);
@@ -806,18 +982,83 @@
     return info;
   }
 
+  /** Rakip seridi: kapali kartlar + botun aldigi acik kartlar. */
+  function renderOpp() {
+    var out = "";
+    for (var o = 0; o < HAND; o++) {
+      if (G.botShown[o]) {
+        var c = G.botHand[o];
+        out += '<div class="opp-card up" title="' + c.name + '">' +
+          '<img src="' + c.headshot_url + '" alt="" onerror="this.src=' +
+          JSON.stringify(LOGOMAN).replace(/"/g, "&quot;") + '">' +
+          '<span class="opp-up-name">' + lastName(c.name) + '</span></div>';
+      } else {
+        out += '<div class="opp-card">🏀</div>';
+      }
+    }
+    $("oppCards").innerHTML = out;
+    var bl = $("botLeftLbl");
+    if (bl) bl.textContent = G.botLeft > 0 ? G.botLeft + " hak" : "bitti";
+  }
+
+  function lastName(n) {
+    var p = n.split(" ");
+    return p.length > 1 ? p[p.length - 1] : n;
+  }
+
+  /** Ortak acik kartlar. Her kartin uzerinde "elime alirsam en fazla
+      ne kazanirim" rozeti var; karar boylece taktik hale geliyor. */
+  function renderMarket(info) {
+    var out = "";
+    for (var m = 0; m < G.market.length; m++) {
+      var card = G.market[m];
+      if (!card) { out += '<div class="mk" style="visibility:hidden"></div>'; continue; }
+      var c1 = teamColor(card.current_team, 0), c2 = teamColor(card.current_team, 1);
+      var g = bestGain(G.hand, card).gain;
+      out += '<div class="mk' + (g > 0 ? " gain" : "") + '" data-m="' + m + '" ' +
+        'style="animation-delay:' + (m * 60) + 'ms">' +
+        '<span class="mk-gain' + (g > 0 ? "" : " zero") + '">' +
+          (g > 0 ? "+" + g : g) + '</span>' +
+        '<div class="mk-av" style="background:linear-gradient(140deg,' + c1 + ',' + c2 + ')">' +
+          '<img class="av" src="' + card.headshot_url + '" alt="" onerror="this.src=' +
+          JSON.stringify(LOGOMAN).replace(/"/g, "&quot;") + '">' +
+        '</div>' +
+        '<div class="mk-id"><div class="mk-name">' + shortName(card.name) + '</div>' +
+        '<div class="mk-team" style="color:' + c2 + '">' + nick(card.current_team) + '</div></div>' +
+      '</div>';
+    }
+    $("market").innerHTML = out;
+
+    var mine = G.turn === "you" && !G.over && G.myLeft > 0;
+    $("marketWrap").classList.toggle("locked", !mine);
+    $("turnLbl").className = "mk-turn " + (G.turn === "you" ? "you" : "bot");
+    $("turnLbl").textContent = G.over ? "EL KILITLENDI"
+      : (G.turn === "you" ? (G.myLeft > 0 ? "SIRA SENDE" : "HAKKIN BITTI") : "BOT DUSUNUYOR");
+
+    var els = $("market").querySelectorAll(".mk");
+    for (var e = 0; e < els.length; e++) els[e].addEventListener("click", onMarket);
+  }
+
+  function toast(html, ms) {
+    var t = $("turnToast");
+    t.innerHTML = html;
+    t.classList.add("on");
+    setTimeout(function () { t.classList.remove("on"); }, ms || 1400);
+  }
+
   function updateHint(info) {
     var h = $("hint");
-    if (G.swaps > 0) {
-      h.className = "live";
-      h.textContent = G.swaps + " degisim hakkin var - zayif karta dokun";
-    } else {
+    if (G.over) { h.className = ""; h.textContent = "El kilitlendi"; return; }
+    if (G.turn === "bot") { h.className = "live"; h.textContent = "Bot oynuyor..."; return; }
+    if (G.myLeft <= 0) {
       h.className = "";
-      h.textContent = "Degisim bitti - eli kilitle";
-    }
-    if (info && info.trios.length) {
+      h.textContent = "Hakkin bitti - eli kilitle";
+    } else if (info && info.trios.length) {
       h.className = "live";
       h.textContent = "⭐ " + info.trios[0].team + " uclusu +" + (info.trios.length * TRIO_BONUS);
+    } else {
+      h.className = "live";
+      h.textContent = "Acik karttan birini al - " + G.myLeft + " hakkin var";
     }
   }
 
@@ -871,15 +1112,23 @@
       })();
     }
     if (!rows) rows = '<div class="empty-note">Bu kartin hicbir baglantisi yok.<br>Degistirmek iyi bir fikir olabilir.</div>';
-    $("shLinks").innerHTML = rows;
 
-    var sw = $("swapBtn");
-    if (G.swaps > 0 && G.deck.length) {
-      sw.disabled = false;
-      sw.textContent = "BU KARTI DEGISTIR (" + G.swaps + ")";
+    // Kartin altinda: yerine hangi acik karti alabilirim ve her biri
+    // kac puan getirir. Karar tek ekranda, tam bilgiyle veriliyor.
+    if (G.turn === "you" && G.myLeft > 0 && !G.over) {
+      var opts = [];
+      for (var m = 0; m < G.market.length; m++) {
+        if (!G.market[m]) continue;
+        opts.push({ m: m, d: deltaOf(G.hand, i, G.market[m]) });
+      }
+      opts.sort(function (x, y) { return y.d - x.d; });
+      rows += '<div class="sheet-lbl">BU KARTIN YERINE AL</div>';
+      for (var o = 0; o < opts.length; o++)
+        rows += pickRow(opts[o].m, i, opts[o].d, o === 0);
+      $("shLinks").innerHTML = rows;
+      bindPicks();
     } else {
-      sw.disabled = true;
-      sw.textContent = "DEGISIM HAKKIN KALMADI";
+      $("shLinks").innerHTML = rows;
     }
     $("sheet").classList.add("on");
     $("sheetBack").classList.add("on");
@@ -914,49 +1163,165 @@
 
   // ══════════ AKIS ══════════
 
-  function doSwap() {
-    if (picked < 0 || G.swaps <= 0 || !G.deck.length) return;
-    var idx = picked;
+  /** Alt sayfadaki secim satiri (alinacak acik kart). */
+  function pickRow(m, myIdx, delta, best) {
+    var card = G.market[m];
+    var c1 = teamColor(card.current_team, 0), c2 = teamColor(card.current_team, 1);
+    var col = delta > 0 ? "#34D399" : (delta < 0 ? "#F87171" : "#8C99B2");
+    return '<div class="pick' + (best && delta > 0 ? " best" : "") +
+      '" data-m="' + m + '" data-i="' + myIdx + '">' +
+      '<div class="pick-av" style="background:linear-gradient(140deg,' + c1 + ',' + c2 + ')">' +
+        '<img class="av" src="' + card.headshot_url + '" alt="" onerror="this.src=\'' + LOGOMAN + '\'">' +
+      '</div>' +
+      '<div class="pick-id"><div class="pick-name">' + card.name + '</div>' +
+      '<div class="pick-sub">' + nick(card.current_team) + " \u00b7 " + card.country + '</div></div>' +
+      '<span class="pick-d" style="color:' + col + '">' +
+        (delta > 0 ? "+" : "") + delta + '</span></div>';
+  }
+
+  function bindPicks() {
+    var els = $("shLinks").querySelectorAll(".pick");
+    for (var i = 0; i < els.length; i++) {
+      els[i].addEventListener("click", function (e) {
+        var el = e.currentTarget;
+        applySwap(+el.getAttribute("data-i"), +el.getAttribute("data-m"));
+      });
+    }
+  }
+
+  /** Acik karta dokununca: hangi kartimla degistireyim? */
+  function onMarket(e) {
+    if (G.turn !== "you" || G.myLeft <= 0 || G.over || G.busy) return;
+    var m = +e.currentTarget.getAttribute("data-m");
+    var card = G.market[m];
+    if (!card) return;
+    buzz(8);
+
+    var c1 = teamColor(card.current_team, 0), c2 = teamColor(card.current_team, 1);
+    $("shAv").style.background = "linear-gradient(140deg," + c1 + "," + c2 + ")";
+    $("shImg").src = card.headshot_url;
+    $("shName").textContent = card.name;
+    $("shTeam").textContent = card.current_team;
+    $("shTeam").style.color = c2;
+    $("shPts").textContent = bestGain(G.hand, card).gain;
+
+    var opts = [], i;
+    for (i = 0; i < G.hand.length; i++)
+      opts.push({ i: i, d: deltaOf(G.hand, i, card) });
+    opts.sort(function (x, y) { return y.d - x.d; });
+
+    var html = '<div class="sheet-lbl">HANGI KARTININ YERINE?</div>';
+    for (var o = 0; o < opts.length; o++) {
+      var mine = G.hand[opts[o].i];
+      var col = opts[o].d > 0 ? "#34D399" : (opts[o].d < 0 ? "#F87171" : "#8C99B2");
+      html += '<div class="pick' + (o === 0 && opts[o].d > 0 ? " best" : "") +
+        '" data-m="' + m + '" data-i="' + opts[o].i + '">' +
+        '<div class="pick-av" style="background:linear-gradient(140deg,' +
+          teamColor(mine.current_team, 0) + ',' + teamColor(mine.current_team, 1) + ')">' +
+          '<img class="av" src="' + mine.headshot_url + '" alt="" onerror="this.src=\'' + LOGOMAN + '\'">' +
+        '</div>' +
+        '<div class="pick-id"><div class="pick-name">' + mine.name + '</div>' +
+        '<div class="pick-sub">cikar \u00b7 ' + nick(mine.current_team) + '</div></div>' +
+        '<span class="pick-d" style="color:' + col + '">' +
+          (opts[o].d > 0 ? "+" : "") + opts[o].d + '</span></div>';
+    }
+    $("shLinks").innerHTML = html;
+    bindPicks();
+    $("sheet").classList.add("on");
+    $("sheetBack").classList.add("on");
+  }
+
+  /** Oyuncunun hamlesi: acik karti alir, kendi kartini birakir. */
+  function applySwap(myIdx, mkIdx) {
+    if (G.turn !== "you" || G.myLeft <= 0 || G.over || G.busy) return;
+    var card = G.market[mkIdx];
+    if (!card) return;
+    G.busy = true;
     var before = analyze(G.hand).total;
     buzz(14);
     closeSheet();
 
-    var el = $("tiles").querySelector('.tile[data-i="' + idx + '"]');
+    var mkEl = $("market").querySelector('.mk[data-m="' + mkIdx + '"]');
+    if (mkEl) mkEl.classList.add("taken");
+    var el = $("tiles").querySelector('.tile[data-i="' + myIdx + '"]');
     if (el) el.classList.add("out");
 
     setTimeout(function () {
-      G.hand[idx] = G.deck.shift();
-      G.swaps--;
+      G.hand[myIdx] = card;
+      G.market[mkIdx] = G.deck.length ? G.deck.shift() : null;
+      G.myLeft--;
       var info = renderBoard(true);
-      var fresh = $("tiles").querySelector('.tile[data-i="' + idx + '"]');
+      var fresh = $("tiles").querySelector('.tile[data-i="' + myIdx + '"]');
       if (fresh) { fresh.style.animation = "none"; void fresh.offsetWidth; fresh.classList.add("in"); }
       var diff = info.total - before;
-      if (diff !== 0) {
+      if (diff !== 0)
         floatPop((diff > 0 ? "+" : "") + diff, diff > 0 ? "#34D399" : "#F87171", fresh);
-      }
-      if (G.swaps === 0) $("lockBtn").classList.add("btn-primary");
+      G.busy = false;
+      if (G.botLeft > 0) setTimeout(botTurn, 600);
+      else checkEnd();
     }, 400);
   }
 
-  function lockIn() {
+  /** Botun gorunur hamlesi: hangi karti aldigi ekranda yaziyor ve
+      aldigi kart rakip seridinde acik kaliyor. */
+  function botTurn() {
     if (G.over) return;
+    G.turn = "bot";
+    G.busy = true;
+    renderMarket(analyze(G.hand));
+    updateHint(null);
+
+    setTimeout(function () {
+      var mv = botMove(G.botHand, G.market, difficulty, G.hand);
+      if (!mv) {
+        // Pas gecmek eskiden botun tum haklarini yakiyordu; havuz her
+        // turda degistigi icin sadece o turu harcamasi dogru.
+        G.botLeft--;
+        toast("Bot <b>pas</b> gecti", 1200);
+      } else {
+        var card = G.market[mv.mk];
+        var mkEl = $("market").querySelector('.mk[data-m="' + mv.mk + '"]');
+        if (mkEl) mkEl.classList.add("taken");
+        G.botHand[mv.idx] = card;
+        G.botShown[mv.idx] = 1;
+        G.market[mv.mk] = G.deck.length ? G.deck.shift() : null;
+        G.botLeft--;
+        toast("Bot <b>" + card.name + "</b> aldi", 1500);
+        renderOpp();
+      }
+      setTimeout(function () {
+        G.turn = "you";
+        G.busy = false;
+        renderBoard(false);
+        checkEnd();
+      }, 850);
+    }, 700);
+  }
+
+  function checkEnd() {
+    if (G.myLeft <= 0 && G.botLeft <= 0 && !G.over) setTimeout(finish, 600);
+  }
+
+  /** Oyuncu kalan haklarindan vazgecip eli kilitler. */
+  function lockIn() {
+    if (G.over || G.busy) return;
+    G.myLeft = 0;
+    closeSheet();
+    if (G.botLeft > 0) { botTurn(); return; }
+    finish();
+  }
+
+  /** Bot kalan haklarini kullanir, sonra sonuc ekrani acilir. */
+  function finish() {
+    if (G.over) return;
+    if (G.botLeft > 0) { botTurn(); return; }
     G.over = true;
     buzz(20);
     closeSheet();
     $("lockBtn").disabled = true;
-    $("hint").className = "live";
-    $("hint").textContent = "Bot oynuyor...";
-
-    var cards = $("oppCards").querySelectorAll(".opp-card");
-    for (var i = 0; i < cards.length; i++) {
-      cards[i].classList.add("think");
-      cards[i].style.animationDelay = (i * 90) + "ms";
-    }
-
-    setTimeout(function () {
-      G.botHand = botPlay(G.botHand, G.deck, difficulty);
-      showResult();
-    }, 1500);
+    renderMarket(analyze(G.hand));
+    updateHint(null);
+    setTimeout(showResult, 500);
   }
 
   function countUp(el, to, ms) {
@@ -1003,11 +1368,28 @@
       '</div>';
     }
     $("resBreak").innerHTML = rows;
+    $("resBotHand").innerHTML = handStrip(G.botHand);
+    $("resMyHand").innerHTML = handStrip(G.hand);
 
     show("result");
     countUp($("resMe"), me, 900);
     countUp($("resBot"), bot, 900);
     if (win) confetti();
+  }
+
+  /** Sonuc ekraninda bir elin acik gosterimi (botun eli dahil). */
+  function handStrip(hand) {
+    var info = analyze(hand), out = "";
+    for (var i = 0; i < hand.length; i++) {
+      var c = hand[i];
+      out += '<div class="rh" title="' + c.name + '">' +
+        '<img src="' + c.headshot_url + '" alt="" onerror="this.src=\'' + LOGOMAN + '\'">' +
+        '<div class="rh-n">' + lastName(c.name) + '</div>' +
+        '<div class="rh-t" style="color:' + teamColor(c.current_team, 1) + '">' +
+          nick(c.current_team) + '</div>' +
+        '<div class="rh-p">' + info.per[i].pts + '</div></div>';
+    }
+    return out;
   }
 
   function confetti() {
@@ -1038,6 +1420,8 @@
     $("lockBtn").className = "btn btn-go";
     show("play");
     renderBoard(false);
+    // Zor modda bot ilk hamleyi yapar: iyi kart senden once gider.
+    if (G.botFirst) setTimeout(botTurn, 950);
   }
 
   // ══════════ BAGLAMA ══════════
@@ -1071,7 +1455,7 @@
   $("lobbyBtn").addEventListener("click", function () { show("lobby"); });
   $("quitBtn").addEventListener("click", function () { show("lobby"); });
   $("lockBtn").addEventListener("click", lockIn);
-  $("swapBtn").addEventListener("click", doSwap);
+  $("sheetClose").addEventListener("click", closeSheet);
   $("sheetBack").addEventListener("click", closeSheet);
 
   var rt;
