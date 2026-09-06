@@ -3,6 +3,7 @@ Card Connections - NBA Card Game UI
 Premium game-card design with network layout.
 """
 import re
+import time
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -490,6 +491,139 @@ def _inject_card_game_css():
         .cg-network-grid .gc-card-wrapper {
             position:relative;
         }
+        /* Kartin kendisine tiklayarak secim:
+           kart kendi kolonunda, checkbox da o kolonun tamamini kaplayan
+           gorunmez bir katman. Boylece kartin herhangi bir yerine
+           dokunmak secim yapiyor. */
+        [data-testid="stColumn"]:has(.gc-card-slot) { position:relative; }
+        /* Streamlit checkbox'i kendi stElementContainer'ina sariyor ve o
+           kapsayici position:relative + 15x0px. Sadece checkbox'a inset:0
+           vermek bu yuzden ise yaramiyor; kapsayiciyi da yaymak sart. */
+        [data-testid="stColumn"]:has(.gc-card-slot)
+            [data-testid="stElementContainer"]:has([data-testid="stCheckbox"]) {
+            position:absolute; inset:0;
+            width:auto; height:auto; max-width:none;
+            margin:0; padding:0; z-index:4;
+        }
+        [data-testid="stColumn"]:has(.gc-card-slot) [data-testid="stCheckbox"] {
+            position:absolute; inset:0;
+            width:auto; height:auto; margin:0; padding:0;
+        }
+        [data-testid="stColumn"]:has(.gc-card-slot) [data-testid="stCheckbox"] > *,
+        [data-testid="stColumn"]:has(.gc-card-slot) [data-testid="stCheckbox"] label {
+            width:100%; height:100%; margin:0; padding:0;
+            min-height:0; display:block;
+        }
+        [data-testid="stColumn"]:has(.gc-card-slot) [data-testid="stCheckbox"] label {
+            opacity:0; cursor:pointer; -webkit-tap-highlight-color:transparent;
+        }
+        /* Kartin kendi ic elemanlari tiklamayi yutmasin */
+        .gc-card-slot { position:relative; z-index:1; pointer-events:none; }
+
+        /* ───── DISCARD / DRAW ANIMASYONU ─────
+           Discard iki asamada calisiyor: once secili kartlar
+           "atiliyor" animasyonuyla ekrandan cikiyor, sonra yerlerine
+           gelen yeni kartlar desteden dagitiliyormus gibi giriyor. */
+        @keyframes cg-discard-out {
+            0%   { transform:translateY(0) rotate(0deg) scale(1); opacity:1; }
+            25%  { transform:translateY(10px) rotate(-3deg) scale(.97); opacity:1; }
+            100% { transform:translateY(-190px) rotate(14deg) scale(.62); opacity:0; }
+        }
+        @keyframes cg-discard-flash {
+            0%, 100% { box-shadow:0 0 0 0 rgba(239,68,68,0); }
+            30%      { box-shadow:0 0 0 3px rgba(239,68,68,.85),
+                                  0 12px 30px rgba(239,68,68,.35); }
+        }
+        @keyframes cg-draw-in {
+            0%   { transform:translateY(-150px) rotateX(65deg) scale(.7); opacity:0; }
+            55%  { transform:translateY(8px) rotateX(0deg) scale(1.03); opacity:1; }
+            100% { transform:translateY(0) rotateX(0deg) scale(1); opacity:1; }
+        }
+        @keyframes cg-draw-glow {
+            0%   { box-shadow:0 0 0 3px rgba(16,185,129,.9), 0 14px 34px rgba(16,185,129,.4); }
+            100% { box-shadow:0 0 0 0 rgba(16,185,129,0), 0 0 0 rgba(16,185,129,0); }
+        }
+        .gc-card-slot.is-discarding .gc-card {
+            animation: cg-discard-out .78s cubic-bezier(.55,.06,.68,.19) forwards,
+                       cg-discard-flash .78s ease-out;
+            pointer-events:none;
+        }
+        .gc-card-slot.is-drawn .gc-card {
+            animation: cg-draw-in .55s cubic-bezier(.22,1.1,.36,1) both,
+                       cg-draw-glow 1.5s ease-out .55s both;
+        }
+        /* Sirali gecikme: kartlar teker teker atilir / dagitilir */
+        .gc-card-slot.d-0 .gc-card { animation-delay:0s, 0s; }
+        .gc-card-slot.d-1 .gc-card { animation-delay:.10s, .10s; }
+        .gc-card-slot.d-2 .gc-card { animation-delay:.20s, .20s; }
+        .gc-card-slot.d-3 .gc-card { animation-delay:.30s, .30s; }
+        .gc-card-slot.d-4 .gc-card { animation-delay:.40s, .40s; }
+        .gc-card-slot.is-drawn.d-1 .gc-card { animation-delay:.10s, .65s; }
+        .gc-card-slot.is-drawn.d-2 .gc-card { animation-delay:.20s, .75s; }
+        .gc-card-slot.is-drawn.d-3 .gc-card { animation-delay:.30s, .85s; }
+        .gc-card-slot.is-drawn.d-4 .gc-card { animation-delay:.40s, .95s; }
+
+        /* Ne atildi / ne cekildi seridi */
+        @keyframes cg-toast-in {
+            0%   { transform:translateY(-8px); opacity:0; }
+            12%  { transform:translateY(0); opacity:1; }
+            80%  { opacity:1; }
+            100% { opacity:.9; }
+        }
+        .cg-swap-toast {
+            display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+            padding:10px 14px; margin:0 0 12px;
+            border-radius:14px;
+            background:linear-gradient(135deg, rgba(239,68,68,.13), rgba(16,185,129,.13));
+            border:1px solid rgba(255,255,255,.10);
+            animation: cg-toast-in 2.6s ease-out both;
+        }
+        .cg-swap-part { display:flex; align-items:center; gap:7px; min-width:0; }
+        .cg-swap-tag {
+            font-size:.72rem; font-weight:800; letter-spacing:.5px;
+            padding:3px 9px; border-radius:999px; white-space:nowrap;
+        }
+        .cg-swap-tag.out { background:rgba(239,68,68,.2); color:#fca5a5; }
+        .cg-swap-tag.in  { background:rgba(16,185,129,.2); color:#6ee7b7; }
+        .cg-swap-names {
+            font-size:.86rem; font-weight:700; color:#e8ecf4;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .cg-swap-arrow { color:#8b93a7; font-size:1.05rem; font-weight:700; }
+
+        /* ───── AKSIYON PANELI ─────
+           Butonlar duz zeminde kaybolmasin diye kendi cerceveli
+           panelinde ve basligiyla duruyor. */
+        .cg-action-head {
+            display:flex; align-items:center; justify-content:space-between;
+            gap:10px; margin:18px 0 8px;
+            padding-top:14px; border-top:1px solid rgba(255,255,255,.09);
+        }
+        .cg-action-title {
+            font-size:.78rem; font-weight:800; letter-spacing:1.4px;
+            text-transform:uppercase; color:#8b93a7;
+        }
+        .cg-action-hint {
+            font-size:.78rem; color:#6ee7b7; font-weight:700;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .cg-action-hint.idle { color:#8b93a7; font-weight:600; }
+        [data-testid="stHorizontalBlock"]:has(.cg-action-anchor) {
+            background:rgba(255,255,255,.035);
+            border:1px solid rgba(255,255,255,.09);
+            border-radius:16px;
+            padding:12px;
+            gap:10px;
+        }
+        [data-testid="stHorizontalBlock"]:has(.cg-action-anchor) button {
+            min-height:48px; font-weight:800; letter-spacing:.3px;
+        }
+        [data-testid="stColumn"]:has(.gc-card-slot):hover .gc-card {
+            transform:translateY(-4px);
+        }
+        [data-testid="stColumn"]:has(.gc-card-slot):active .gc-card {
+            transform:scale(.985);
+        }
 
         /* ───── BOT CARDS (Animated Back) ───── */
         .gc-bot-card {
@@ -711,6 +845,7 @@ def _inject_card_game_css():
 # ════════════════════════════════════════════════════════════════════
 #  CARD HTML BUILDER
 # ════════════════════════════════════════════════════════════════════
+
 def _build_card_html(card, index, is_selected=False, show_contrib=False, contrib=0):
     """Build premium game-card HTML."""
     team = card["current_team"]
@@ -918,77 +1053,131 @@ def _render_game_screen(game):
 
     hand = game.player_hand
 
-    # Row 1 (first 5 cards)
-    row1 = hand[:5]
-    row1_html = '<div class="cg-network-grid">'
-    for i, card in enumerate(row1):
-        is_sel = i in selected
-        contrib = ConnectionChecker.calculate_card_contribution(hand, i)
-        row1_html += f'<div class="gc-card-wrapper">{_build_card_html(card, i, is_sel, True, contrib)}</div>'
-    row1_html += '</div>'
-    st.markdown(row1_html, unsafe_allow_html=True)
+    # Discard iki asamalidir:
+    #   1) buton -> cg_discard_pending yazilir, kartlar "atiliyor"
+    #      animasyonuyla cizilir, kisa bir bekleme sonrasi el guncellenir
+    #   2) yeni el cizilirken cekilen kartlar "dagitiliyor" animasyonu alir
+    pending = list(st.session_state.get("cg_discard_pending") or [])
+    drawn = set(st.session_state.get("cg_drawn_indices") or [])
+    swap_out = st.session_state.get("cg_swap_out") or []
+    swap_in = st.session_state.get("cg_swap_in") or []
 
-    # Row 1 checkboxes
-    cols1 = st.columns(len(row1))
-    for i in range(len(row1)):
-        with cols1[i]:
-            if st.checkbox("Sel", key=f"cg_sel_{i}", value=(i in selected),
-                           label_visibility="collapsed"):
-                selected.add(i)
-            else:
-                selected.discard(i)
+    if swap_out:
+        parts = ('<div class="cg-swap-part">'
+                 '<span class="cg-swap-tag out">DISCARD</span>'
+                 f'<span class="cg-swap-names">{", ".join(swap_out)}</span></div>')
+        if swap_in:
+            parts += ('<span class="cg-swap-arrow">&rarr;</span>'
+                      '<div class="cg-swap-part">'
+                      '<span class="cg-swap-tag in">DRAW</span>'
+                      f'<span class="cg-swap-names">{", ".join(swap_in)}</span></div>')
+        st.markdown(f'<div class="cg-swap-toast">{parts}</div>',
+                    unsafe_allow_html=True)
 
-    # Row 2 (cards 5–9, staggered)
-    row2 = hand[5:10]
-    if row2:
-        row2_html = '<div class="cg-network-grid staggered">'
-        for j, card in enumerate(row2):
-            card_idx = 5 + j
-            is_sel = card_idx in selected
-            contrib = ConnectionChecker.calculate_card_contribution(hand, card_idx)
-            row2_html += f'<div class="gc-card-wrapper">{_build_card_html(card, card_idx, is_sel, True, contrib)}</div>'
-        row2_html += '</div>'
-        st.markdown(row2_html, unsafe_allow_html=True)
+    # Kartlar kendi kolonlarinda ciziliyor ve her kolonun uzerine
+    # gorunmez bir checkbox seriliyor -> KARTIN KENDISINE tiklayarak
+    # secim. (Once kart bir <a> icine alinmisti ama Streamlit'te
+    # baglantiya tiklamak tam sayfa gezinmesi yapip session_state'i
+    # siliyor, yani oyun sifirlaniyordu. Checkbox normal rerun yapar.)
+    token = st.session_state.get("cg_hand_token", 0)
 
-        # Row 2 checkboxes (offset to match stagger)
-        c_spacer, *cols2 = st.columns([0.5] + [1] * len(row2))
-        for j in range(len(row2)):
-            card_idx = 5 + j
-            with cols2[j]:
-                if st.checkbox("Sel", key=f"cg_sel_{card_idx}",
-                               value=(card_idx in selected),
+    def _render_hand_row(cards, start_idx):
+        cols = st.columns(len(cards))
+        for k, card in enumerate(cards):
+            idx = start_idx + k
+            contrib = ConnectionChecker.calculate_card_contribution(hand, idx)
+            cls = "gc-card-slot"
+            if idx in pending:
+                cls += " is-discarding d-%d" % (pending.index(idx) % 5)
+            elif idx in drawn:
+                cls += " is-drawn d-%d" % (sorted(drawn).index(idx) % 5)
+            with cols[k]:
+                st.markdown(
+                    f'<div class="{cls}">'
+                    + _build_card_html(card, idx, idx in selected, True, contrib)
+                    + '</div>',
+                    unsafe_allow_html=True)
+                # Animasyon oynarken secim katmani cizilmez
+                if pending:
+                    continue
+                if st.checkbox("Kartı seç", key=f"cg_sel_{token}_{idx}",
+                               value=(idx in selected),
                                label_visibility="collapsed"):
-                    selected.add(card_idx)
+                    selected.add(idx)
                 else:
-                    selected.discard(card_idx)
+                    selected.discard(idx)
+
+    _render_hand_row(hand[:5], 0)
+    if len(hand) > 5:
+        _render_hand_row(hand[5:10], 5)
 
     st.session_state.cg_selected_cards = selected
+    # "Ne atildi/ne cekildi" seridi ve dagitim animasyonu bir kez oynar.
+    # Atilma karesinde temizlenmez; yoksa dagitim karesinde serit kaybolur.
+    if not pending:
+        st.session_state.cg_drawn_indices = None
+        st.session_state.cg_swap_out = None
+        st.session_state.cg_swap_in = None
 
     # ── Action buttons ──
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 1])
+    if pending:
+        hint, hint_cls = "Kartlar atılıyor...", "idle"
+    elif selected:
+        hint = f"{len(selected)} kart seçili - Discard & Draw'a bas"
+        hint_cls = ""
+    else:
+        hint, hint_cls = "Değiştirmek istediğin kartlara dokun", "idle"
+    st.markdown(
+        '<div class="cg-action-head">'
+        '<span class="cg-action-title">Actions</span>'
+        f'<span class="cg-action-hint {hint_cls}">{hint}</span></div>',
+        unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1.15, 1, .9])
     with col1:
-        dis = (game.player_discards_left <= 0) or (len(selected) == 0)
-        if st.button(f"Discard & Draw ({len(selected)})", disabled=dis,
-                     width='stretch', key="cg_discard_btn", type="secondary"):
+        st.markdown('<span class="cg-action-anchor"></span>',
+                    unsafe_allow_html=True)
+        dis = (game.player_discards_left <= 0) or (len(selected) == 0) or bool(pending)
+        if st.button(f"🔄 Discard & Draw ({len(selected)})", disabled=dis,
+                     width='stretch', key="cg_discard_btn",
+                     type="primary" if selected and not pending else "secondary"):
             if selected:
-                game.player_discard(list(selected))
-                st.session_state.card_game = game.to_dict()
-                st.session_state.cg_selected_cards = set()
+                st.session_state.cg_discard_pending = sorted(selected)
+                st.session_state.cg_swap_out = [
+                    hand[i]["name"] for i in sorted(selected) if i < len(hand)]
                 st.rerun()
     with col2:
-        if st.button("Lock In Hand", width='stretch', key="cg_lock_btn",
-                      type="primary"):
+        if st.button("✅ Lock In Hand", width='stretch', key="cg_lock_btn",
+                      type="secondary" if selected else "primary",
+                      disabled=bool(pending)):
             game.player_lock_in()
             st.session_state.card_game = game.to_dict()
             st.session_state.cg_selected_cards = set()
+            st.session_state.cg_hand_token = token + 1
             st.rerun()
     with col3:
         if st.button("Back to Lobby", width='stretch', key="cg_back_game",
                       type="secondary"):
-            st.session_state.pop("card_game", None)
-            st.session_state.pop("cg_selected_cards", None)
+            for k in ("card_game", "cg_selected_cards", "cg_discard_pending",
+                      "cg_drawn_indices", "cg_swap_out", "cg_swap_in"):
+                st.session_state.pop(k, None)
             st.rerun()
+
+    # Asama 1 ciziltikten sonra: animasyonun oynamasi icin kisa bekleme,
+    # ardindan eli guncelleyip asama 2'yi (dagitim) tetikle.
+    if pending:
+        time.sleep(0.95)
+        game.player_discard(list(pending))
+        yeni_el = game.player_hand
+        # player_discard cikanlari silip yenileri sona ekliyor
+        yeni_idx = list(range(max(0, len(yeni_el) - len(pending)), len(yeni_el)))
+        st.session_state.card_game = game.to_dict()
+        st.session_state.cg_discard_pending = None
+        st.session_state.cg_drawn_indices = yeni_idx
+        st.session_state.cg_swap_in = [yeni_el[i]["name"] for i in yeni_idx]
+        st.session_state.cg_selected_cards = set()
+        st.session_state.cg_hand_token = token + 1
+        st.rerun()
 
     # ── Connections preview ──
     if preview_connections:
