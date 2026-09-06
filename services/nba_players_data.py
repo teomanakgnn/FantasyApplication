@@ -896,9 +896,83 @@ CONNECTION_TYPES = {
 }
 
 
+# Kadro kisaltmasi -> kart oyununda kullanilan tam takim adi
+_ABBR_TO_TEAM = {
+    "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets",
+    "CHA": "Charlotte Hornets", "CHI": "Chicago Bulls", "CLE": "Cleveland Cavaliers",
+    "DAL": "Dallas Mavericks", "DEN": "Denver Nuggets", "DET": "Detroit Pistons",
+    "GS": "Golden State Warriors", "GSW": "Golden State Warriors",
+    "HOU": "Houston Rockets", "IND": "Indiana Pacers",
+    "LAC": "LA Clippers", "LAL": "Los Angeles Lakers",
+    "MEM": "Memphis Grizzlies", "MIA": "Miami Heat", "MIL": "Milwaukee Bucks",
+    "MIN": "Minnesota Timberwolves", "NO": "New Orleans Pelicans",
+    "NOP": "New Orleans Pelicans", "NY": "New York Knicks", "NYK": "New York Knicks",
+    "OKC": "Oklahoma City Thunder", "ORL": "Orlando Magic",
+    "PHI": "Philadelphia 76ers", "PHX": "Phoenix Suns",
+    "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings",
+    "SA": "San Antonio Spurs", "SAS": "San Antonio Spurs",
+    "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "UTAH": "Utah Jazz",
+    "WSH": "Washington Wizards",
+}
+
+
+def _live_team_map():
+    """
+    ESPN kadrolarindan {oyuncu adi: tam takim adi} haritasi.
+
+    Bu dosyadaki NBA_PLAYERS listesi elle yazilmis ve bayatliyor: olculdu,
+    82 oyuncunun 39'unun takimi artik yanlisti (Luka Doncic kartta Dallas
+    yaziyordu, gercekte Lakers). Bu sadece gorsel bir sorun degil -
+    "Teammates" baglantisi 5 puan ve current_team uzerinden hesaplaniyor,
+    yani skor da yanlis cikiyordu.
+
+    Ag yoksa bos donuyor ve statik veri oldugu gibi kullaniliyor.
+    """
+    try:
+        from services.espn_api import get_current_team_rosters
+        rosters = get_current_team_rosters()
+    except Exception as exc:
+        print(f"⚠️ Kart oyunu icin canli kadro alinamadi: {exc}")
+        return {}
+
+    out = {}
+    for name, info in (rosters or {}).items():
+        abbr = info.get("team") if isinstance(info, dict) else info
+        team = _ABBR_TO_TEAM.get(abbr)
+        if team:
+            out[name] = team
+    return out
+
+
 def get_all_players():
-    """Return a copy of all NBA player data."""
-    return [p.copy() for p in NBA_PLAYERS]
+    """
+    Oyuncu listesini dondurur; guncel takimlar canli kadrodan tazelenir.
+
+    Statik veri yedek olarak kalir (ag yoksa oyun yine calisir).
+    """
+    live = _live_team_map()
+    players = []
+    duzeltilen = 0
+
+    for p in NBA_PLAYERS:
+        card = p.copy()
+        gercek = live.get(card["name"])
+        if gercek and gercek != card["current_team"]:
+            eski = card["current_team"]
+            card["current_team"] = gercek
+            # Oyuncu eski takimina geri donmus olabilir; ayni takim hem
+            # guncel hem "eski takim" olarak gorunmesin.
+            formers = [t for t in card.get("former_teams", []) if t != gercek]
+            # Birakti oldugu takim artik gecmisi sayilir.
+            if eski and eski not in formers:
+                formers.append(eski)
+            card["former_teams"] = formers
+            duzeltilen += 1
+        players.append(card)
+
+    if duzeltilen:
+        print(f"✓ Kart oyunu: {duzeltilen} oyuncunun takimi canli kadrodan güncellendi")
+    return players
 
 
 def get_player_count():
