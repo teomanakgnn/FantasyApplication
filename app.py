@@ -22,6 +22,7 @@ from streamlit_javascript import st_javascript
 import hashlib
 # Import db early so it's available for fingerprint validation
 from services.database import db, FREE_WATCHLIST_LIMIT
+from utils.text import esc
 from components.pro import (PRO_FEATURES, inject_pro_css, limit_notice,
                             require_pro, within_limit)
 
@@ -1254,8 +1255,8 @@ with st.sidebar:
         plan_chip = "pro" if is_pro else "free"
         st.markdown(f"""
             <div class="side-user">
-                <div class="side-user-name">{user.get('username','User')}</div>
-                <div class="side-user-mail">{user.get('email','')}</div>
+                <div class="side-user-name">{esc(user.get('username'), 'User')}</div>
+                <div class="side-user-mail">{esc(user.get('email'))}</div>
                 <span class="plan-chip {plan_chip}">{'PRO' if is_pro else 'FREE'}</span>
             </div>
         """, unsafe_allow_html=True)

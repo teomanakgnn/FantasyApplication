@@ -12,6 +12,7 @@ import time
 import pandas as pd
 import streamlit as st
 
+from utils.text import esc
 from services.database import db, FREE_SAVED_DRAFT_LIMIT
 from components.pro import within_limit
 from services.draft_data import (fetch_draft_rankings, get_draft_board,
@@ -417,7 +418,7 @@ def _render_saved_drafts(board):
         c1, c2, c3, c4 = st.columns([4, 2, 1, 1])
         with c1:
             status = "Complete" if row["complete"] else "In progress"
-            st.markdown(f"**{row['name']}**  \n"
+            st.markdown(f"**{esc(row['name'])}**  \n"
                         f"<span style='font-size:0.86rem;color:#888'>"
                         f"{row['format'].title()} · {row['team_count']} teams · "
                         f"{row['rounds']} tur · {status}</span>",

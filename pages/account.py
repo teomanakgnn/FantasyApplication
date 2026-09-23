@@ -10,6 +10,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from utils.text import esc
 from components.pro import PRO_FEATURES, UPGRADE_NOTE, inject_pro_css, plan_label
 from services.database import (FREE_SAVED_DRAFT_LIMIT, FREE_WATCHLIST_LIMIT,
                                PLAN_FREE, PLAN_PRO, db)
@@ -56,8 +57,8 @@ def _profile(user):
     st.markdown(
         f"""
         <div class="acct-card">
-            <div class="acct-name">{user.get('username', '')}</div>
-            <div class="acct-mail">{user.get('email', '')}</div>
+            <div class="acct-name">{esc(user.get('username'))}</div>
+            <div class="acct-mail">{esc(user.get('email'))}</div>
             <div style="margin-top:10px;">
                 <span class="plan-chip {chip}">{plan.upper()}</span>
                 <span class="acct-meta">Member since {_fmt_date(user.get('created_at'))}</span>
@@ -135,8 +136,8 @@ def _sessions(user):
             f"""
             <div class="acct-row">
                 <div>
-                    <div class="acct-row-main">{_short_agent(item.get('user_agent'))}</div>
-                    <div class="acct-row-sub">{item.get('ip_address') or 'unknown IP'}
+                    <div class="acct-row-main">{esc(_short_agent(item.get('user_agent')))}</div>
+                    <div class="acct-row-sub">{esc(item.get('ip_address'), 'unknown IP')}
                         · signed in {_fmt_date(item.get('created_at'))}</div>
                 </div>
             </div>

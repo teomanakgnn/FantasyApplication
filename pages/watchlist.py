@@ -1,5 +1,6 @@
 import streamlit as st
 from services.database import db, FREE_WATCHLIST_LIMIT
+from utils.text import esc
 from components.pro import limit_notice, within_limit
 import pandas as pd
 from datetime import datetime
@@ -148,7 +149,7 @@ def render_watchlist_page():
         for idx, item in enumerate(filtered_watchlist):
             st.markdown(f"""
                 <div class="player-card">
-                    <div class="player-name">{item['player_name']}</div>
+                    <div class="player-name">{esc(item['player_name'])}</div>
                     <div class="player-meta">
                         Added on {item['created_at'].strftime('%B %d, %Y at %I:%M %p')}
                     </div>
@@ -163,7 +164,7 @@ def render_watchlist_page():
                     st.markdown(f"""
                         <div class="player-notes">
                             <strong>Notes:</strong><br>
-                            {item['notes']}
+                            {esc(item['notes'])}
                         </div>
                     """, unsafe_allow_html=True)
                 else:
