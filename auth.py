@@ -68,7 +68,7 @@ def handle_login(username, password, remember_me=True, fingerprint_hash=None):
     st.rerun()
 
 
-def persist_auth_if_pending():
+def _persist_auth_if_pending():
     """
     Bekleyen oturumu tarayiciya yazar.
 
@@ -113,10 +113,17 @@ def get_fingerprint_component():
 def check_authentication_enhanced(fingerprint_hash=None):
     """
     Check if user is authenticated via session state, URL params, or fingerprint.
-    
+
     Args:
         fingerprint_hash: Optional device fingerprint hash for automatic login
     """
+    # Giristen sonraki ilk calistirmada oturumu tarayiciya yaz. Bu is
+    # ayri bir fonksiyon olarak disa aktariliyordu; app.py'nin import
+    # listesine yeni bir ad eklemek, sunucuda eski auth.py kalmis
+    # oldugunda tum uygulamayi ImportError ile dusuruyordu. Zaten her
+    # calistirmada cagrilan bu fonksiyonun icinde olmasi daha guvenli.
+    _persist_auth_if_pending()
+
     # 1. Zaten giriş yapılmışsa
     if st.session_state.get('authenticated'):
         return True
