@@ -172,7 +172,7 @@ def render_watchlist_page():
                 
                 # Remove
                 if st.button("", key=f"del_{item['id']}", help="Remove from watchlist"):
-                    if db.remove_from_watchlist(item['id']):
+                    if db.remove_from_watchlist(item['id'], user_id):
                         st.success(f"Removed {item['player_name']}.")
                         st.rerun()
             
@@ -187,7 +187,7 @@ def render_watchlist_page():
                     col_save, col_cancel = st.columns(2)
                     with col_save:
                         if st.button("Save", key=f"save_{item['id']}", width='stretch'):
-                            if db.update_watchlist_notes(item['id'], new_notes):
+                            if db.update_watchlist_notes(item['id'], new_notes, user_id):
                                 st.session_state[f"editing_{item['id']}"] = False
                                 st.success("Notes saved.")
                                 st.rerun()
@@ -230,7 +230,7 @@ def render_watchlist_page():
                 with col_yes:
                     if st.button("Yes, clear all", type="primary"):
                         for item in watchlist:
-                            db.remove_from_watchlist(item['id'])
+                            db.remove_from_watchlist(item['id'], user_id)
                         st.success("Watchlist cleared.")
                         st.session_state.confirm_clear = False
                         st.rerun()

@@ -1,5 +1,6 @@
 import streamlit as st
 from services.database import db
+import services.database as db_module
 import re
 import base64
 import os
@@ -12,10 +13,15 @@ import hashlib
 
 def handle_login(username, password, remember_me=True, fingerprint_hash=None):
     """Login işlemi - LocalStorage + URL param tabanlı"""
-    user = db.verify_user(username, password)
+    user = db.verify_user(username, password,
+                          ip_address=get_client_info().get('ip_address'))
 
+    # Cok fazla basarisiz denemeden sonra hesap gecici olarak kilitlenir
+    if user == "locked":
+        return False, ("Too many failed attempts. Try again in "
+                       f"{db_module.LOGIN_WINDOW_MINUTES} minutes.")
     if not user:
-        return False, "Invalid credentials"
+        return False, "Incorrect username or password"
 
     # Session oluştur
     client_info = get_client_info()

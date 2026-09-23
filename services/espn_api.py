@@ -67,36 +67,47 @@ def get_game_ids(date):
 
 def get_last_available_game_date(date, lookback_days=210, lookahead_days=90):
     """
-    Verilen tarihe en yakın maç gününü bulur.
+    Verilen tarihe en yakin mac gununu bulur.
 
-    Önce geriye doğru (o güne kadar oynanmış son maç günü), bulunamazsa
-    ileriye doğru (sıradaki maç günü) bakar. Sezon arasında geriye 7 gün
-    bakmak yetmiyordu ve ana sayfa tamamen boş kalıyordu; bu yüzden
-    aralık bir sezonu kapsayacak kadar geniş tutuldu.
+    Once o gune kadar oynanmis son mac gunune, yoksa siradaki mac gunune
+    bakar. Gunleri tek tek denemek yerine scoreboard'un kendi takvimini
+    kullaniyor: sezon arasinda tek istekle "son oynanan gun" ogreniliyor.
 
     Returns:
-        (tarih, [maç_id]) - hiçbir şey bulunamazsa (None, [])
+        (tarih, [mac_id]) - hicbir sey bulunamazsa (None, [])
     """
-    # Hızlı yol: tam o günde maç var mı?
     ids = get_game_ids(date)
     if ids:
         return date, ids
 
     day = date.date() if isinstance(date, datetime) else date
+    days = get_season_game_days(day)
 
-    # 1) Geriye doğru en son oynanan maç günü
-    past = get_game_ids_in_range(day - timedelta(days=lookback_days), day)
+    past = [d for d in days if d <= day and d >= day - timedelta(days=lookback_days)]
     if past:
         latest = max(past)
-        return latest, past[latest]
+        found = get_game_ids(latest)
+        if found:
+            return latest, found
 
-    # 2) İleriye doğru sıradaki maç günü (sezon öncesi dönem)
-    future = get_game_ids_in_range(day, day + timedelta(days=lookahead_days))
+    future = [d for d in days if d > day and d <= day + timedelta(days=lookahead_days)]
     if future:
         soonest = min(future)
-        return soonest, future[soonest]
+        found = get_game_ids(soonest)
+        if found:
+            return soonest, found
 
+    # Takvim o tarihte bos kalirsa (sezon gecisi) ay bazli aramaya dus
+    past_map = get_game_ids_in_range(day - timedelta(days=lookback_days), day)
+    if past_map:
+        latest = max(past_map)
+        return latest, past_map[latest]
+    future_map = get_game_ids_in_range(day, day + timedelta(days=lookahead_days))
+    if future_map:
+        soonest = min(future_map)
+        return soonest, future_map[soonest]
     return None, []
+
 
 def get_scoreboard(date):
     """GÜNÜN MAÇLARI + SKOR + OT KONTROLÜ"""
@@ -1074,48 +1085,69 @@ def get_score_color(score):
     return "#ef4444" # Kırmızı (Sıkıcı)
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def get_season_game_days(around_date):
+    """
+    Scoreboard yanitindaki takvimden, o tarihin ait oldugu sezonun tum
+    mac gunlerini dondurur.
+
+    ESPN her scoreboard yanitina o sezonun takvimini koyuyor; tek istekle
+    "hangi gunlerde mac var" bilgisini almak icin en ucuz yol bu.
+    """
+    day = around_date.date() if isinstance(around_date, datetime) else around_date
+    url = f"{SCOREBOARD_URL}?dates={day:%Y%m%d}"
+    try:
+        data = espn_get(url, timeout=20).json()
+    except Exception:
+        return []
+    leagues = data.get("leagues") or [{}]
+    out = []
+    for entry in leagues[0].get("calendar") or []:
+        text = entry if isinstance(entry, str) else entry.get("value", "")
+        try:
+            out.append(datetime.strptime(str(text)[:10], "%Y-%m-%d").date())
+        except (ValueError, TypeError):
+            continue
+    return sorted(out)
+
+
 def get_game_ids_in_range(start_date, end_date):
     """
-    Bir tarih aralığındaki tüm maç ID'lerini {tarih: [id, ...]} olarak döndürür.
+    Bir tarih araligindaki tum mac ID'lerini {tarih: [id, ...]} dondurur.
 
-    ESPN scoreboard'u 'dates=YYYYMMDD-YYYYMMDD' aralığını destekliyor; günde
-    bir istek atmak yerine ~30 günlük bloklar hâlinde çekilir. Tam bir sezon
-    için ~170 istek yerine ~6 istek yeterli oluyor.
+    ESPN'in 'dates=YYYYMMDD-YYYYMMDD' araligi artik HTTP 400 veriyor;
+    bu yuzden aralik ay ay ('dates=YYYYMM') sorgulanip birlestiriliyor.
+    Once takvimden hangi gunlerde mac oldugu ogrenilip yalnizca dolu
+    aylar isteniyor, bos aralikta bosuna istek atilmiyor.
     """
-    CHUNK_DAYS = 30
-    # Çağıranlar hem datetime hem date gönderebiliyor; tek tipe indir.
     start_date = start_date.date() if isinstance(start_date, datetime) else start_date
     end_date = end_date.date() if isinstance(end_date, datetime) else end_date
+    if end_date < start_date:
+        return {}
 
-    chunks = []
-    cursor = start_date
+    months = []
+    cursor = start_date.replace(day=1)
     while cursor <= end_date:
-        chunk_end = min(cursor + timedelta(days=CHUNK_DAYS - 1), end_date)
-        chunks.append((cursor, chunk_end))
-        cursor = chunk_end + timedelta(days=1)
+        months.append(cursor)
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
 
-    def fetch_chunk(bounds):
-        c_start, c_end = bounds
-        url = f"{SCOREBOARD_URL}?dates={c_start:%Y%m%d}-{c_end:%Y%m%d}&limit=1000"
+    def fetch_month(first_of_month):
+        url = f"{SCOREBOARD_URL}?dates={first_of_month:%Y%m}&limit=1000"
         try:
             data = espn_get(url, timeout=25).json()
-        except Exception as exc:
-            print(f"Hata (get_game_ids_in_range {c_start:%Y-%m-%d}): {exc}")
+        except Exception:
             return {}
-
         by_date = {}
         for event in data.get("events", []):
             event_date = _parse_event_date(event.get("date"))
-            if event_date:
+            if event_date and start_date <= event_date <= end_date:
                 by_date.setdefault(event_date, []).append(event["id"])
         return by_date
 
     date_game_map = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-        for partial in executor.map(fetch_chunk, chunks):
+        for partial in executor.map(fetch_month, months):
             for day, ids in partial.items():
                 date_game_map.setdefault(day, []).extend(ids)
-
     return date_game_map
 
 

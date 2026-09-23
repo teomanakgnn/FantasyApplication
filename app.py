@@ -21,7 +21,9 @@ import json
 from streamlit_javascript import st_javascript
 import hashlib
 # Import db early so it's available for fingerprint validation
-from services.database import db
+from services.database import db, FREE_WATCHLIST_LIMIT
+from components.pro import (PRO_FEATURES, inject_pro_css, limit_notice,
+                            require_pro, within_limit)
 
 # ==================== 1. SAYFA AYARLARI (EN BAŞTA OLMALI) ====================
 st.set_page_config(
@@ -1064,6 +1066,7 @@ components.html("""
 
 # ==================== 8. DİĞER IMPORTLAR ====================
 from components.styles import load_styles
+inject_pro_css()
 from components.header import render_header
 from components.sidebar import render_sidebar
 from components.tables import render_tables
@@ -1242,54 +1245,53 @@ with st.sidebar:
     st.markdown("---")
 
     if is_authenticated and user:
+        # Mor gradyanli kart yerine sade bir kimlik satiri
+        plan_chip = "pro" if is_pro else "free"
         st.markdown(f"""
-            <div style='background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
-                        padding:1rem;border-radius:10px;margin-bottom:1rem;'>
-                <div style='color:white;font-weight:600;font-size:1.1rem;'>{user.get('username','User')}</div>
-                <div style='color:rgba(255,255,255,0.8);font-size:0.85rem;'>{user.get('email','')}</div>
+            <div class="side-user">
+                <div class="side-user-name">{user.get('username','User')}</div>
+                <div class="side-user-mail">{user.get('email','')}</div>
+                <span class="plan-chip {plan_chip}">{'PRO' if is_pro else 'FREE'}</span>
             </div>
         """, unsafe_allow_html=True)
 
-        if is_pro:
-            st.success("PRO Member")
-            watchlist_count = len(db.get_watchlist(user['id']))
-            if st.button(f"My Watchlist ({watchlist_count})", width='stretch'):
-                st.session_state.page = "watchlist"
-                st.rerun()
-        else:
-            st.info("Free Account")
-            if st.button("Upgrade to PRO", width='stretch'):
-                st.info("Contact admin for PRO upgrade")
-
-        if st.button("Logout", width='stretch'):
+        watchlist_count = db.watchlist_count(user['id'])
+        if st.button(f"Watchlist ({watchlist_count})", width='stretch'):
+            st.session_state.page = "watchlist"
+            st.rerun()
+        if st.button("Account", width='stretch'):
+            st.session_state.page = "account"
+            st.rerun()
+        if st.button("Sign out", width='stretch'):
             logout_enhanced()
     else:
         st.markdown("""
-            <div style='background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);
-                        padding:1rem;border-radius:10px;margin-bottom:1rem;text-align:center;'>
-                <div style='color:white;font-weight:600;font-size:1.1rem;margin-bottom:0.5rem;'>Pro account</div>
-                <div style='color:rgba(255,255,255,0.9);font-size:0.85rem;'>Log in to use Pro features</div>
+            <div class="side-user">
+                <div class="side-user-name">Not signed in</div>
+                <div class="side-user-mail">Track players and save mock drafts.</div>
             </div>
         """, unsafe_allow_html=True)
 
-        if st.button("Login / Register", width='stretch', type="primary"):
+        if st.button("Sign in", width='stretch', type="primary"):
             st.session_state.page = "login"
             st.rerun()
 
-        with st.expander("PRO Features"):
-            st.markdown("""
-                - Player Watchlists
-                - Advanced Analytics
-                - Player Trends
-                - Custom Alerts
-                - Save Preferences
-                - Export Data
-            """)
+        with st.expander("What Pro adds"):
+            for _name, _detail in PRO_FEATURES:
+                st.markdown(f"**{_name}** — {_detail}")
 
 # ==================== 12. SAYFA YÖNLENDİRMELERİ ====================
 if st.session_state.page == "login":
     from auth import render_auth_page_enhanced
     render_auth_page_enhanced()
+    st.stop()
+
+if st.session_state.page == "account":
+    from pages.account import render_account_page
+    render_account_page()
+    if st.sidebar.button("Back to Home", width='stretch', key="account_back"):
+        st.session_state.page = "home"
+        st.rerun()
     st.stop()
 
 if st.session_state.page == "injury":
@@ -1301,18 +1303,8 @@ if st.session_state.page == "injury":
     st.stop()
 
 if st.session_state.page == "trends":
-    if not is_pro:
-        st.warning("This is a PRO feature.")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Login / Register", width='stretch', type="primary"):
-                st.session_state.page = "login"
-                st.rerun()
-        with col2:
-            if st.button("Back to Home", width='stretch'):
-                st.session_state.page = "home"
-                st.rerun()
-        st.stop()
+    require_pro("Player trends",
+                "Rolling form, usage shifts and rumour tracking for every player.")
     from pages.player_trends import render_player_trends_page
     render_player_trends_page()
     st.stop()
@@ -1323,18 +1315,13 @@ if st.session_state.page == "fantasy_league":
     st.stop()
 
 if st.session_state.page == "watchlist":
-    if not is_pro:
-        st.warning("Watchlist is a PRO feature.")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Login / Register", width='stretch', type="primary"):
-                st.session_state.page = "login"
-                st.rerun()
-        with col2:
-            if st.button("Back to Home", width='stretch'):
-                st.session_state.page = "home"
-                st.rerun()
-        st.stop()
+    # Izleme listesi artik ucretsiz planda da calisiyor; Pro olan tek
+    # fark sinirsiz olmasi. Eskiden ucretsiz kullanici sayfayi hic
+    # acamiyordu ve giris yapmak icin hicbir sebebi kalmiyordu.
+    if not user:
+        require_pro("Watchlist",
+                    "Sign in to track players. Free accounts hold "
+                    f"{FREE_WATCHLIST_LIMIT} players.")
     from pages.watchlist import render_watchlist_page
     render_watchlist_page()
     st.stop()
@@ -1426,8 +1413,8 @@ def show_boxscore_dialog(game_info):
     display_cols = ["PLAYER", "MIN", "FG", "3PT", "FT", "PTS", "REB", "AST", "STL", "BLK", "TO"]
     final_cols = [c for c in display_cols if c in df.columns]
 
-    if is_pro and user:
-        st.markdown("#### Quick Add to Watchlist")
+    if user:
+        st.markdown("#### Add to watchlist")
         watchlist = db.get_watchlist(user['id'])
         watchlist_names = [w['player_name'] for w in watchlist]
         players_to_add = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
@@ -1438,15 +1425,29 @@ def show_boxscore_dialog(game_info):
             with col2:
                 st.write("")
                 st.write("")
-                if st.button("Add Selected", disabled=not selected_players):
-                    added = sum(1 for p in selected_players if db.add_to_watchlist(user['id'], p, f"Added from {game_info.get('away_team')} vs {game_info.get('home_team')}"))
+                if st.button("Add selected", disabled=not selected_players):
+                    added = 0
+                    for name in selected_players:
+                        if not within_limit(db.watchlist_count(user['id']),
+                                            FREE_WATCHLIST_LIMIT, user):
+                            break
+                        if db.add_to_watchlist(
+                                user['id'], name,
+                                f"Added from {game_info.get('away_team')} vs "
+                                f"{game_info.get('home_team')}"):
+                            added += 1
                     if added:
                         st.success(f"Added {added} player(s).")
+                    if added < len(selected_players):
+                        st.warning("Free accounts hold "
+                                   f"{FREE_WATCHLIST_LIMIT} players. "
+                                   "Remove one or switch to Pro.")
+            limit_notice(db.watchlist_count(user['id']), FREE_WATCHLIST_LIMIT, "watchlist")
         else:
-            st.info("All selected players are already in your watchlist.")
+            st.info("All of these players are already in your watchlist.")
         st.markdown("---")
-    elif not is_pro:
-        st.info("Log in with a Pro account to add players to your watchlist.")
+    else:
+        st.info("Sign in to track players from this box score.")
 
     if "TEAM" in df.columns:
         teams = df["TEAM"].unique()
@@ -1457,7 +1458,7 @@ def show_boxscore_dialog(game_info):
                 team_df = df[df["TEAM"].astype(str).str.contains(team_name, case=False, na=False)].copy()
                 if not team_df.empty:
                     team_df = team_df.sort_values("MIN", ascending=False, key=lambda x: pd.to_numeric(x, errors='coerce').fillna(0))
-                    if is_pro and user:
+                    if user:
                         wl = db.get_watchlist(user['id'])
                         wl_names = [w['player_name'] for w in wl]
                         team_df['•'] = team_df['PLAYER'].apply(lambda x: '•' if x in wl_names else '')
