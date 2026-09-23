@@ -45,7 +45,7 @@ raw_fp = st_javascript(client_js)
 
 # 2. KRİTİK NOKTA: Fingerprint gelene kadar bekle
 if raw_fp is None or raw_fp == 0:
-    st.info("Oturum kontrol ediliyor, lütfen bekleyin...")
+    st.info("Checking your session...")
     st.stop() # Henüz veri yok, aşağıya inme, bir sonraki run'ı bekle.
 
 # 3. Veri geldi, artık işlemleri yapabiliriz

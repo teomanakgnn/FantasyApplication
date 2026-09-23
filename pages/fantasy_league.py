@@ -1181,7 +1181,7 @@ def render_fantasy_league_page():
                 
                 if missing:
                     st.error(f"Missing Categories for Simulation: {missing}")
-                    st.info("Yahoo API'den bu kategoriler gelmiyor. Lig ayarlarınız standart 9-cat olmayabilir veya Stat ID'ler farklıdır.")
+                    st.info("Yahoo is not returning these categories. Your league may not use standard 9-cat scoring, or the stat IDs differ.")
                 else:
                     st.success("All required stats are present.")
             st.markdown(f"### WEEKLY HEAD-TO-HEAD ({len(matchups)} Matchups)")

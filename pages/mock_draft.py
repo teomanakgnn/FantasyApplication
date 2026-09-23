@@ -45,7 +45,7 @@ from services.draft_engine import (
 )
 from services.nba_season import get_season_label
 
-POSITION_FILTERS = ["TÜMÜ", "PG", "SG", "SF", "PF", "C"]
+POSITION_FILTERS = ["ALL", "PG", "SG", "SF", "PF", "C"]
 
 INJURY_LABELS = {
     "ACTIVE": ("", ""),
@@ -301,87 +301,87 @@ def _pos_tag(pos):
 def _render_setup(board):
     st.markdown(f"""
         <div class="draft-hero">
-            <h1>Mock Draft Simülatörü</h1>
-            <p>{get_season_label()} sezonu ESPN draft sıralamasıyla — gerçek draftından
-            önce istediğin kadar prova yap.</p>
+            <h1>Mock Draft</h1>
+            <p>Run as many practice drafts as you like on the {get_season_label()}
+            ESPN rankings before the real thing.</p>
         </div>
     """, unsafe_allow_html=True)
 
     if board.empty:
-        st.error("Draft havuzu şu anda alınamadı — ESPN'in fantasy API'si "
-                 "ara ara bağlantıyı kesiyor.")
-        st.caption("Genelde tek denemede düzeliyor.")
-        if st.button("Tekrar dene", type="primary", width='stretch',
+        st.error("The draft pool is unavailable right now - ESPN's fantasy API "
+                 "drops connections from time to time.")
+        st.caption("One retry usually fixes it.")
+        if st.button("Try again", type="primary", width='stretch',
                      key="draft_pool_retry"):
             get_draft_board.clear()
             fetch_draft_rankings.clear()
             st.rerun()
         return
 
-    st.caption(f"Havuzda {len(board)} sıralı oyuncu · "
-               f"{int(board['ROOKIE'].sum())} çaylak/istatistiksiz")
+    st.caption(f"{len(board)} ranked players · "
+               f"{int(board['ROOKIE'].sum())} rookies or unranked")
 
     col_a, col_b = st.columns(2)
 
     with col_a:
         fmt_label = st.radio(
-            "Draft formatı", ["Snake", "Auction"], horizontal=True, key="draft_format",
-            help="Snake: sıra 1→N, N→1 döner. Auction: her takımın bütçesi vardır, "
-                 "oyuncular açık artırmayla alınır.",
+            "Draft format", ["Snake", "Auction"], horizontal=True, key="draft_format",
+            help="Snake: order runs 1-N then N-1. Auction: every team has a budget "
+                 "and players are bid on.",
         )
         fmt = "snake" if fmt_label == "Snake" else "auction"
 
         opp_label = st.radio(
-            "Rakipler", ["Yapay zekâ rakipler", "Tüm takımları ben seçeyim"],
+            "Rakipler", ["AI opponents", "I pick for every team"],
             key="draft_opponent_mode",
-            help="Yapay zekâ modunda tek bir takımı sen yönetirsin. Manuel modda "
-                 "bütün takımların seçimlerini sen yaparsın.",
+            help="In AI mode you run one team. In manual mode you make "
+                 "every pick for every team.",
         )
         opponent_mode = "ai" if opp_label.startswith("Yapay") else "manual"
 
-        team_count = st.select_slider("Takım sayısı", options=[4, 6, 8, 10, 12, 14],
+        team_count = st.select_slider("Teams", options=[4, 6, 8, 10, 12, 14],
                                       value=10, key="draft_team_count")
 
     with col_b:
-        rounds = st.slider("Kadro büyüklüğü (tur)", min_value=5, max_value=16,
+        rounds = st.slider("Roster size (rounds)", min_value=5, max_value=16,
                            value=13, key="draft_rounds")
 
         if opponent_mode == "ai":
             user_slot = st.number_input(
-                "Draft pozisyonun", min_value=1, max_value=int(team_count), value=1,
-                key="draft_user_slot", help="Snake draftta kaçıncı sıradan seçeceğin.",
+                "Your draft slot", min_value=1, max_value=int(team_count), value=1,
+                key="draft_user_slot", help="Where you pick in the first round of a snake draft.",
             )
         else:
             user_slot = 1
 
         if fmt == "auction":
-            budget = st.number_input("Takım başı bütçe ($)", min_value=50, max_value=500,
+            budget = st.number_input("Budget per team ($)", min_value=50, max_value=500,
                                      value=200, step=10, key="draft_budget")
         else:
             budget = 200
 
         difficulty = st.select_slider(
-            "Rakip öngörülebilirliği",
-            options=["Çok sadık", "Dengeli", "Öngörülemez"],
-            value="Dengeli", key="draft_difficulty",
-            help="Sadık: rakipler sıralamaya harfiyen uyar. Öngörülemez: sürpriz "
-                 "seçimler ve reach'ler artar.",
+            "Opponent predictability",
+            options=["By the board", "Balanced", "Unpredictable"],
+            value="Balanced", key="draft_difficulty",
+            help="By the board: opponents follow the rankings exactly. Unpredictable: "
+                 "more surprises and reaches.",
         )
-        randomness = {"Çok sadık": 0.12, "Dengeli": 0.35, "Öngörülemez": 0.7}[difficulty]
+        randomness = {"By the board": 0.12, "Balanced": 0.35, "Unpredictable": 0.7}[difficulty]
 
     live = st.checkbox(
-        "Rakip seçimlerini canlı göster", value=True, key="draft_live_mode",
-        help="Açıkken rakipler sırayla, tek tek seçim yapar ve ekranda akar. "
-             "Kapalıyken sıra anında sana gelir.",
+        "Show opponent picks live", value=True, key="draft_live_mode",
+        help="On: opponents pick one at a time and the feed updates as they go. "
+             "Off: the turn jumps straight back to you.",
     )
 
     if fmt == "auction" and budget < rounds:
-        st.warning(f"Bütçe kadro büyüklüğünden küçük olamaz — her oyuncu en az $1. "
-                   f"{rounds} tur için en az ${rounds} gerekli.")
+        st.warning(f"The budget cannot be smaller than the roster - every player costs at least $1. "
+                   f"You need at least ${rounds} for {rounds} rounds.")
         return
 
     st.markdown("")
-    if st.button("Draftı Başlat", type="primary", width='stretch',
+    if st.button("Start draft", type="primary", width='stretch',
                  key="draft_start_btn"):
         state = create_draft(
             board, team_count=int(team_count), rounds=int(rounds),
@@ -401,7 +401,7 @@ def _render_setup(board):
 def _render_saved_drafts(board):
     user = st.session_state.get("user")
     if not user:
-        st.info("Draftlarını kaydedip sonra geri yüklemek için giriş yap.")
+        st.info("Sign in to save drafts and pick them up later.")
         return
 
     db.ensure_draft_table()
@@ -410,22 +410,22 @@ def _render_saved_drafts(board):
         return
 
     st.markdown("---")
-    st.subheader("Kayıtlı draftların")
+    st.subheader("Your saved drafts")
 
     for row in saved:
         c1, c2, c3, c4 = st.columns([4, 2, 1, 1])
         with c1:
-            status = "Tamamlandı" if row["complete"] else "Devam ediyor"
+            status = "Complete" if row["complete"] else "In progress"
             st.markdown(f"**{row['name']}**  \n"
                         f"<span style='font-size:0.86rem;color:#888'>"
-                        f"{row['format'].title()} · {row['team_count']} takım · "
+                        f"{row['format'].title()} · {row['team_count']} teams · "
                         f"{row['rounds']} tur · {status}</span>",
                         unsafe_allow_html=True)
         with c2:
             if row["grade"]:
                 st.metric("Not", row["grade"], label_visibility="collapsed")
         with c3:
-            if st.button("Aç", key=f"load_{row['id']}", width='stretch'):
+            if st.button("Open", key=f"load_{row['id']}", width='stretch'):
                 record = db.load_mock_draft(user["id"], row["id"])
                 if record:
                     saved_state = record["state"]
@@ -436,7 +436,7 @@ def _render_saved_drafts(board):
                     st.session_state.draft_messages = []
                     st.rerun()
                 else:
-                    st.error("Draft yüklenemedi.")
+                    st.error("Could not load that draft.")
         with c4:
             if st.button("Sil", key=f"del_{row['id']}", width='stretch'):
                 db.delete_mock_draft(user["id"], row["id"])
@@ -450,7 +450,7 @@ def _render_clock(state):
         st.markdown("""
             <div class="clock-bar">
                 <span class="clock-pill">Bitti</span>
-                <span class="clock-main">Draft tamamlandı</span>
+                <span class="clock-main">Draft complete</span>
             </div>
         """, unsafe_allow_html=True)
         return
@@ -459,19 +459,19 @@ def _render_clock(state):
     on_clock = is_user_turn(state)
 
     if state["format"] == "auction":
-        main = f"{team['name']} aday gösteriyor" if team else "Açık artırma"
-        sub = f"Seçim {state['pick_number']} / {total_picks(state)}"
+        main = f"{team['name']} is nominating" if team else "Auction"
+        sub = f"Pick {state['pick_number']} of {total_picks(state)}"
     else:
         main = team["name"] if team else ""
-        sub = (f"Tur {current_round(state)} · Seçim {pick_in_round(state)}"
+        sub = (f"Round {current_round(state)} · Pick {pick_in_round(state)}"
                f" (genel {state['pick_number']}/{total_picks(state)})")
         if state["opponent_mode"] == "ai" and not on_clock:
             waiting = picks_until_user_turn(state)
             if waiting:
-                sub += f" · sıran {waiting} seçim sonra"
+                sub += f" · you are up in {waiting} picks"
 
-    pill = ("<span class='clock-pill live'>Sıra sende</span>" if on_clock
-            else "<span class='clock-pill'>Sırada</span>")
+    pill = ("<span class='clock-pill live'>Your turn</span>" if on_clock
+            else "<span class='clock-pill'>On the clock</span>")
 
     st.markdown(f"""
         <div class="clock-bar {'on-clock' if on_clock else ''}">
@@ -496,8 +496,8 @@ def _render_progress(state):
 def _feed_html(state, count=9, fresh_overalls=()):
     """Son seçimleri yatay kart şeridi olarak üretir."""
     if not state["log"]:
-        return ("<div class='empty-note'>Henüz seçim yapılmadı — "
-                "ilk seçimle birlikte burada akmaya başlayacak.</div>")
+        return ("<div class='empty-note'>No picks yet - "
+                "the feed starts with the first selection.</div>")
 
     cards = []
     for entry in reversed(state["log"][-count:]):
@@ -568,8 +568,8 @@ def _render_since_last(state):
     if not made or not is_user_turn(state):
         return
     names = ", ".join(f"**{m['player']}**" for m in made[:4])
-    extra = f" ve {len(made) - 4} seçim daha" if len(made) > 4 else ""
-    st.caption(f"Sen beklerken {len(made)} seçim yapıldı: {names}{extra}")
+    extra = f" and {len(made) - 4} more" if len(made) > 4 else ""
+    st.caption(f"{len(made)} picks were made while you waited: {names}{extra}")
 
 
 # ------------------------------------------------------------- draft board
@@ -577,7 +577,7 @@ def _render_since_last(state):
 def _render_draft_board(state):
     headers, rows = draft_board_grid(state)
     if not rows:
-        st.markdown("<div class='empty-note'>Draft board ilk seçimle dolmaya başlar.</div>",
+        st.markdown("<div class='empty-note'>The board fills in from the first pick.</div>",
                     unsafe_allow_html=True)
         return
 
@@ -609,7 +609,7 @@ def _render_draft_board(state):
         f"<tbody>{''.join(body)}</tbody></table></div>",
         unsafe_allow_html=True,
     )
-    st.caption("Altın sütun senin takımın. Yatay kaydırarak tüm takımları görebilirsin.")
+    st.caption("The gold column is your team. Scroll sideways to see every team.")
 
 
 # ------------------------------------------------------------ auction paneli
@@ -643,10 +643,10 @@ def _render_auction_panel(state):
 
     if nom.get("history"):
         trail = " → ".join(f"{h['team'][:12]} ${h['bid']}" for h in nom["history"][-4:])
-        st.caption(f"Teklif akışı: {trail}")
+        st.caption(f"Bid history: {trail}")
 
     if not nom.get("awaiting_user"):
-        if st.button("Açık artırmayı kapat", type="primary", width='stretch',
+        if st.button("Close the auction", type="primary", width='stretch',
                      key="auction_close_btn"):
             ok, msg = finalize_nomination(state)
             _push_message(ok, msg)
@@ -657,13 +657,13 @@ def _render_auction_panel(state):
     ceiling = max_affordable_bid(state, user)
     minimum = nom["high_bid"] + 1
 
-    st.caption(f"Kalan bütçen ${user['budget'] - user['spent']} · "
+    st.caption(f"Budget left ${user['budget'] - user['spent']} · "
                f"bu oyuncuya en fazla ${ceiling} verebilirsin "
-               f"(kalan {state['rounds'] - len(user['picks'])} kadro yeri için 1$ ayrılıyor)")
+               f"($1 is held back for each of your {state['rounds'] - len(user['picks'])} open spots)")
 
     if ceiling < minimum:
-        st.warning("Bu oyuncu için teklifini artıracak bütçen yok.")
-        if st.button("Pas geç", width='stretch', key="auction_pass_broke"):
+        st.warning("You do not have the budget to raise on this player.")
+        if st.button("Pass", width='stretch', key="auction_pass_broke"):
             ok, msg = user_pass(state)
             _push_message(ok, msg)
             _advance_ai(state)
@@ -688,7 +688,7 @@ def _render_auction_panel(state):
                 _advance_ai(state)
             st.rerun()
     with c3:
-        if st.button("Pas geç", width='stretch', key="auction_pass_btn"):
+        if st.button("Pass", width='stretch', key="auction_pass_btn"):
             ok, msg = user_pass(state)
             _push_message(ok, msg)
             _advance_ai(state)
@@ -709,10 +709,10 @@ def _pool_dataframe(state, players, needs):
         rows.append({
             "_id": p["id"],
             "": get_headshot_url(p["id"]),
-            "İHT": "•" if fills else "",
+            "NEED": "•" if fills else "",
             "Oyuncu": p["name"],
             "Poz": "/".join(p["positions"]),
-            "Takım": p["team"],
+            "Team": p["team"],
             "ADP": p["adp"],
             "$": p["auction"],
             "Durum": status,
@@ -740,8 +740,8 @@ def _render_quick_picks(state, filtered, needs, count=5):
     if not top:
         return
 
-    verb = "Aday" if state["format"] == "auction" else "Seç"
-    st.caption("Hızlı seçim — sıradaki en iyiler")
+    verb = "Nominate" if state["format"] == "auction" else "Draft"
+    st.caption("Quick pick - best available")
     cols = st.columns(len(top))
     for col, player in zip(cols, top):
         positions = set(player.get("positions") or [player["pos"]])
@@ -787,23 +787,23 @@ def _commit_player(state, player):
 def _render_pool(state):
     pool = available_players(state)
     if not pool:
-        st.markdown("<div class='empty-note'>Havuzda seçilebilecek oyuncu kalmadı.</div>",
+        st.markdown("<div class='empty-note'>No draftable players left in the pool.</div>",
                     unsafe_allow_html=True)
         return
 
     c1, c2, c3 = st.columns([2.2, 2.6, 1.4])
     with c1:
-        search = st.text_input("Oyuncu ara", placeholder="isim veya takım…",
+        search = st.text_input("Search players", placeholder="name or team...",
                                key="draft_search", label_visibility="collapsed")
     with c2:
         position = st.radio("Pozisyon", POSITION_FILTERS, horizontal=True,
                             key="draft_pos_filter", label_visibility="collapsed")
     with c3:
-        sort_by = st.selectbox("Sırala", ["ADP", "Fantasy puanı", "Değer ($)", "Sahiplenme"],
+        sort_by = st.selectbox("Sort by", ["ADP", "Fantasy points", "Value ($)", "Rostered %"],
                                key="draft_sort", label_visibility="collapsed")
 
     filtered = pool
-    if position != "TÜMÜ":
+    if position != "ALL":
         filtered = [p for p in filtered if position in (p.get("positions") or [p["pos"]])]
     if search:
         needle = search.lower().strip()
@@ -812,9 +812,9 @@ def _render_pool(state):
 
     key_fn = {
         "ADP": lambda p: p["adp"],
-        "Fantasy puanı": lambda p: -p["fpts"],
-        "Değer ($)": lambda p: -p["auction"],
-        "Sahiplenme": lambda p: -p["owned"],
+        "Fantasy points": lambda p: -p["fpts"],
+        "Value ($)": lambda p: -p["auction"],
+        "Rostered %": lambda p: -p["owned"],
     }[sort_by]
     filtered = sorted(filtered, key=key_fn)
 
@@ -847,8 +847,8 @@ def _render_pool(state):
         key=table_key,
         column_config={
             "": st.column_config.ImageColumn("", width="small"),
-            "İHT": st.column_config.TextColumn("•", width="small",
-                                               help="Kadrondaki açık pozisyona uyuyor"),
+            "NEED": st.column_config.TextColumn("•", width="small",
+                                               help="Fits an open spot on your roster"),
             "Oyuncu": st.column_config.TextColumn("Oyuncu", width="medium"),
             "ADP": st.column_config.NumberColumn("ADP", format="%d", width="small"),
             "$": st.column_config.NumberColumn("$", format="%d", width="small"),
@@ -856,24 +856,24 @@ def _render_pool(state):
         },
     )
 
-    st.caption(f"{len(filtered)} oyuncu · • kadrondaki açık pozisyona uyanları gösterir · "
-               f"seçmek için satıra tıkla")
+    st.caption(f"{len(filtered)} players · • marks players who fit an open roster spot · "
+               f"tap a row to select")
 
     rows = (event.selection.rows if event and getattr(event, "selection", None) else [])
     # Seçim indeksi listeyle uyumsuz kalabilir (filtre değişimi); sınır kontrolü.
     if not rows or rows[0] >= len(shown):
-        st.info("Listeden bir oyuncuya tıkla, sonra aşağıdan seçimini onayla.")
+        st.info("Tap a player in the list, then confirm below.")
         return
 
     _render_selected_player(state, shown[rows[0]])
 
 
 def _render_selected_player(state, player):
-    stats = ("geçen sezon NBA istatistiği yok" if player["rookie"] or player["gp"] == 0
+    stats = ("no NBA stats last season" if player["rookie"] or player["gp"] == 0
              else (f"{player['pts']:.1f} sy · {player['reb']:.1f} rib · "
                    f"{player['ast']:.1f} as · {player['stl']:.1f} tp · "
                    f"{player['blk']:.1f} blok · <strong>{player['fpts']:.1f} FP</strong> "
-                   f"({int(player['gp'])} maç)"))
+                   f"({int(player['gp'])} games)"))
 
     st.markdown(f"""
         <div class="sel-card">
@@ -892,19 +892,19 @@ def _render_selected_player(state, player):
     awaiting = bool(state.get("current_nomination"))
 
     if not can_act:
-        st.button("Sıran değil", disabled=True, width='stretch', key="pick_disabled")
+        st.button("Not your turn", disabled=True, width='stretch', key="pick_disabled")
         return
     if awaiting:
-        st.button("Önce açık artırmayı bitir", disabled=True, width='stretch',
+        st.button("Finish the auction first", disabled=True, width='stretch',
                   key="pick_blocked")
         return
 
     if state["format"] == "auction":
-        if st.button(f"{player['name']} için açık artırma başlat", type="primary",
+        if st.button(f"Start the auction for {player['name']}", type="primary",
                      width='stretch', key="confirm_nominate"):
             _commit_player(state, player)
     else:
-        if st.button(f"{player['name']} oyuncusunu seç", type="primary",
+        if st.button(f"Draft {player['name']}", type="primary",
                      width='stretch', key="confirm_pick"):
             _commit_player(state, player)
 
@@ -922,7 +922,7 @@ def _render_my_team(state):
     if state["format"] == "auction":
         c1, c2, c3 = st.columns(3)
         c1.metric("Oyuncu", f"{summary['players']}/{state['rounds']}")
-        c2.metric("Kalan bütçe", f"${summary['remaining']}")
+        c2.metric("Budget left", f"${summary['remaining']}")
         c3.metric("Fantasy", f"{summary['fpts']:.0f}")
     else:
         c1, c2 = st.columns(2)
@@ -931,7 +931,7 @@ def _render_my_team(state):
 
     if needs:
         chips = "".join(f"<span class='slot-chip open'>{s}</span>" for s in needs)
-        st.markdown(f"<div style='margin:6px 0 10px 0'>Açık yerler: {chips}</div>",
+        st.markdown(f"<div style='margin:6px 0 10px 0'>Open spots: {chips}</div>",
                     unsafe_allow_html=True)
     else:
         st.markdown("<div style='margin:6px 0 10px 0'>"
@@ -939,7 +939,7 @@ def _render_my_team(state):
                     unsafe_allow_html=True)
 
     if not team["picks"]:
-        st.caption("Henüz oyuncu almadın.")
+        st.caption("You have not drafted anyone yet.")
         return
 
     for pick in team["picks"]:
@@ -969,19 +969,19 @@ def _render_all_teams(state):
 
         with st.expander(title, expanded=team["is_user"]):
             if not team["picks"]:
-                st.caption("Henüz seçim yok.")
+                st.caption("No picks yet.")
                 continue
             open_slots = roster_needs(team, state["rounds"])
             if open_slots:
                 chips = "".join(f"<span class='slot-chip open'>{s}</span>"
                                 for s in open_slots)
-                st.markdown(f"<div style='margin-bottom:6px'>İhtiyaç: {chips}</div>",
+                st.markdown(f"<div style='margin-bottom:6px'>Needs: {chips}</div>",
                             unsafe_allow_html=True)
             rows = [{
                 "Tur": pick["round"],
                 "Oyuncu": pick["player"]["name"],
                 "Poz": "/".join(pick["player"]["positions"]),
-                "Takım": pick["player"]["team"],
+                "Team": pick["player"]["team"],
                 "ADP": pick["player"]["adp"],
                 "Fiyat": f"${pick['price']}" if pick["price"] is not None else "—",
                 "FP": round(pick["player"]["fpts"], 1),
@@ -991,7 +991,7 @@ def _render_all_teams(state):
 
 def _render_log(state):
     if not state["log"]:
-        st.caption("Henüz seçim yapılmadı.")
+        st.caption("No picks have been made yet.")
         return
     for entry in reversed(state["log"][-80:]):
         mine = entry["slot"] == state["user_slot"]
@@ -1013,7 +1013,7 @@ def _render_upcoming(state):
     if not coming:
         return
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
-    st.caption("Sıradaki seçimler")
+    st.caption("Coming up")
     for item in coming:
         mark = " **← sen**" if item["is_user"] else ""
         st.markdown(f"<span style='font-size:0.86rem;color:#8b8b9a'>"
@@ -1028,16 +1028,16 @@ def _render_results(state):
     user = user_team(state)
     my_grade = grades.get(user["slot"], {}) if user else {}
 
-    st.success(f"Draft tamamlandı. Takımın **{my_grade.get('grade', '-')}** aldı "
-               f"— {len(state['teams'])} takım arasında **{my_grade.get('rank', '-')}.** sırada.")
+    st.success(f"Draft complete. Your team graded **{my_grade.get('grade', '-')}** "
+               f"- ranked **{my_grade.get('rank', '-')}** of {len(state['teams'])} teams.")
 
     rows = []
     for team in state["teams"]:
         summary = team_summary(state, team)
         grade = grades.get(team["slot"], {})
         rows.append({
-            "Sıra": grade.get("rank", 0),
-            "Takım": team["name"] + (" (sen)" if team["is_user"] else ""),
+            "Order": grade.get("rank", 0),
+            "Team": team["name"] + (" (sen)" if team["is_user"] else ""),
             "Not": grade.get("grade", "-"),
             "Fantasy": summary["fpts"],
             "SY": summary["pts"], "RIB": summary["reb"], "AS": summary["ast"],
@@ -1045,27 +1045,27 @@ def _render_results(state):
             "Harcanan": f"${summary['spent']}" if state["format"] == "auction" else "—",
         })
 
-    st.dataframe(pd.DataFrame(rows).sort_values("Sıra"), hide_index=True, width='stretch')
+    st.dataframe(pd.DataFrame(rows).sort_values("Order"), hide_index=True, width='stretch')
 
 
 def _render_save(state):
     user = st.session_state.get("user")
     if not user:
-        st.info("Bu draftı kaydetmek için giriş yapman gerekiyor.")
+        st.info("Sign in to save this draft.")
         return
 
     grades = grade_draft(state)
     u = user_team(state)
     my_grade = grades.get(u["slot"], {}).get("grade") if u else None
-    default_name = (f"{state['format'].title()} · {state['team_count']} takım · "
+    default_name = (f"{state['format'].title()} · {state['team_count']} teams · "
                     f"{state['created_at'][:10]}")
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        name = st.text_input("Draft adı", value=default_name, key="draft_save_name",
+        name = st.text_input("Draft name", value=default_name, key="draft_save_name",
                              label_visibility="collapsed")
     with c2:
-        if st.button("Kaydet", type="primary", width='stretch', key="draft_save_btn"):
+        if st.button("Save", type="primary", width='stretch', key="draft_save_btn"):
             db.ensure_draft_table()
             draft_id = db.save_mock_draft(
                 user["id"], name or default_name, serialize(state),
@@ -1075,7 +1075,7 @@ def _render_save(state):
                 st.session_state.draft_saved_id = draft_id
                 st.success("Draft kaydedildi.")
             else:
-                st.error("Draft kaydedilemedi. Veritabanı bağlantısını kontrol et.")
+                st.error("Could not save the draft. Check the database connection.")
 
 
 # ------------------------------------------------------------------ yardımcılar
@@ -1098,7 +1098,7 @@ def _flush_messages():
 def render_mock_draft_page():
     _inject_styles()
 
-    with st.spinner("Draft havuzu hazırlanıyor…"):
+    with st.spinner("Preparing the draft pool..."):
         board = get_draft_board()
 
     state = st.session_state.get("draft_state")
@@ -1117,7 +1117,7 @@ def render_mock_draft_page():
         opp = "yapay zekâ" if state["opponent_mode"] == "ai" else "manuel"
         st.markdown(f"""
             <div class="draft-hero">
-                <h1>Mock Draft — {mode}</h1>
+                <h1>Mock Draft - {mode}</h1>
                 <p>{state['team_count']} takım · {state['rounds']} tur · {opp} rakipler
                    · {get_season_label()} sıralaması</p>
             </div>
@@ -1155,7 +1155,7 @@ def render_mock_draft_page():
         _render_save(state)
         st.markdown("---")
         tab_board, tab_teams, tab_log = st.tabs(
-            ["Draft Board", "Takımlar", "Akış"])
+            ["Draft board", "Teams", "Feed"])
         with tab_board:
             _render_draft_board(state)
         with tab_teams:
@@ -1176,7 +1176,7 @@ def render_mock_draft_page():
     with main:
         _render_pool(state)
     with side:
-        tab_mine, tab_all = st.tabs(["Takımım", "Lig"])
+        tab_mine, tab_all = st.tabs(["My team", "League"])
         with tab_mine:
             _render_my_team(state)
             _render_upcoming(state)
@@ -1184,7 +1184,7 @@ def render_mock_draft_page():
             _render_all_teams(state)
 
     st.markdown("---")
-    tab_board, tab_log, tab_save = st.tabs(["Draft Board", "Tüm seçimler", "Kaydet"])
+    tab_board, tab_log, tab_save = st.tabs(["Draft board", "All picks", "Save"])
     with tab_board:
         _render_draft_board(state)
     with tab_log:

@@ -591,7 +591,7 @@ def fetch_rss_rumors() -> List[Dict]:
             try:
                 feed = feedparser.parse(rss_source['url'])
                 if getattr(feed, 'bozo', 0) and not feed.entries:
-                    print(f"RSS okunamadı: {rss_source['source']}")
+                    print(f"Could not read RSS feed: {rss_source['source']}")
                     continue
 
                 for entry in feed.entries[:8]:

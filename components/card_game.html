@@ -479,7 +479,7 @@
     box-shadow: 0 0 22px rgba(251,191,36,.12);
   }
   .res-box.win::after {
-    content: "KAZANAN"; display: block; margin-top: 6px;
+    content: "WINNER"; display: block; margin-top: 6px;
     font-size: 8.5px; font-weight: 900; letter-spacing: 1.2px; color: #FBBF24;
   }
   .res-num { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1px; }
@@ -515,38 +515,38 @@
   <div class="screen on" id="lobby">
     <div class="logo-mark">CC</div>
     <div class="lobby-title">Court Connect</div>
-    <div class="lobby-sub">6 oyuncu topla, aralarindaki<br>en guclu baglantilari kur</div>
+    <div class="lobby-sub">Collect six players and build<br>the strongest links between them</div>
     <div class="rules" id="rulesBox"></div>
     <div>
-      <div class="swap-lbl" style="text-align:left;margin:2px 0 7px 2px;">BOT ZORLUGU</div>
+      <div class="swap-lbl" style="text-align:left;margin:2px 0 7px 2px;">DIFFICULTY</div>
       <div class="diff-row" id="diffRow">
-        <div class="diff" data-d="easy">Kolay<span>bot 3 hak</span></div>
-        <div class="diff on" data-d="normal">Normal<span>bot 4 hak</span></div>
-        <div class="diff" data-d="hard">Zor<span>bot once secer</span></div>
+        <div class="diff" data-d="easy">Easy<span>bot gets 3 moves</span></div>
+        <div class="diff on" data-d="normal">Normal<span>bot gets 4 moves</span></div>
+        <div class="diff" data-d="hard">Hard<span>bot picks first</span></div>
       </div>
     </div>
-    <button class="btn btn-primary" id="startBtn">OYUNU BASLAT</button>
+    <button class="btn btn-primary" id="startBtn">START GAME</button>
   </div>
 
   <!-- ══════════ OYUN ══════════ -->
   <div class="screen" id="play">
     <div id="hud">
-      <div class="hud-box me"><span class="hud-lbl">SEN</span><span class="hud-val" id="myScore">0</span></div>
+      <div class="hud-box me"><span class="hud-lbl">YOU</span><span class="hud-val" id="myScore">0</span></div>
       <div id="swapWrap">
         <div class="swap-dots" id="swapDots"></div>
-        <div class="swap-lbl">DEGISIM</div>
+        <div class="swap-lbl">MOVES</div>
       </div>
       <div class="hud-box bot"><span class="hud-lbl">BOT</span><span class="hud-val" id="botScore">?</span></div>
     </div>
     <div id="oppRow">
-      <span class="opp-lbl">RAKIP</span>
-      <span class="opp-left" id="botLeftLbl">4 hak</span>
+      <span class="opp-lbl">BOT</span>
+      <span class="opp-left" id="botLeftLbl">4 moves</span>
       <div class="opp-cards" id="oppCards"></div>
     </div>
     <div id="marketWrap">
       <div class="mk-head">
-        <span class="mk-title">ACIK KARTLAR</span>
-        <span class="mk-turn you" id="turnLbl">SIRA SENDE</span>
+        <span class="mk-title">OPEN CARDS</span>
+        <span class="mk-turn you" id="turnLbl">YOUR TURN</span>
       </div>
       <div id="market"></div>
     </div>
@@ -555,10 +555,10 @@
       <div id="tiles"></div>
     </div>
     <div id="turnToast"></div>
-    <div id="hint">Karta dokun - baglantilarini gor</div>
+    <div id="hint">Tap a card to see its links</div>
     <div id="actions">
       <button class="btn btn-ghost" id="quitBtn" style="flex:0 0 52px;">×</button>
-      <button class="btn btn-go" id="lockBtn">ELI KILITLE</button>
+      <button class="btn btn-go" id="lockBtn">LOCK IN HAND</button>
     </div>
 
     <div id="sheetBack"></div>
@@ -572,22 +572,22 @@
         </div>
         <div style="text-align:right;flex:0 0 auto;">
           <div class="hud-val" id="shPts" style="font-size:24px;">0</div>
-          <div class="swap-lbl">PUAN</div>
+          <div class="swap-lbl">POINTS</div>
         </div>
       </div>
       <div class="sheet-scroll" id="shLinks"></div>
-      <button class="btn btn-ghost" id="sheetClose" style="margin-top:10px;min-height:44px;">KAPAT</button>
+      <button class="btn btn-ghost" id="sheetClose" style="margin-top:10px;min-height:44px;">CLOSE</button>
     </div>
   </div>
 
   <!-- ══════════ SONUC ══════════ -->
   <div class="screen" id="result">
-    <div class="res-title" id="resTitle">Kazandin!</div>
+    <div class="res-title" id="resTitle">You win</div>
     <div class="res-sub" id="resSub"></div>
     <div class="res-scores">
       <div class="res-box" id="resMeBox">
         <div class="res-num" id="resMe" style="color:#34D399;">0</div>
-        <div class="res-cap">SEN</div>
+        <div class="res-cap">YOU</div>
       </div>
       <div class="res-box" id="resBotBox">
         <div class="res-num" id="resBot" style="color:#94A3B8;">0</div>
@@ -596,13 +596,13 @@
     </div>
     <div class="sheet-scroll" id="resScroll">
       <div id="resBreak"></div>
-      <div class="sheet-lbl">BOTUN ELI</div>
+      <div class="sheet-lbl">BOT HAND</div>
       <div class="res-hand" id="resBotHand"></div>
-      <div class="sheet-lbl">SENIN ELIN</div>
+      <div class="sheet-lbl">YOUR HAND</div>
       <div class="res-hand" id="resMyHand"></div>
     </div>
-    <button class="btn btn-primary" id="againBtn">TEKRAR OYNA</button>
-    <button class="btn btn-ghost" id="lobbyBtn">ANA MENU</button>
+    <button class="btn btn-primary" id="againBtn">PLAY AGAIN</button>
+    <button class="btn btn-ghost" id="lobbyBtn">MAIN MENU</button>
   </div>
 </div>
 
@@ -626,10 +626,10 @@
      anlamsizlastiriyordu (bot 98 - oyuncu 31 gibi skorlar). ABD esleri
      sembolik 1 puan, nadir ulkeler 4 puan aliyor. */
   var CONN = {
-    team:    { label: "Ayni takim",    color: "#10B981", pts: 6, desc: "Su an ayni takimda" },
-    country: { label: "Ayni ulke",     color: "#3B82F6", pts: 4, desc: "Ayni ulkeden (ABD esleri 1 puan)" },
-    former:  { label: "Eski takimdas", color: "#F59E0B", pts: 3, desc: "Ayni takimda oynamislar" },
-    draft:   { label: "Draft sinifi",  color: "#F97316", pts: 2, desc: "Ayni yil draft edilmis" }
+    team:    { label: "Same team",     color: "#10B981", pts: 6, desc: "On the same roster right now" },
+    country: { label: "Same country",  color: "#3B82F6", pts: 4, desc: "Same nationality (USA pairs score 1)" },
+    former:  { label: "Former teammates", color: "#F59E0B", pts: 3, desc: "Played for the same franchise" },
+    draft:   { label: "Draft class",   color: "#F97316", pts: 2, desc: "Drafted in the same year" }
   };
   var COMMON_COUNTRY = "USA";
   var COMMON_COUNTRY_PTS = 1;
@@ -885,7 +885,7 @@
       }
     }
     if (!order.length)
-      return '<div class="tile-none">zayif kart<br>degistirmeyi dusun</div>';
+      return '<div class="tile-none">weak card<br>consider swapping</div>';
 
     order.sort(function (x, y) { return byOther[y].pts - byOther[x].pts; });
     var max = window.innerHeight < 620 ? 2 : 4;
@@ -897,7 +897,7 @@
         '<span class="tl-p" style="color:' + m.color + '">+' + g.pts + '</span></div>';
     }
     if (order.length > max)
-      out += '<div class="tl-more">+' + (order.length - max) + ' oyuncu daha</div>';
+      out += '<div class="tl-more">+' + (order.length - max) + ' more</div>';
     return out + '</div>';
   }
 
@@ -986,7 +986,7 @@
     }
     $("oppCards").innerHTML = out;
     var bl = $("botLeftLbl");
-    if (bl) bl.textContent = G.botLeft > 0 ? G.botLeft + " hak" : "bitti";
+    if (bl) bl.textContent = G.botLeft > 0 ? G.botLeft + " moves" : "done";
   }
 
   function lastName(n) {
@@ -1020,8 +1020,8 @@
     var mine = G.turn === "you" && !G.over && G.myLeft > 0;
     $("marketWrap").classList.toggle("locked", !mine);
     $("turnLbl").className = "mk-turn " + (G.turn === "you" ? "you" : "bot");
-    $("turnLbl").textContent = G.over ? "EL KILITLENDI"
-      : (G.turn === "you" ? (G.myLeft > 0 ? "SIRA SENDE" : "HAKKIN BITTI") : "BOT DUSUNUYOR");
+    $("turnLbl").textContent = G.over ? "HAND LOCKED"
+      : (G.turn === "you" ? (G.myLeft > 0 ? "YOUR TURN" : "NO MOVES LEFT") : "BOT THINKING");
 
     var els = $("market").querySelectorAll(".mk");
     for (var e = 0; e < els.length; e++) els[e].addEventListener("click", onMarket);
@@ -1036,17 +1036,17 @@
 
   function updateHint(info) {
     var h = $("hint");
-    if (G.over) { h.className = ""; h.textContent = "El kilitlendi"; return; }
-    if (G.turn === "bot") { h.className = "live"; h.textContent = "Bot oynuyor..."; return; }
+    if (G.over) { h.className = ""; h.textContent = "Hand locked"; return; }
+    if (G.turn === "bot") { h.className = "live"; h.textContent = "Bot is playing..."; return; }
     if (G.myLeft <= 0) {
       h.className = "";
-      h.textContent = "Hakkin bitti - eli kilitle";
+      h.textContent = "No moves left - lock in your hand";
     } else if (info && info.trios.length) {
       h.className = "live";
-      h.textContent = info.trios[0].team + " uclusu +" + (info.trios.length * TRIO_BONUS);
+      h.textContent = info.trios[0].team + " trio +" + (info.trios.length * TRIO_BONUS);
     } else {
       h.className = "live";
-      h.textContent = "Acik karttan birini al - " + G.myLeft + " hakkin var";
+      h.textContent = "Take an open card - " + G.myLeft + " moves left";
     }
   }
 
@@ -1099,7 +1099,7 @@
         '</div>';
       })();
     }
-    if (!rows) rows = '<div class="empty-note">Bu kartin hicbir baglantisi yok.<br>Degistirmek iyi bir fikir olabilir.</div>';
+    if (!rows) rows = '<div class="empty-note">This card has no links.<br>Swapping it is probably a good idea.</div>';
 
     // Kartin altinda: yerine hangi acik karti alabilirim ve her biri
     // kac puan getirir. Karar tek ekranda, tam bilgiyle veriliyor.
@@ -1110,7 +1110,7 @@
         opts.push({ m: m, d: deltaOf(G.hand, i, G.market[m]) });
       }
       opts.sort(function (x, y) { return y.d - x.d; });
-      rows += '<div class="sheet-lbl">BU KARTIN YERINE AL</div>';
+      rows += '<div class="sheet-lbl">TAKE INSTEAD OF THIS</div>';
       for (var o = 0; o < opts.length; o++)
         rows += pickRow(opts[o].m, i, opts[o].d, o === 0);
       $("shLinks").innerHTML = rows;
@@ -1198,7 +1198,7 @@
       opts.push({ i: i, d: deltaOf(G.hand, i, card) });
     opts.sort(function (x, y) { return y.d - x.d; });
 
-    var html = '<div class="sheet-lbl">HANGI KARTININ YERINE?</div>';
+    var html = '<div class="sheet-lbl">SWAP OUT WHICH CARD?</div>';
     for (var o = 0; o < opts.length; o++) {
       var mine = G.hand[opts[o].i];
       var col = opts[o].d > 0 ? "#34D399" : (opts[o].d < 0 ? "#F87171" : "#8C99B2");
@@ -1209,7 +1209,7 @@
           '<img class="av" src="' + mine.headshot_url + '" alt="" onerror="this.src=\'' + LOGOMAN + '\'">' +
         '</div>' +
         '<div class="pick-id"><div class="pick-name">' + mine.name + '</div>' +
-        '<div class="pick-sub">cikar \u00b7 ' + nick(mine.current_team) + '</div></div>' +
+        '<div class="pick-sub">drop \u00b7 ' + nick(mine.current_team) + '</div></div>' +
         '<span class="pick-d" style="color:' + col + '">' +
           (opts[o].d > 0 ? "+" : "") + opts[o].d + '</span></div>';
     }
@@ -1265,7 +1265,7 @@
         // Pas gecmek eskiden botun tum haklarini yakiyordu; havuz her
         // turda degistigi icin sadece o turu harcamasi dogru.
         G.botLeft--;
-        toast("Bot <b>pas</b> gecti", 1200);
+        toast("Bot <b>passed</b>", 1200);
       } else {
         var card = G.market[mv.mk];
         var mkEl = $("market").querySelector('.mk[data-m="' + mv.mk + '"]');
@@ -1274,7 +1274,7 @@
         G.botShown[mv.idx] = 1;
         G.market[mv.mk] = G.deck.length ? G.deck.shift() : null;
         G.botLeft--;
-        toast("Bot <b>" + card.name + "</b> aldi", 1500);
+        toast("Bot took <b>" + card.name + "</b>", 1500);
         renderOpp();
       }
       setTimeout(function () {
@@ -1327,10 +1327,10 @@
     var bot = analyze(G.botHand).total;
     var win = me > bot, tie = me === bot;
 
-    $("resTitle").textContent = win ? "Kazandin!" : (tie ? "Berabere" : "Bot kazandi");
+    $("resTitle").textContent = win ? "You win" : (tie ? "Draw" : "Bot wins");
     $("resSub").textContent = win
-      ? "Baglantilarin botunkinden guclu"
-      : (tie ? "Tam esitlik - nadir gorulur" : "Fark " + (bot - me) + " puan");
+      ? "Your links beat the bot's"
+      : (tie ? "Dead level - that is rare" : (bot - me) + " points behind");
     $("resMeBox").className = "res-box" + (win ? " win" : "");
     $("resBotBox").className = "res-box" + (!win && !tie ? " win" : "");
 
@@ -1347,7 +1347,7 @@
     if (bMe.trio || bBot.trio) {
       rows += '<div class="bd-row" style="background:rgba(251,191,36,.09)">' +
         '<span class="link-dot" style="background:#FBBF24"></span>' +
-        '<span class="bd-name">Ayni takim uclusu</span>' +
+        '<span class="bd-name">Same-team trio</span>' +
         '<span class="bd-val" style="color:#FBBF24">' + bMe.trio + " - " + bBot.trio + '</span>' +
       '</div>';
     }
@@ -1402,8 +1402,8 @@
   }
   rules += '<div class="rule">' +
     '<span class="rule-pts" style="background:#FBBF24">+' + TRIO_BONUS + '</span>' +
-    '<div class="rule-txt"><div class="rule-name">Ayni takim uclusu</div>' +
-    '<div class="rule-desc">Ayni takimi paylasan 3 oyuncu</div></div></div>';
+    '<div class="rule-txt"><div class="rule-name">Same-team trio</div>' +
+    '<div class="rule-desc">Three players sharing one franchise</div></div></div>';
   $("rulesBox").innerHTML = rules;
 
   var diffs = $("diffRow").querySelectorAll(".diff");

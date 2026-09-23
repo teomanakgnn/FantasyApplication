@@ -287,12 +287,12 @@ def render_auth_page_enhanced():
         div[data-testid="stFormSubmitButton"] button {
             border-radius: 8px;
             font-weight: 600;
-            background-color: #1D428A !important;
+            background-color: #C8102E !important;
             color: white !important;
             border: none !important;
         }
         div[data-testid="stFormSubmitButton"] button:hover {
-            background-color: #163a7a !important;
+            background-color: #A60D26 !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -315,7 +315,7 @@ def render_auth_page_enhanced():
     st.markdown(f"""
         <div class="logo-container">{img_tag}</div>
         <div class="brand-header">
-            <p style="margin-top:0;">Your ultimate fantasy basketball companion.</p>
+            <p style="margin-top:0;">Daily box scores, mock drafts and trade math.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -377,7 +377,8 @@ def render_auth_page_enhanced():
             reg_email = st.text_input("Email", placeholder="name@example.com")
             p1, p2 = st.columns(2)
             with p1:
-                reg_password = st.text_input("Password", type="password")
+                reg_password = st.text_input("Password", type="password",
+                                             help="At least 8 characters.")
             with p2:
                 reg_password2 = st.text_input("Confirm", type="password")
             terms = st.checkbox("I agree to the Terms of Service")
@@ -385,23 +386,24 @@ def render_auth_page_enhanced():
             submit_reg = st.form_submit_button("Create Free Account", width='stretch')
 
             if submit_reg:
-                errors = []
+                # Dogrulama kurallari tek yerde (veritabani katmani).
+                # Burada ayri bir kopya vardi ve parola alt siniri farkliydi
+                # (6 vs 8), yani form kabul ediyor kayit reddediliyordu.
+                error = None
                 if not all([reg_username, reg_email, reg_password, reg_password2]):
-                    errors.append("All fields are required")
-                elif len(reg_username) < 3:
-                    errors.append("Username too short (min 3 chars)")
-                elif not is_valid_email(reg_email):
-                    errors.append("Invalid email format")
-                elif len(reg_password) < 6:
-                    errors.append("Password too short (min 6 chars)")
+                    error = "Fill in every field."
                 elif reg_password != reg_password2:
-                    errors.append("Passwords do not match")
+                    error = "The two passwords do not match."
                 elif not terms:
-                    errors.append("Please accept the terms")
+                    error = "Accept the terms to continue."
+                else:
+                    valid, message = db.validate_registration(
+                        reg_username, reg_email, reg_password)
+                    if not valid:
+                        error = message
 
-                if errors:
-                    for error in errors:
-                        st.error(error)
+                if error:
+                    st.error(error)
                 else:
                     success, message = db.create_user(reg_username, reg_email, reg_password)
                     if success:
@@ -409,9 +411,9 @@ def render_auth_page_enhanced():
                     else:
                         st.error(f"{message}")
 
-    st.markdown("""
+    st.markdown(f"""
         <div style="text-align:center; margin-top:1rem; color:#6b7280; font-size:0.8rem;">
-            © 2024 HoopLife NBA. All rights reserved.
+            © {datetime.now().year} HoopLife NBA
         </div>
     """, unsafe_allow_html=True)
 

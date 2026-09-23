@@ -142,7 +142,10 @@ class Database:
         try:
             factory = RealDictCursor if fetch in ("one", "all") else None
             with conn.cursor(cursor_factory=factory) as cur:
-                cur.execute(sql, params or ())
+                # params bos tuple ise psycopg2 yine bicimlendirme
+                # yapiyor ve SQL icindeki duz '%' (LIKE kaliplari)
+                # patliyor. Parametresiz sorguda None gecilmeli.
+                cur.execute(sql, params if params else None)
                 if fetch == "one":
                     row = cur.fetchone()
                     result = dict(row) if row else None
