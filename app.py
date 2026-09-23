@@ -1250,6 +1250,31 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # Bu dort sayfanin kodu ve rotasi vardi ama hicbir yerden
+    # gidilemiyordu: menude butonlari yoktu, URL ile de acilmiyorlardi.
+    # Yani dort ozellik yazilmis ama kullanilamiyordu.
+    if st.button("Injury Report", width='stretch', type="secondary",
+                 key="sidebar_injury_btn"):
+        st.session_state.page = "injury"
+        st.rerun()
+
+    if st.button("Trade Analyzer", width='stretch', type="secondary",
+                 key="sidebar_trade_btn"):
+        st.session_state.page = "trade"
+        st.rerun()
+
+    if st.button("My League", width='stretch', type="secondary",
+                 key="sidebar_league_btn"):
+        st.session_state.page = "fantasy_league"
+        st.rerun()
+
+    if st.button("Player Trends", width='stretch', type="secondary",
+                 key="sidebar_trends_btn"):
+        st.session_state.page = "trends"
+        st.rerun()
+
+    st.markdown("---")
+
     if is_authenticated and user:
         # Mor gradyanli kart yerine sade bir kimlik satiri
         plan_chip = "pro" if is_pro else "free"
