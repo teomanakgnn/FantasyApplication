@@ -1237,6 +1237,11 @@ with st.sidebar:
         st.session_state.page = "mock_draft"
         st.rerun()
 
+    if st.button("Draft Strategy", width='stretch', type="secondary",
+                 key="sidebar_draft_strategy_btn"):
+        st.session_state.page = "draft_strategy"
+        st.rerun()
+
     # Card Game button - accessible to everyone
     if st.button("Card Connections", width='stretch', type="secondary", key="sidebar_card_game_btn"):
         st.session_state.page = "card_game"
@@ -1284,6 +1289,14 @@ with st.sidebar:
 if st.session_state.page == "login":
     from auth import render_auth_page_enhanced
     render_auth_page_enhanced()
+    st.stop()
+
+if st.session_state.page == "draft_strategy":
+    from pages.draft_strategy import render_draft_strategy_page
+    render_draft_strategy_page()
+    if st.sidebar.button("Back to Home", width='stretch', key="ds_back"):
+        st.session_state.page = "home"
+        st.rerun()
     st.stop()
 
 if st.session_state.page == "account":
