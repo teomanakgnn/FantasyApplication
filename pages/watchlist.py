@@ -1,6 +1,7 @@
 import streamlit as st
 from services.database import db, FREE_WATCHLIST_LIMIT
 from utils.text import esc
+from utils.images import FALLBACK, headshot_for_name
 from components.pro import limit_notice, within_limit
 import pandas as pd
 from datetime import datetime
@@ -16,6 +17,14 @@ def render_watchlist_page():
     # Custom CSS for watchlist
     st.markdown("""
         <style>
+        /* Oyuncu karti: ad tek basina duruyordu, fotograf eklendi */
+        .player-head { display: flex; align-items: center; gap: 10px; }
+        .player-photo {
+            width: 40px; height: 40px; border-radius: 50%;
+            object-fit: cover; object-position: top center;
+            background: #0C1119; flex: 0 0 auto;
+            border: 1px solid rgba(255,255,255,.10);
+        }
         .player-card {
             background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
             border-left: 4px solid #667eea;
@@ -149,7 +158,7 @@ def render_watchlist_page():
         for idx, item in enumerate(filtered_watchlist):
             st.markdown(f"""
                 <div class="player-card">
-                    <div class="player-name">{esc(item['player_name'])}</div>
+                    <div class="player-head"><img class="player-photo" src="{esc(headshot_for_name(item['player_name']))}" alt="" onerror="this.src=&#39;{FALLBACK}&#39;"><div class="player-name">{esc(item['player_name'])}</div></div>
                     <div class="player-meta">
                         Added on {item['created_at'].strftime('%B %d, %Y at %I:%M %p')}
                     </div>

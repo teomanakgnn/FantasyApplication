@@ -1,4 +1,6 @@
 import streamlit as st
+
+from utils.images import add_headshot_by_name
 import pandas as pd
 from collections import Counter
 
@@ -168,11 +170,17 @@ def render_mvp_lvp_section(date_range, weights, label):
         ),
     }
 
+    # Sayfa bastan asagi sayiydi; fotograf sutunu hicbir istatistigin
+    # yerini almiyor, sadece kimin one ciktigini goz kararinda belli ediyor.
+    col_config_mvp["PHOTO"] = st.column_config.ImageColumn("", width="small")
+    col_config_lvp["PHOTO"] = st.column_config.ImageColumn("", width="small")
+
     with col1:
         st.markdown("### Most MVP Appearances")
         if not top_df.empty:
             st.dataframe(
-                top_df, 
+                add_headshot_by_name(top_df)[
+                    ["PHOTO"] + [c for c in top_df.columns]], 
                 width='stretch', 
                 hide_index=True,
                 column_config=col_config_mvp
@@ -184,7 +192,8 @@ def render_mvp_lvp_section(date_range, weights, label):
         st.markdown("### Most LVP Appearances")
         if not worst_df.empty:
             st.dataframe(
-                worst_df, 
+                add_headshot_by_name(worst_df)[
+                    ["PHOTO"] + [c for c in worst_df.columns]], 
                 width='stretch', 
                 hide_index=True,
                 column_config=col_config_lvp

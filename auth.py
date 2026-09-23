@@ -49,38 +49,42 @@ def handle_login(username, password, remember_me=True, fingerprint_hash=None):
     st.session_state.session_token = session_data['token']
 
     if remember_me:
-        # LocalStorage'a kaydet ve URL param ile yenile
-        auth_data = {
+        # Oturumu tarayicida sakla ki sonraki ziyarette inject_auth_bridge
+        # geri yukleyebilsin. Yazma islemi bir SONRAKI calistirmada
+        # yapiliyor: ayni calistirmada bileseni cizip hemen rerun etmek,
+        # bilesen mount olmadan onu yok ediyor.
+        st.session_state._pending_auth_persist = {
             'token': session_data['token'],
             'username': user['username'],
             'user_id': user['id'],
-            'expiry': (datetime.now() + timedelta(days=30)).isoformat()
+            'expiry': (datetime.now() + timedelta(days=30)).isoformat(),
         }
-        st.components.v1.html(f"""
-        <script>
-            (function() {{
-                try {{
-                    localStorage.setItem('hooplife_auth_data', JSON.stringify({json.dumps(auth_data)}));
-                    console.log('Session saved to localStorage');
-                }} catch(e) {{
-                    console.error('localStorage save failed:', e);
-                }}
 
-                // URL param ekleyerek yenile - Streamlit token'ı yakalasın
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('auth_token', '{session_data['token']}');
-                url.searchParams.set('auth_user', '{user['username']}');
-                window.parent.location.href = url.toString();
-            }})();
-        </script>
-        """, height=0)
-        # JS yönlendiriyor, Python rerun yapmıyor
-        return True, "Login successful. Redirecting..."
-    else:
-        # Remember me kapalı: sadece session state, URL temiz
-        st.session_state.page = "home"
-        st.rerun()
-        return True, "Login successful"
+    # Gecisi Python yapiyor. Eskiden bu is iframe icindeki
+    # "window.parent.location.href = ..." satirina birakilmisti; Streamlit
+    # bileseni sandbox'li oldugu icin tarayici o yonlendirmeyi engelliyor
+    # ve kullanici giris ekraninda kaliyordu.
+    st.session_state.page = "home"
+    st.rerun()
+
+
+def persist_auth_if_pending():
+    """
+    Bekleyen oturumu tarayiciya yazar.
+
+    Girisin hemen ardindan degil, bir sonraki calistirmada cagrilir;
+    boylece bilesen rerun tarafindan yok edilmeden calisabiliyor.
+    """
+    data = st.session_state.pop('_pending_auth_persist', None)
+    if not data:
+        return
+    components.html(
+        "<script>try{localStorage.setItem('hooplife_auth_data',"
+        + json.dumps(json.dumps(data))
+        + ");}catch(e){}</script>",
+        height=0,
+    )
+
 
 def get_fingerprint_component():
     """Görünmez bir JS bileşeni ile cihaz özelliklerini toplar"""
@@ -343,9 +347,9 @@ def render_auth_page_enhanced():
                     success, message = handle_login(username, password, remember_me, fingerprint_hash)
 
                 if success:
+                    # handle_login basarili olursa rerun ediyor; buraya
+                    # yalnizca basarisiz girislerde duselir.
                     st.success(f"Welcome back, {username}.")
-                    # remember_me=True ise JS yönlendiriyor, rerun gerekmez.
-                    # remember_me=False ise handle_login içinde rerun yapıldı.
                 else:
                     st.error(f"{message}")
 

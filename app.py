@@ -14,7 +14,8 @@ import time
 from services.espn_api import (calculate_game_score, get_score_color)
 from services.nba_season import (get_current_season_year, get_season_label,
                                  get_season_start_date, is_offseason)
-from auth import check_authentication_enhanced, inject_auth_bridge, logout_enhanced
+from auth import (check_authentication_enhanced, inject_auth_bridge,
+                  logout_enhanced, persist_auth_if_pending)
 import os
 import pickle
 import json
@@ -89,6 +90,9 @@ inject_auth_bridge()
 is_authenticated = check_authentication_enhanced()
 user = st.session_state.get('user', None)
 is_pro = user.get('is_pro', False) if user else False
+
+# Girisin hemen ardindaki calistirmada oturumu tarayiciya yaz
+persist_auth_if_pending()
 
 # ==================== 5. MOBİL UYGULAMA & EMBED KONTROLÜ ====================
 def is_embedded():

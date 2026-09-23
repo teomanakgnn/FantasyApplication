@@ -1,4 +1,7 @@
 import streamlit as st
+
+from utils.images import FALLBACK, add_headshot_column, headshot
+from utils.text import esc
 import pandas as pd
 from datetime import datetime, timedelta
 from utils.helpers import parse_minutes
@@ -857,30 +860,6 @@ def show_player_analysis(player_row, weights):
 # 3. MAIN TABLE FUNCTION
 # =================================================================
 
-def render_tables(today_df, weights, default_period="Today"):
-    """
-    Renders the main table.
-    Uses different data sources based on period selection (Today, Season, Week).
-    """
-    
-    # Initialize Session State
-    if "stats_period" not in st.session_state:
-        st.session_state.stats_period = default_period
-        
-    # --- PERIOD SELECTION BUTTONS ---
-    st.markdown("### Time Period")
-    cols = st.columns(4)
-    periods = ["Today", "This Week", "This Month", "Season"]
-    
-    for i, p in enumerate(periods):
-        style = "primary" if st.session_state.stats_period == p else "secondary"
-        if cols[i].button(p, key=f"btn_{p}", type=style, width='stretch'):
-            st.session_state.stats_period = p
-            st.rerun()
-            
-    current_period = st.session_state.stats_period
-    active_df = pd.DataFrame()
-    
 # Sezon basinda anlamli siralama icin gereken asgari mac sayisi.
 # Lig genelinde oynanan mac sayisi arttikca esik de yukselir, ama
 # hicbir zaman bundan fazla olmaz.
@@ -907,6 +886,126 @@ def filter_small_samples(df, gp_column="GP"):
     return kept if not kept.empty else df
 
 
+# ==================== ONE CIKANLAR SERIDI ====================
+
+def _inject_leader_css():
+    """Serit stili. Tablolarin ustunde, istatistiklerin yerine degil."""
+    st.markdown("""
+        <style>
+        .lead-strip {
+            display: grid; gap: 10px; margin: 4px 0 14px;
+            grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+        }
+        .lead {
+            position: relative; overflow: hidden;
+            border: 1px solid rgba(255,255,255,.09);
+            border-radius: 14px; padding: 12px 13px 11px;
+            background: linear-gradient(150deg, #171C27, #10141C);
+        }
+        .lead-rank {
+            position: absolute; top: 9px; right: 11px;
+            font-size: 10px; font-weight: 800; letter-spacing: .5px;
+            color: #4E5A70;
+        }
+        .lead-top { display: flex; align-items: center; gap: 10px; }
+        .lead-photo {
+            width: 46px; height: 46px; border-radius: 50%;
+            object-fit: cover; object-position: top center;
+            background: #0C1119; flex: 0 0 auto;
+            border: 1px solid rgba(255,255,255,.10);
+        }
+        .lead-id { min-width: 0; }
+        .lead-name {
+            font-size: .88rem; font-weight: 800; letter-spacing: -.2px;
+            color: #E8ECF4; line-height: 1.2;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .lead-team { font-size: .72rem; color: #7C89A3; margin-top: 2px; }
+        .lead-score {
+            font-size: 1.32rem; font-weight: 800; letter-spacing: -.5px;
+            color: #34D399; line-height: 1; margin-top: 10px;
+            font-variant-numeric: tabular-nums;
+        }
+        .lead-score span { font-size: .64rem; font-weight: 700; color: #6B7893;
+                           letter-spacing: .8px; margin-left: 5px; }
+        .lead-line {
+            font-size: .74rem; color: #9FADC6; margin-top: 5px;
+            font-variant-numeric: tabular-nums;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+
+def _stat_text(value, decimals):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "0"
+    return f"{number:.0f}" if decimals == 0 else f"{number:.1f}"
+
+
+def render_leader_strip(top_df, is_today, count=5):
+    """
+    Tablonun ustunde ilk birkac oyuncuyu fotografiyla gosterir.
+
+    Tabloyu kisaltmiyor, oncesine gorsel bir giris koyuyor: sayfa bastan
+    asagi rakam oldugu icin kimin one ciktigi ancak satir satir okununca
+    anlasiliyordu.
+    """
+    if top_df is None or top_df.empty:
+        return
+    decimals = 0 if is_today else 1
+    cards = []
+    for rank, (_, row) in enumerate(top_df.head(count).iterrows(), start=1):
+        photo = row.get("PHOTO") or headshot(row.get("PLAYER_ID"))
+        line = " · ".join([
+            f"{_stat_text(row.get('PTS'), decimals)} PTS",
+            f"{_stat_text(row.get('REB'), decimals)} REB",
+            f"{_stat_text(row.get('AST'), decimals)} AST",
+        ])
+        try:
+            score = f"{float(row.get('USER_SCORE', 0)):.1f}"
+        except (TypeError, ValueError):
+            score = "-"
+        cards.append(
+            f'<div class="lead"><span class="lead-rank">{rank}</span>'
+            f'<div class="lead-top">'
+            f'<img class="lead-photo" src="{esc(photo)}" alt="" '
+            f'onerror="this.src=&#39;{FALLBACK}&#39;">'
+            f'<div class="lead-id">'
+            f'<div class="lead-name">{esc(row.get("PLAYER"))}</div>'
+            f'<div class="lead-team">{esc(row.get("TEAM"))}</div>'
+            f'</div></div>'
+            f'<div class="lead-score">{score}<span>SCORE</span></div>'
+            f'<div class="lead-line">{line}</div></div>')
+    st.markdown('<div class="lead-strip">' + "".join(cards) + "</div>",
+                unsafe_allow_html=True)
+
+
+def render_tables(today_df, weights, default_period="Today"):
+    """
+    Renders the main table.
+    Uses different data sources based on period selection (Today, Season, Week).
+    """
+    
+    # Initialize Session State
+    if "stats_period" not in st.session_state:
+        st.session_state.stats_period = default_period
+        
+    # --- PERIOD SELECTION BUTTONS ---
+    st.markdown("### Time Period")
+    cols = st.columns(4)
+    periods = ["Today", "This Week", "This Month", "Season"]
+    
+    for i, p in enumerate(periods):
+        style = "primary" if st.session_state.stats_period == p else "secondary"
+        if cols[i].button(p, key=f"btn_{p}", type=style, width='stretch'):
+            st.session_state.stats_period = p
+            st.rerun()
+            
+    current_period = st.session_state.stats_period
+    active_df = pd.DataFrame()
+    
     # =================================================================
     # DATA PREPARATION (DATA FETCHING STRATEGY)
     # =================================================================
@@ -1117,7 +1216,13 @@ def filter_small_samples(df, gp_column="GP"):
             else:
                 active_df[col] = active_df[col].astype(float).round(1)
 
-    column_order = ["PLAYER", "TEAM", "USER_SCORE", "MIN", "PTS", "FG", "3PT", "FT", "REB", "AST", "STL", "BLK", "TO", "+/-"]
+    # Fotograf sutunu: tablolar bastan asagi sayiydi, oyuncunun kim
+    # oldugu ancak adini okuyunca anlasiliyordu. Sutun dar, hicbir
+    # istatistigin yerini almiyor.
+    active_df = add_headshot_column(active_df)
+
+    column_order = ["PHOTO", "PLAYER", "TEAM", "USER_SCORE", "MIN", "PTS", "FG",
+                    "3PT", "FT", "REB", "AST", "STL", "BLK", "TO", "+/-"]
     
     if not is_today:
         column_order.insert(2, "GAMES")
@@ -1127,6 +1232,7 @@ def filter_small_samples(df, gp_column="GP"):
     available_cols = [c for c in column_order if c in active_df.columns]
 
     col_config = {
+        "PHOTO": st.column_config.ImageColumn("", width="small"),
         "PLAYER": st.column_config.TextColumn("Player", width="medium"),
         "TEAM": st.column_config.TextColumn("Team", width="small"),
         "GAMES": st.column_config.NumberColumn("GP", format="%d", width="small"),
@@ -1143,10 +1249,12 @@ def filter_small_samples(df, gp_column="GP"):
 
     st.markdown("---")
     st.caption("Click a player row for context and injury analysis.")
+    _inject_leader_css()
 
     # --- 1. TOP 10 PERFORMANCES ---
     st.markdown(f"## Top 10 Performances ({current_period})")
     top_df = active_df.sort_values("USER_SCORE", ascending=False).head(10)
+    render_leader_strip(top_df, is_today)
     
     event_top = st.dataframe(
         top_df[available_cols],
