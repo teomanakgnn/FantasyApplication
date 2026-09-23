@@ -12,7 +12,8 @@ import time
 import pandas as pd
 import streamlit as st
 
-from services.database import db
+from services.database import db, FREE_SAVED_DRAFT_LIMIT
+from components.pro import within_limit
 from services.draft_data import (fetch_draft_rankings, get_draft_board,
                                  get_headshot_url)
 from services.draft_engine import (
@@ -1067,13 +1068,22 @@ def _render_save(state):
     with c2:
         if st.button("Save", type="primary", width='stretch', key="draft_save_btn"):
             db.ensure_draft_table()
+            # Ucretsiz planda kayitli draft sayisi sinirli; mevcut bir
+            # draftin uzerine yazmak sinira takilmamali.
+            existing = st.session_state.get("draft_saved_id")
+            if not existing and not within_limit(db.saved_draft_count(user["id"]),
+                                                 FREE_SAVED_DRAFT_LIMIT):
+                st.warning(
+                    f"Free accounts keep {FREE_SAVED_DRAFT_LIMIT} saved drafts. "
+                    "Delete one or switch to Pro.")
+                st.stop()
             draft_id = db.save_mock_draft(
                 user["id"], name or default_name, serialize(state),
                 grade=my_grade, draft_id=st.session_state.get("draft_saved_id"),
             )
             if draft_id:
                 st.session_state.draft_saved_id = draft_id
-                st.success("Draft kaydedildi.")
+                st.success("Draft saved.")
             else:
                 st.error("Could not save the draft. Check the database connection.")
 

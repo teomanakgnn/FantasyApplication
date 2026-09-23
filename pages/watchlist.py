@@ -1,5 +1,6 @@
 import streamlit as st
-from services.database import db
+from services.database import db, FREE_WATCHLIST_LIMIT
+from components.pro import limit_notice, within_limit
 import pandas as pd
 from datetime import datetime
 
@@ -69,6 +70,10 @@ def render_watchlist_page():
                     watchlist = db.get_watchlist(user_id)
                     if any(w['player_name'].lower() == player_name.lower() for w in watchlist):
                         st.warning(f"{player_name} is already in your watchlist.")
+                    elif not within_limit(len(watchlist), FREE_WATCHLIST_LIMIT):
+                        st.warning(
+                            f"Free accounts hold {FREE_WATCHLIST_LIMIT} players. "
+                            "Remove one to add another, or switch to Pro.")
                     else:
                         success = db.add_to_watchlist(user_id, player_name, notes)
                         if success:

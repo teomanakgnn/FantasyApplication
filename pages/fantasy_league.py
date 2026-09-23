@@ -1,4 +1,6 @@
 import streamlit as st
+
+from components.pro import is_pro
 import pandas as pd
 import os
 import streamlit.components.v1 as components
@@ -912,7 +914,7 @@ def render_fantasy_league_page():
     
     # --- SIDEBAR ---
     with st.sidebar:
-        st.markdown("### PLATFORM SELECTION")
+        st.markdown("### Platform")
         
         # Platform seçimi
         col1, col2 = st.columns(2)
@@ -937,7 +939,7 @@ def render_fantasy_league_page():
         
         # Platform bazlı input alanları
         if st.session_state.get('selected_platform') == 'ESPN':
-            st.markdown("### ESPN CONFIGURATION")
+            st.markdown("### ESPN")
             
             league_input = st.text_input("LEAGUE ID", value="987023001", key="espn_league_id")
             if "leagueId=" in league_input:
@@ -947,32 +949,37 @@ def render_fantasy_league_page():
             
             st.markdown("---")
             
-            # Time filter (ESPN için)
-            st.markdown("**TIME PERIOD**")
+            # Zaman araligi. Bu kontrol eskiden disabled=True idi ve hep
+            # "week" kullaniliyordu; "(PRO)" etiketleri calismayan bir
+            # kontrolun uzerinde duruyordu. Artik gercekten calisiyor,
+            # genis araliklar Pro'ya acik.
+            pro = is_pro()
+            st.markdown("**Time period**")
             time_filter = st.radio(
-                "Select Data Range:",
+                "Data range",
                 options=["week", "month", "season"],
                 format_func=lambda x: {
-                    "week": " Current Week",
-                    "month": "Last Month (PRO)",
-                    "season": "Full Season (PRO)"
+                    "week": "Current week",
+                    "month": "Last month" if pro else "Last month (Pro)",
+                    "season": "Full season" if pro else "Full season (Pro)",
                 }[x],
                 index=0,
                 key="espn_time_filter",
-                disabled=True,
                 label_visibility="collapsed"
             )
-            time_filter = "week"
-            st.session_state['time_filter'] = "week"
+            if time_filter != "week" and not pro:
+                st.caption("Wider ranges are part of Pro. Using the current week.")
+                time_filter = "week"
+            st.session_state['time_filter'] = time_filter
             
             st.markdown("---")
             
-            if st.button("LOAD ESPN DATA", type="primary", width='stretch'):
-                with st.spinner("CONNECTING TO ESPN SERVERS..."):
+            if st.button("Load ESPN data", type="primary", width='stretch'):
+                with st.spinner("Connecting to ESPN..."):
                     df_standings, matchups, error = load_espn_data(league_id, time_filter)
                     
                     if error:
-                        st.error(f"ESPN ERROR: {error}")
+                        st.error(f"ESPN error: {error}")
                     else:
                         st.session_state['df_standings'] = df_standings
                         st.session_state['matchups'] = matchups
@@ -981,7 +988,7 @@ def render_fantasy_league_page():
                         st.rerun()
         
         elif st.session_state.get('selected_platform') == 'YAHOO':
-            st.markdown("### YAHOO CONFIGURATION")
+            st.markdown("### Yahoo")
             
             # Yahoo authentication kontrolü
             is_authenticated = handle_yahoo_auth()
@@ -1037,13 +1044,13 @@ def render_fantasy_league_page():
                 st.markdown("---")
                 
                 # 1. LOAD DATA BUTONU
-                if st.button("LOAD YAHOO DATA", type="primary", width='stretch'):
+                if st.button("Load Yahoo data", type="primary", width='stretch'):
                     if league_key:
                         with st.spinner("CONNECTING TO YAHOO SERVERS..."):
                             df_standings, matchups, error = load_yahoo_data(league_key, week_number)
                             
                             if error:
-                                st.error(f"YAHOO ERROR: {error}")
+                                st.error(f"Yahoo error: {error}")
                             else:
                                 st.session_state['df_standings'] = df_standings
                                 st.session_state['matchups'] = matchups

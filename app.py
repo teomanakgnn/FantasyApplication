@@ -2304,8 +2304,8 @@ def home_page():
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         st.session_state["period_df"] = df.copy()
 
-        if is_pro and user:
-            with st.expander("Add Players to Watchlist", expanded=False):
+        if user:
+            with st.expander("Add players to your watchlist", expanded=False):
                 watchlist = db.get_watchlist(user['id'])
                 watchlist_names = [w['player_name'] for w in watchlist]
                 available_players = [p for p in df['PLAYER'].unique() if p not in watchlist_names]
@@ -2317,14 +2317,28 @@ def home_page():
                         st.write("")
                         st.write("")
                         if st.button("Add", disabled=not quick_add_players, key="quick_add_btn"):
+                            added = 0
                             for player in quick_add_players:
-                                db.add_to_watchlist(user['id'], player, f"Added from Daily Stats - {resolved_date.strftime('%Y-%m-%d')}")
-                            st.success(f"Added {len(quick_add_players)} player(s).")
+                                if not within_limit(db.watchlist_count(user['id']),
+                                                    FREE_WATCHLIST_LIMIT, user):
+                                    break
+                                if db.add_to_watchlist(
+                                        user['id'], player,
+                                        "Added from daily stats - "
+                                        f"{resolved_date.strftime('%Y-%m-%d')}"):
+                                    added += 1
+                            if added:
+                                st.success(f"Added {added} player(s).")
+                            if added < len(quick_add_players):
+                                st.warning(f"Free accounts hold {FREE_WATCHLIST_LIMIT} "
+                                           "players. Remove one or switch to Pro.")
                             st.rerun()
+                    limit_notice(db.watchlist_count(user['id']),
+                                 FREE_WATCHLIST_LIMIT, "watchlist")
                 else:
-                    st.info("All selected players are already in your watchlist.")
-        elif not is_pro:
-            st.info("Pro feature. Log in with a Pro account to add players to your watchlist.")
+                    st.info("All of these players are already in your watchlist.")
+        else:
+            st.info("Sign in to track players from this table.")
 
         render_tables(df, weights=weights)
     else:
