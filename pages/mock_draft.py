@@ -659,7 +659,7 @@ def _render_auction_panel(state):
     minimum = nom["high_bid"] + 1
 
     st.caption(f"Budget left ${user['budget'] - user['spent']} · "
-               f"bu oyuncuya en fazla ${ceiling} verebilirsin "
+               f"you can bid up to ${ceiling} on this player "
                f"($1 is held back for each of your {state['rounds'] - len(user['picks'])} open spots)")
 
     if ceiling < minimum:
@@ -711,7 +711,7 @@ def _pool_dataframe(state, players, needs):
             "_id": p["id"],
             "": get_headshot_url(p["id"]),
             "NEED": "•" if fills else "",
-            "Oyuncu": p["name"],
+            "Player": p["name"],
             "Poz": "/".join(p["positions"]),
             "Team": p["team"],
             "ADP": p["adp"],
@@ -820,7 +820,7 @@ def _render_pool(state):
     filtered = sorted(filtered, key=key_fn)
 
     if not filtered:
-        st.markdown("<div class='empty-note'>Bu filtreye uyan oyuncu yok.</div>",
+        st.markdown("<div class='empty-note'>No players match this filter.</div>",
                     unsafe_allow_html=True)
         return
 
@@ -850,7 +850,7 @@ def _render_pool(state):
             "": st.column_config.ImageColumn("", width="small"),
             "NEED": st.column_config.TextColumn("•", width="small",
                                                help="Fits an open spot on your roster"),
-            "Oyuncu": st.column_config.TextColumn("Oyuncu", width="medium"),
+            "Player": st.column_config.TextColumn("Player", width="medium"),
             "ADP": st.column_config.NumberColumn("ADP", format="%d", width="small"),
             "$": st.column_config.NumberColumn("$", format="%d", width="small"),
             "FP": st.column_config.NumberColumn("FP", format="%.1f", width="small"),
@@ -922,12 +922,12 @@ def _render_my_team(state):
 
     if state["format"] == "auction":
         c1, c2, c3 = st.columns(3)
-        c1.metric("Oyuncu", f"{summary['players']}/{state['rounds']}")
+        c1.metric("Players", f"{summary['players']}/{state['rounds']}")
         c2.metric("Budget left", f"${summary['remaining']}")
         c3.metric("Fantasy", f"{summary['fpts']:.0f}")
     else:
         c1, c2 = st.columns(2)
-        c1.metric("Oyuncu", f"{summary['players']}/{state['rounds']}")
+        c1.metric("Players", f"{summary['players']}/{state['rounds']}")
         c2.metric("Fantasy", f"{summary['fpts']:.0f}")
 
     if needs:
@@ -936,7 +936,7 @@ def _render_my_team(state):
                     unsafe_allow_html=True)
     else:
         st.markdown("<div style='margin:6px 0 10px 0'>"
-                    "<span class='slot-chip done'>Kadro tamam</span></div>",
+                    "<span class='slot-chip done'>Roster full</span></div>",
                     unsafe_allow_html=True)
 
     if not team["picks"]:
@@ -962,7 +962,7 @@ def _render_all_teams(state):
     for team in state["teams"]:
         summary = team_summary(state, team)
         grade = grades.get(team["slot"], {})
-        title = f"{team['name']} — {summary['players']} oyuncu · {summary['fpts']:.0f} FP"
+        title = f"{team['name']} — {summary['players']} players · {summary['fpts']:.0f} FP"
         if grade:
             title += f" · {grade['grade']} (#{grade['rank']})"
         if state["format"] == "auction":
@@ -980,7 +980,7 @@ def _render_all_teams(state):
                             unsafe_allow_html=True)
             rows = [{
                 "Tur": pick["round"],
-                "Oyuncu": pick["player"]["name"],
+                "Player": pick["player"]["name"],
                 "Poz": "/".join(pick["player"]["positions"]),
                 "Team": pick["player"]["team"],
                 "ADP": pick["player"]["adp"],
@@ -1016,7 +1016,7 @@ def _render_upcoming(state):
     st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
     st.caption("Coming up")
     for item in coming:
-        mark = " **← sen**" if item["is_user"] else ""
+        mark = " **← you**" if item["is_user"] else ""
         st.markdown(f"<span style='font-size:0.86rem;color:#8b8b9a'>"
                     f"#{item['overall']} (T{item['round']}) {item['team']}{mark}</span>",
                     unsafe_allow_html=True)
@@ -1038,7 +1038,7 @@ def _render_results(state):
         grade = grades.get(team["slot"], {})
         rows.append({
             "Order": grade.get("rank", 0),
-            "Team": team["name"] + (" (sen)" if team["is_user"] else ""),
+            "Team": team["name"] + (" (you)" if team["is_user"] else ""),
             "Not": grade.get("grade", "-"),
             "Fantasy": summary["fpts"],
             "SY": summary["pts"], "RIB": summary["reb"], "AS": summary["ast"],

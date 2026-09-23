@@ -1,19 +1,13 @@
-streamlit
-pandas
-beautifulsoup4
-selenium
-webdriver-manager
-lxml
-html5lib
-matplotlib
-requests
-urllib3
-plotly
-psycopg2-binary
-bcrypt
-requests-oauthlib
-extra-streamlit-components
-feedparser
-Pillow
-python-dotenv
-streamlit-javascript
+# Surumler sabit: Streamlit Cloud her derlemede en guncel surumu
+# cozuyordu, yani koda dokunulmayan bir gun deploy kirilabiliyordu.
+streamlit==1.52.2
+pandas==2.2.2
+beautifulsoup4==4.14.3
+requests==2.32.5
+urllib3==2.6.3
+psycopg2-binary==2.9.11
+bcrypt==5.0.0
+requests-oauthlib==2.0.0
+extra-streamlit-components==0.1.81
+feedparser==6.0.12
+streamlit-javascript==0.1.5

@@ -1,12 +1,10 @@
 import streamlit as st
 
-from components.pro import is_pro
 import pandas as pd
 import os
 import streamlit.components.v1 as components
 
 # ESPN ve Yahoo servisleri import edilecek
-# from services.selenium_scraper import scrape_league_standings as espn_standings, scrape_matchups as espn_matchups
 # from yahoo_fantasy_service import YahooFantasyService, save_yahoo_token, load_yahoo_token
 
 
@@ -812,17 +810,27 @@ def rename_display_columns(df):
 
 # ---------------- PLATFORM HANDLERS ----------------
 
-def load_espn_data(league_id, time_filter):
-    """ESPN verilerini yükler"""
+def load_espn_data(league_id, matchup_week=None):
+    """
+    ESPN lig verisini yukler.
+
+    Eskiden headless Chromium ile ESPN'in HTML sayfasi kaziniyordu; her
+    soguk baslangicta surucu indiriyor, gelistirme makinesinde hic
+    calismiyor ve ESPN sayfayi degistirdiginde kiriliyordu. Artik draft
+    havuzunun da kullandigi fantasy API'si okunuyor.
+    """
+    from services.espn_league import (LeagueError, get_league_matchups,
+                                      get_league_standings)
     try:
-        from services.selenium_scraper import scrape_league_standings, scrape_matchups
-        
-        df_standings = scrape_league_standings(int(league_id))
-        matchups = scrape_matchups(int(league_id), time_filter)
-        
+        df_standings = get_league_standings(int(league_id))
+        matchups = get_league_matchups(int(league_id),
+                                       matchup_period=matchup_week)
         return df_standings, matchups, None
-    except Exception as e:
-        return None, None, str(e)
+    except LeagueError as exc:
+        return None, None, str(exc)
+    except Exception:
+        return None, None, ("Something went wrong reading that league. "
+                            "Check the league ID and try again.")
 
 def load_yahoo_data(league_key, week_number):
     """Yahoo verilerini yükler"""
@@ -949,34 +957,26 @@ def render_fantasy_league_page():
             
             st.markdown("---")
             
-            # Zaman araligi. Bu kontrol eskiden disabled=True idi ve hep
-            # "week" kullaniliyordu; "(PRO)" etiketleri calismayan bir
-            # kontrolun uzerinde duruyordu. Artik gercekten calisiyor,
-            # genis araliklar Pro'ya acik.
-            pro = is_pro()
-            st.markdown("**Time period**")
-            time_filter = st.radio(
-                "Data range",
-                options=["week", "month", "season"],
-                format_func=lambda x: {
-                    "week": "Current week",
-                    "month": "Last month" if pro else "Last month (Pro)",
-                    "season": "Full season" if pro else "Full season (Pro)",
-                }[x],
-                index=0,
-                key="espn_time_filter",
-                label_visibility="collapsed"
-            )
-            if time_filter != "week" and not pro:
-                st.caption("Wider ranges are part of Pro. Using the current week.")
-                time_filter = "week"
-            st.session_state['time_filter'] = time_filter
+            # ESPN'in API'si gecmis haftalar icin haftalik kategori
+            # kirilimi vermiyor (statBySlot bos geliyor); kategori
+            # toplamlari sezon basindan bugune. Secilebilen sey hangi
+            # HAFTANIN eslesmelerine bakildigi. Uc secenegin ayni sayiyi
+            # gostermesindense kontrolun gercegi soylemesi daha dogru.
+            st.markdown("**Matchup week**")
+            week_choice = st.number_input(
+                "Matchup week", min_value=0, max_value=30, value=0, step=1,
+                key="espn_matchup_week", label_visibility="collapsed",
+                help="0 uses the latest week ESPN has.")
+            matchup_week = int(week_choice) or None
+            st.caption("Category totals are season to date. The week picker "
+                       "changes which matchups are shown.")
+            st.session_state['matchup_week'] = matchup_week
             
             st.markdown("---")
             
             if st.button("Load ESPN data", type="primary", width='stretch'):
                 with st.spinner("Connecting to ESPN..."):
-                    df_standings, matchups, error = load_espn_data(league_id, time_filter)
+                    df_standings, matchups, error = load_espn_data(league_id, matchup_week)
                     
                     if error:
                         st.error(f"ESPN error: {error}")

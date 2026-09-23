@@ -881,6 +881,32 @@ def render_tables(today_df, weights, default_period="Today"):
     current_period = st.session_state.stats_period
     active_df = pd.DataFrame()
     
+# Sezon basinda anlamli siralama icin gereken asgari mac sayisi.
+# Lig genelinde oynanan mac sayisi arttikca esik de yukselir, ama
+# hicbir zaman bundan fazla olmaz.
+MIN_GAMES_FLOOR = 3
+MIN_GAMES_CAP = 10
+
+
+def filter_small_samples(df, gp_column="GP"):
+    """
+    Az mac oynamis oyunculari sezon tablosundan cikarir.
+
+    Esik, havuzdaki en cok mac oynayan oyuncunun ucte biri kadar
+    (en az 3, en fazla 10). Boylece sezon ortasinda sadece uzun sureli
+    sakatlar elenirken, sezonun ilk haftasinda tablo bos kalmiyor.
+    """
+    if df is None or df.empty or gp_column not in df.columns:
+        return df
+    games = pd.to_numeric(df[gp_column], errors="coerce").fillna(0)
+    played = int(games.max() or 0)
+    if played <= MIN_GAMES_FLOOR:
+        return df            # sezonun ilk birkac gunu: elemeye gerek yok
+    threshold = max(MIN_GAMES_FLOOR, min(MIN_GAMES_CAP, played // 3))
+    kept = df[games >= threshold]
+    return kept if not kept.empty else df
+
+
     # =================================================================
     # DATA PREPARATION (DATA FETCHING STRATEGY)
     # =================================================================
@@ -890,6 +916,12 @@ def render_tables(today_df, weights, default_period="Today"):
         with st.spinner("Fetching official NBA Season Leaders..."):
             # Sezon ESPN takviminden gelir; veri yoksa önceki sezona düşer.
             season_df = get_nba_season_stats_official()
+
+            # Sezonun ilk gunlerinde tek maclik ornekler tum sezon
+            # ortalamasiymis gibi siralaniyordu: acilista 40 sayi atan
+            # oyuncu listenin tepesine oturuyordu. Yeterli mac oynanana
+            # kadar az maclik oyuncular tablodan cikariliyor.
+            season_df = filter_small_samples(season_df)
 
             if not season_df.empty:
                 # Calculate Fantasy Score

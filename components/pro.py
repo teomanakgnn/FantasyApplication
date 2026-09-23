@@ -17,8 +17,6 @@ UPGRADE_NOTE = "Pro is currently invite-only while we finish the season rollout.
 PRO_FEATURES = [
     ("Unlimited watchlist",
      f"Free accounts track up to {FREE_WATCHLIST_LIMIT} players."),
-    ("Full-season splits",
-     "Month and full-season windows in addition to today and this week."),
     ("Player trends",
      "Rolling form, usage shifts and rumour tracking."),
     ("Punt build analysis",

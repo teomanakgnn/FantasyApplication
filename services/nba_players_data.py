@@ -2,6 +2,10 @@
 NBA Players Data for Card Connections Game
 Each player has: name, current_team, country, former_teams, draft_year, position, jersey, headshot_url
 """
+import json
+import os
+import tempfile
+import time
 
 NBA_PLAYERS = [
     # --- Los Angeles Lakers ---
@@ -916,6 +920,41 @@ _ABBR_TO_TEAM = {
 }
 
 
+# Kadro haritasi 30 ayri ESPN cagrisi demek (olculdu: 4.1 sn). Streamlit
+# Cloud uygulamayi uyuttugu icin her uyanista bu bedel odeniyordu.
+# Draft siralamasinda zaten kullanilan disk onbellegi burada da var.
+_ROSTER_CACHE_DIR = os.path.join(tempfile.gettempdir(), "hooplife_cache")
+_ROSTER_CACHE_MAX_AGE = 24 * 3600          # bir gun
+
+
+def _roster_cache_path():
+    return os.path.join(_ROSTER_CACHE_DIR, "card_game_rosters.json")
+
+
+def _save_roster_cache(mapping):
+    try:
+        os.makedirs(_ROSTER_CACHE_DIR, exist_ok=True)
+        with open(_roster_cache_path(), "w", encoding="utf-8") as fh:
+            json.dump({"saved_at": time.time(), "teams": mapping}, fh)
+    except Exception as exc:
+        print(f"Kadro haritasi diske yazilamadi: {exc}")
+
+
+def _load_roster_cache():
+    try:
+        path = _roster_cache_path()
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as fh:
+            blob = json.load(fh)
+        if time.time() - float(blob.get("saved_at") or 0) > _ROSTER_CACHE_MAX_AGE:
+            return None
+        teams = blob.get("teams")
+        return teams if teams else None
+    except Exception:
+        return None
+
+
 def _live_team_map():
     """
     ESPN kadrolarindan {oyuncu adi: tam takim adi} haritasi.
@@ -928,6 +967,9 @@ def _live_team_map():
 
     Ag yoksa bos donuyor ve statik veri oldugu gibi kullaniliyor.
     """
+    cached = _load_roster_cache()
+    if cached is not None:
+        return cached
     try:
         from services.espn_api import get_current_team_rosters
         rosters = get_current_team_rosters()
@@ -941,6 +983,8 @@ def _live_team_map():
         team = _ABBR_TO_TEAM.get(abbr)
         if team:
             out[name] = team
+    if out:
+        _save_roster_cache(out)
     return out
 
 

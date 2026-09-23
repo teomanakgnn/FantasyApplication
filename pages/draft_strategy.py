@@ -13,7 +13,7 @@ uzerinden hesaplaniyor. Sinirlari sayfanin altinda aciklikla yaziyor.
 import streamlit as st
 
 from services.draft_data import fetch_draft_rankings, get_draft_board
-from services.draft_strategy import (AUCTION_SHAPES, CAT_LABELS, NINE_CAT,
+from services.strategy_engine import (AUCTION_SHAPES, CAT_LABELS, NINE_CAT,
                                      auction_plan, category_scores,
                                      draftable_depth, league_baseline,
                                      picks_for_slots, slot_notes,
