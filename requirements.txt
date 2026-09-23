@@ -1,13 +1,30 @@
-# Surumler sabit: Streamlit Cloud her derlemede en guncel surumu
-# cozuyordu, yani koda dokunulmayan bir gun deploy kirilabiliyordu.
+# Iki farkli kural, iki farkli sebep:
+#
+# SAF PYTHON paketler kesin sabitleniyor (==). Bunlarin tekerlegi
+# "py3-none-any", yani her Python surumunde ayni dosya kuruluyor; sabit
+# tutmak risksiz ve uygulama bu API'lere gore yazildi. Ozellikle
+# streamlit: 1.52 ile 1.64 arasi on iki ara surum var ve aradaki
+# degisiklikler denenmedi.
+#
+# DERLENEN paketler aralikla veriliyor (>=, <). Bunlarin tekerlegi
+# Python surumune ozel. Onceki denemede hepsi "==" ile sabitlenmisti;
+# pandas==2.2.2'nin Python 3.13 tekerlegi olmadigi ve Streamlit Cloud
+# 3.13 kullandigi icin pip kaynaktan derlemeye calisti, TUM kurulum
+# dustu ve requirements.txt'teki hicbir paket kurulmadi. Ust sinirlar
+# asil korkulan seyi hala karsiliyor: pandas 3 ve numpy 3 disarida.
+
+# --- saf python: kesin surum ---
 streamlit==1.52.2
-pandas==2.2.2
+extra-streamlit-components==0.1.81
+streamlit-javascript==0.1.5
 beautifulsoup4==4.14.3
+feedparser==6.0.12
+requests-oauthlib==2.0.0
 requests==2.32.5
 urllib3==2.6.3
-psycopg2-binary==2.9.11
-bcrypt==5.0.0
-requests-oauthlib==2.0.0
-extra-streamlit-components==0.1.81
-feedparser==6.0.12
-streamlit-javascript==0.1.5
+
+# --- derlenen: calisma ortamina uyan surum secilsin ---
+pandas>=2.2,<3
+numpy<3
+psycopg2-binary>=2.9.9,<3
+bcrypt>=4.1,<6
