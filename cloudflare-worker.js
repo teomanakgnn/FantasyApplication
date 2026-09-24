@@ -111,6 +111,8 @@ function page(kind) {
 <link rel="canonical" href="${SITE}${kind === 'home' ? '/' : '/' + kind}">
 <link rel="icon" href="${LOGO}">
 <link rel="apple-touch-icon" href="${LOGO}">
+<link rel="preconnect" href="${APP}" crossorigin>
+<link rel="dns-prefetch" href="${APP}">
 <meta name="theme-color" content="#0B0E14">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${titles[kind]}">
@@ -400,6 +402,16 @@ const SCRIPT = `<script>
       if(q && q.length>1) a.href='/app'+q;
     });
   });
+
+  // Streamlit uygulamasi bos beklemeden sonra sogukta aciliyor. Ziyaretci
+  // acilis sayfasini okurken arka planda bir istek atip uyandiriyoruz;
+  // butona bastiginda uygulama cogu zaman ayakta oluyor. Yanit okunmuyor,
+  // istegin sunucuya ulasmasi yeterli; bu yuzden no-cors.
+  if(document.querySelector('a[href^="/app"]')){
+    setTimeout(function(){
+      try{ fetch('${APP}/', {mode:'no-cors', cache:'no-store'}); }catch(e){}
+    }, 500);
+  }
 
   // Sezon geri sayimi
   var k=document.getElementById('kicker');
