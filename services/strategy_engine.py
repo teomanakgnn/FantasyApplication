@@ -10,9 +10,13 @@ siralarinda kimlerin masada kalacagi ADP'den bulunuyor.
 Tek bir "dogru" strateji yok; bu modul her stratejiyi ayni olcutle
 puanlayip karsilastirilabilir hale getiriyor.
 
-Olcutun siniri: hesap gecen sezonun mac basi uretimine ve bugunku
-ADP'ye dayanir. Haftalik varyans, sakatlik, waiver hareketi ve rakip
-takimlarin kendi stratejileri hesaba girmez. Bu yuzden cikti bir
+Uretim olcusu gelecek sezonun mac basi projeksiyonu; musaitlik ise iki
+ayri sinyalden geliyor: projeksiyondaki mac sayisi ve oyuncunun draft
+gunu tasidigi sakatlik bayragi. Mac kacirmanin bedeli sifir sayilmiyor;
+o kadro yerinde waiver seviyesinde bir oyuncu oynuyor kabul ediliyor.
+
+Olcutun siniri: haftalik varyans, waiver hareketi, sezon ici takaslar ve
+rakip takimlarin kendi stratejileri hesaba girmez. Bu yuzden cikti bir
 "kazanma olasiligi" degil, ayni kosullarda stratejilerin birbirine
 gore nasil durduguna dair bir izdusumdur.
 """
@@ -37,6 +41,151 @@ CAT_LABELS = {
 # genelinde degil, gercekten secilen oyuncular arasinda anlamli.
 def draftable_depth(teams, rounds):
     return max(60, min(int(teams * rounds * 1.25), 300))
+
+
+# ==================== MUSAITLIK (SAKATLIK) ====================
+
+FULL_SEASON_GAMES = 82
+
+# ESPN'in draft havuzunda dondurdugu sakatlik durumlari. Bu kesinti
+# projeksiyonun UZERINE biniyor: ESPN'in mac tahmini bilinen uzun sureli
+# sakatliklari kismen zaten iceriyor (olculdu: havuz medyani 68 mac,
+# kirilgan yildizlar 59-67 bandinda), ama draft gunu tasinan bir bayragi
+# icermiyor - kadro disi bir oyuncunun projeksiyonu hala 70 mac olabiliyor.
+INJURY_FLAG_PENALTY = {
+    "ACTIVE": 0.00,
+    "DAY_TO_DAY": 0.04,
+    "QUESTIONABLE": 0.06,
+    "DOUBTFUL": 0.12,
+    "OUT": 0.25,
+    "INJURY_RESERVE": 0.45,
+    "SUSPENSION": 0.10,
+}
+
+# Kullanicinin sakatlik riskine karsi durusu. Katsayi, eksik mac sayisinin
+# degere ne kadar yansiyacagini olceklendirir: 0 = hic bakma,
+# 1 = oldugu gibi say, 1.6 = kirilgan oyuncudan kacin.
+RISK_LEVELS = {
+    "ignore": {
+        "name": "Ignore injuries",
+        "weight": 0.0,
+        "note": "Players are ranked on per-game production alone.",
+    },
+    "balanced": {
+        "name": "Price the risk in",
+        "weight": 1.0,
+        "note": "Missed games cost you what they actually cost: "
+                "replacement-level production in that roster spot.",
+    },
+    "avoid": {
+        "name": "Avoid fragile players",
+        "weight": 1.6,
+        "note": "Missed games are penalised beyond their projected cost, "
+                "which pushes the board toward durable players.",
+    },
+}
+DEFAULT_RISK = "balanced"
+
+# Musaitlik agirligi bir oyuncunun beklenen bedelini zaten dusuyor. Bunun
+# ustune, ortalama draft edilen oyuncudan DAHA kirilgan olmanin ayri bir
+# cezasi var: "kirilgandan kacin" bir tahmin degil, tercih.
+#
+# Esik sabit bir sayi degil, ligin kendi temposu (ortalama bir draft edilen
+# oyuncunun kacirdigi mac payi, olculdu: 0.154). Sabit bir toplam butce
+# denendi ve ise yaramadi: 13 turluk bir kadroda ancak 8. turda asiliyordu,
+# yani ayari en cok onemsendigi yerde - ilk turlarda - tamamen sessizdi.
+RISK_FRAGILITY_WEIGHT = 1.5
+
+# Bu esigin altinda kalan oyuncu kartlarda "kirilgan" olarak isaretlenir.
+# Olcut ortalama draft edilen oyuncu (olculdu: 0.84, yani ~69 mac); esik
+# onun biraz altinda duruyor ki her ikinci oyuncu isaretlenmesin.
+FRAGILE_BELOW = 0.80          # ~66 mac
+FRAGILE_SEVERE = 0.72         # ~59 mac: sezonun dortte birinden fazlasi
+
+
+def fragility_tier(player_availability):
+    """
+    Bir oyuncunun kirilganlik seviyesi: 0 = sorun yok, 1 = dikkat,
+    2 = sezonun dortte birinden fazlasini kacirmasi bekleniyor.
+
+    Tabloda isaret koymak icin; esikler tek yerde dursun diye burada.
+    """
+    if player_availability < FRAGILE_SEVERE:
+        return 2
+    if player_availability < FRAGILE_BELOW:
+        return 1
+    return 0
+
+
+def _numeric(df, column):
+    """Sutunu sayiya cevirir; sutun yoksa tamami NaN olan seri doner."""
+    if column not in df.columns:
+        return pd.Series(np.nan, index=df.index, dtype="float64")
+    return pd.to_numeric(df[column], errors="coerce")
+
+
+# Projeksiyon yoksa gecen sezonun mac sayisina dusuyoruz, ama o tek basina
+# gurultulu bir tahmin: bes mac oynamis bir oyuncu "gelecek sezon %6 musait"
+# demek degil, sadece gecen sezonu kaybetmis demek. Gozlem bu yuzden havuz
+# medyanina dogru cekiliyor (yariya kadar).
+FALLBACK_SHRINK = 0.5
+
+# Hicbir sinyal yoksa (ne projeksiyon ne gecen sezon) kullanilan pay.
+UNKNOWN_SHARE = 0.85
+
+
+def expected_games(df):
+    """
+    Oyuncunun kac mac oynamasi beklendigi ve bunun sezona orani.
+
+    Once ESPN'in gelecek sezon projeksiyonu - o zaten bir tahmin, oldugu
+    gibi aliniyor. Projeksiyonu olmayan oyuncuda gecen sezonun gerceklesen
+    mac sayisi medyana dogru cekilerek kullaniliyor. Sifir mac "bilinmiyor"
+    demek (caylaklarda gecen sezon 0 olarak doluyor), o yuzden sifirlar
+    NaN sayiliyor.
+
+    Returns:
+        (games, share) - ikisi de df ile ayni indeksli seriler.
+    """
+    projected = _numeric(df, "PROJ_GP")
+    projected = projected.where(projected > 0)
+    played = _numeric(df, "GP")
+    played = played.where(played > 0)
+
+    share = (projected / FULL_SEASON_GAMES).clip(upper=1.0)
+    observed = (played / FULL_SEASON_GAMES).clip(upper=1.0)
+
+    known = share.dropna()
+    if not known.empty:
+        median = float(known.median())
+    elif observed.notna().any():
+        median = float(observed.median())
+    else:
+        median = UNKNOWN_SHARE
+
+    shrunk = median + FALLBACK_SHRINK * (observed - median)
+    share = share.fillna(shrunk).fillna(median).clip(lower=0.05, upper=1.0)
+    # Gosterilen mac sayisi hesabin kullandigi sayiyla ayni olsun: gecen
+    # sezonun ham 5 maci ekranda durup arkada 37 varsaymak kafa karistirir.
+    return (share * FULL_SEASON_GAMES).round(), share
+
+
+def availability(df):
+    """
+    Sezonun ne kadarini oynamasi beklendigi (0-1).
+
+    Iki sinyal carpilir: beklenen mac payi ve draft gunu sakatlik bayragi.
+    Bayrak ayri durmak zorunda, cunku projeksiyon onu icermiyor: kadro disi
+    bir oyuncunun projeksiyonu hala 70 mac olabiliyor.
+    """
+    _, share = expected_games(df)
+
+    if "INJURY" not in df.columns:
+        penalty = pd.Series(0.0, index=df.index)
+    else:
+        penalty = df["INJURY"].fillna("ACTIVE").map(INJURY_FLAG_PENALTY).fillna(0.0)
+
+    return (share * (1.0 - penalty)).clip(lower=0.05, upper=1.0)
 
 
 STRATEGIES = [
@@ -109,9 +258,27 @@ STRATEGY_BY_KEY = {s["key"]: s for s in STRATEGIES}
 
 # ==================== Z-SKORLARI ====================
 
-def category_scores(board, depth=None):
+def _stat_column(df, cat, basis):
+    """
+    Bir kategorinin kaynak sutunu.
+
+    'projection' modunda gelecek sezon projeksiyonu kullanilir; projeksiyonu
+    olmayan oyuncu (havuzun derinindeki isimler) gecen sezonun gerceklesen
+    mac basi uretimine duser. Boylece tek bir eksik tahmin oyuncuyu
+    listeden silmiyor.
+    """
+    actual = _numeric(df, cat)
+    if basis != "projection":
+        return actual.fillna(0.0)
+    return _numeric(df, f"PROJ_{cat}").fillna(actual).fillna(0.0)
+
+
+def category_scores(board, depth=None, basis="projection"):
     """
     Her oyuncu icin kategori bazinda z-skoru tablosu.
+
+    Sayilar mac basi, yani "oynadiginda ne uretiyor" sorusunun cevabi;
+    kac mac oynayacagi ayri tutulur (bkz. availability_weighted).
 
     Yuzdeler icin ham oran kullanilmaz: %90 atan ama maclik iki serbest
     atisi olan bir oyuncu, %80 atan ama sekiz deneyen birinden daha
@@ -125,18 +292,18 @@ def category_scores(board, depth=None):
 
     out = pd.DataFrame(index=df.index)
     for cat in COUNTING_CATS:
-        values = pd.to_numeric(df.get(cat), errors="coerce").fillna(0.0)
+        values = _stat_column(df, cat, basis)
         std = values.std(ddof=0)
         out[cat] = 0.0 if std == 0 else (values - values.mean()) / std
 
     for cat in NEGATIVE_CATS:
-        values = pd.to_numeric(df.get(cat), errors="coerce").fillna(0.0)
+        values = _stat_column(df, cat, basis)
         std = values.std(ddof=0)
         out[cat] = 0.0 if std == 0 else -(values - values.mean()) / std
 
     for cat, (made_col, att_col) in PERCENT_CATS.items():
-        made = pd.to_numeric(df.get(made_col), errors="coerce").fillna(0.0)
-        att = pd.to_numeric(df.get(att_col), errors="coerce").fillna(0.0)
+        made = _stat_column(df, made_col, basis)
+        att = _stat_column(df, att_col, basis)
         pool_rate = made.sum() / att.sum() if att.sum() else 0.0
         impact = (np.where(att > 0, made / att.replace(0, np.nan), pool_rate)
                   - pool_rate) * att
@@ -150,8 +317,61 @@ def category_scores(board, depth=None):
     out["POSITIONS"] = df["POSITIONS"].values
     out["TEAM"] = df["TEAM"].values
     out["AUCTION"] = pd.to_numeric(df.get("AUCTION"), errors="coerce").fillna(1).values
-    out["INJURY"] = df.get("INJURY", pd.Series(["ACTIVE"] * len(df))).values
+    out["INJURY"] = (df["INJURY"] if "INJURY" in df.columns
+                     else pd.Series(["ACTIVE"] * len(df))).values
     out["FPTS"] = pd.to_numeric(df.get("FPTS"), errors="coerce").fillna(0).values
+    # Sakatlik hesabi icin: beklenen mac sayisi ve ondan cikan musaitlik.
+    out["GAMES"] = expected_games(df)[0].values
+    out["AVAIL"] = availability(df).values
+    # Kategorileri hangi kaynaktan aldigini kullaniciya soyleyebilmek icin.
+    projected = _numeric(df, "PROJ_PTS").notna() if basis == "projection" else pd.Series(False, index=df.index)
+    out["PROJECTED"] = projected.values
+    return out
+
+
+# ==================== MUSAITLIK AGIRLIKLI DEGER ====================
+
+def replacement_level(scores, teams, rounds, cats=NINE_CAT):
+    """
+    Draft edilen havuzun hemen disindaki oyuncunun kategori z-skorlari.
+
+    Bir oyuncu mac kacirdiginda kadro yeri bos durmuyor: waiver'dan alinan
+    biri oynuyor. Kayip bu yuzden "sifir uretim" degil, yedek seviyesiyle
+    aradaki fark. Sinirdaki bir avuc oyuncunun ortalamasi aliniyor.
+    """
+    drafted = teams * rounds
+    window = max(10, teams * 2)
+    tail = scores[(scores["ADP"] > drafted) & (scores["ADP"] <= drafted + window)]
+    if tail.empty:
+        # Havuz ligden kucukse en sondaki oyuncular yedek seviyesini verir.
+        tail = scores.nlargest(min(window, len(scores)), "ADP")
+    return {cat: float(tail[cat].mean()) for cat in cats}
+
+
+def availability_weighted(scores, replacement, cats=NINE_CAT, risk_weight=1.0):
+    """
+    Mac basi z-skorlarini beklenen mac sayisina gore agirliklandirir.
+
+    Her kategori icin:
+        z_etkin = (1 - eksik) * z + eksik * z_yedek
+
+    Kaciracagi maclarda kadro yerini yedek seviyesinde bir oyuncu
+    doldurur. Bu kurgu sakatligi hicbir zaman odullendirmiyor: yedek
+    seviyesi draft edilen her oyuncunun altinda oldugu icin eksik mac
+    daima degeri dusuruyor - z'yi dogrudan musaitlikle carpmak ise
+    negatif z'li oyuncuyu sakatlandikca "iyilestirirdi".
+
+    risk_weight = 0 ise tablo oldugu gibi doner (sakatliga bakma).
+    """
+    out = scores.copy()
+    if risk_weight <= 0:
+        out["SHORTFALL"] = 0.0
+        return out
+
+    shortfall = ((1.0 - out["AVAIL"]) * risk_weight).clip(lower=0.0, upper=1.0)
+    for cat in cats:
+        out[cat] = (1.0 - shortfall) * out[cat] + shortfall * replacement.get(cat, 0.0)
+    out["SHORTFALL"] = shortfall
     return out
 
 
@@ -217,16 +437,25 @@ def available_at(scores, pick, reach=3):
     return scores[scores["ADP"] >= pick - reach]
 
 
-def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3):
+def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3,
+                       risk_weight=1.0, pace=None):
     """
     Bir strateji icin tur tur hedef kadro.
 
     Her secimde masada kalmasi beklenen oyuncular arasindan stratejinin
     en degerlisi aliniyor; kadro dengesi icin eksik mevkiye kucuk bir
     oncelik veriliyor.
+
+    'scores' musaitlik agirlikli tablo oldugu icin eksik mac beklentisi
+    zaten degere girmis durumda. Buna ek olarak ortalamadan kirilgan her
+    aday ayrica geriye dusuyor (bkz. RISK_FRAGILITY_WEIGHT); bu, uretim
+    farki yeterince buyukse kirilgan yildizi yine de masada birakmaz -
+    tercihi zorlar, matematigi bozmaz.
     """
     value = total_value(scores, punts, cats)
     table = scores.assign(VALUE=value)
+    if pace is None:
+        pace = 1.0 - baseline_availability(scores)
     taken, roster = set(), []
     counts = {"C": 0, "G": 0, "F": 0}
 
@@ -246,10 +475,18 @@ def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3):
         scored["FIT"] = scored["VALUE"] + scored["POSITIONS"].apply(
             lambda pos: urgency if _position_group(pos) & need else 0.0)
 
+        # Ortalama bir draft edilen oyuncudan daha cok mac kacirmasi beklenen
+        # aday, aradaki fark kadar geriye duser. Ortalama ve ustu dayanikli
+        # oyuncuda ceza sifir, yani kimse "saglam" diye odullendirilmiyor.
+        if risk_weight > 0 and pace > 0:
+            frailty = ((1.0 - scored["AVAIL"]) - pace).clip(lower=0.0)
+            scored["FIT"] -= RISK_FRAGILITY_WEIGHT * risk_weight * frailty
+
         best = scored.nlargest(1, "FIT").iloc[0]
         taken.add(best["PLAYER"])
         for group in _position_group(best["POSITIONS"]):
             counts[group] += 1
+        games = best["GAMES"]
         roster.append({
             "round": rnd,
             "pick": pick,
@@ -260,8 +497,52 @@ def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3):
             "value": float(best["VALUE"]),
             "auction": int(best["AUCTION"]),
             "injury": best["INJURY"],
+            "availability": float(best["AVAIL"]),
+            "games": None if pd.isna(games) else int(round(float(games))),
+            # Degerinin yuzde kaci eksik mac beklentisi yuzunden dusuldu.
+            "shortfall": float(best["SHORTFALL"]) if "SHORTFALL" in best else 0.0,
         })
     return roster
+
+
+def baseline_availability(scores, teams=None, rounds=None):
+    """
+    Ortalama bir draft edilen oyuncunun musaitligi.
+
+    Kadronun %78 oynamasi tek basina bir sey soylemiyor; karsilastirilacak
+    bir sey gerekiyor. Olculdu: bu deger lig sekli degisse de 0.84 civarinda
+    duruyor, cunku havuzun tamami degil draft edilen kismi aliniyor.
+    """
+    if scores.empty:
+        return 0.0
+    pool = scores
+    if teams and rounds:
+        pool = scores.nsmallest(min(teams * rounds, len(scores)), "ADP")
+    return float(pool["AVAIL"].mean())
+
+
+def roster_durability(roster, reference=None):
+    """
+    Kadronun sakatlik ozeti.
+
+    'games_missed' tum kadronun 82 maclik sezona gore beklenen eksigi;
+    haftalik eslesmede kac kez eksik kadroyla cikilacaginin olcusu.
+    'reference' ortalama draft edilen oyuncunun musaitligi - kadronun
+    sayisi ancak buna gore okunabiliyor.
+    """
+    if not roster:
+        return {"availability": 0.0, "games_missed": 0, "fragile": [],
+                "flagged": [], "reference": reference or 0.0}
+    shares = [item["availability"] for item in roster]
+    return {
+        "availability": sum(shares) / len(shares),
+        "games_missed": int(round(sum((1.0 - s) * FULL_SEASON_GAMES for s in shares))),
+        "fragile": [item["player"] for item in roster
+                    if item["availability"] < FRAGILE_BELOW],
+        "flagged": [(item["player"], item["injury"]) for item in roster
+                    if item["injury"] not in ("ACTIVE", None, "")],
+        "reference": reference if reference is not None else 0.0,
+    }
 
 
 def roster_profile(scores, roster, cats=NINE_CAT):
@@ -320,15 +601,28 @@ def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
 
 
 def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
-                    teams=10, rounds=13):
-    """Tum stratejileri ayni secimler icin kurup karsilastirir."""
-    baseline = league_baseline(scores, teams, rounds, cats)
+                    teams=10, rounds=13, risk=DEFAULT_RISK):
+    """
+    Tum stratejileri ayni secimler icin kurup karsilastirir.
+
+    Once tablo musaitlige gore agirliklandiriliyor; rakip takimin olcutu
+    de ayni tablodan cikiyor, yoksa sakatliklari yalnizca kullanicinin
+    kadrosuna yuklemis olurduk (lig geneli de mac kaybediyor).
+    """
+    risk_weight = RISK_LEVELS.get(risk, RISK_LEVELS[DEFAULT_RISK])["weight"]
+    replacement = replacement_level(scores, teams, rounds, cats)
+    table = availability_weighted(scores, replacement, cats, risk_weight)
+
+    baseline = league_baseline(table, teams, rounds, cats)
+    reference = baseline_availability(table, teams, rounds)
+    pace = 1.0 - reference
     reports = []
     for strategy in STRATEGIES:
         punts = strategy["punts"]
-        roster = build_target_roster(scores, picks, punts, cats, reach)
-        profile = roster_profile(scores, roster, cats)
-        wins, chances = expected_category_wins(scores, roster, punts, cats,
+        roster = build_target_roster(table, picks, punts, cats, reach,
+                                     risk_weight, pace)
+        profile = roster_profile(table, roster, cats)
+        wins, chances = expected_category_wins(table, roster, punts, cats,
                                                baseline)
         live = [c for c in cats if c not in punts]
         reports.append({
@@ -337,6 +631,7 @@ def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
             "profile": profile,
             "chances": chances,
             "expected_wins": wins,
+            "durability": roster_durability(roster, reference),
             "strong": sorted(live, key=lambda c: -chances[c])[:3],
             "weak": sorted(live, key=lambda c: chances[c])[:2],
         })
@@ -374,6 +669,17 @@ AUCTION_SHAPES = {
 }
 
 
+def _auction_health(row):
+    """Acik artirma satirina sakatlik alanlarini ayni sekilde ekler."""
+    games = row["GAMES"] if "GAMES" in row else np.nan
+    return {
+        "injury": row["INJURY"] if "INJURY" in row else "ACTIVE",
+        "availability": float(row["AVAIL"]) if "AVAIL" in row else 1.0,
+        "games": None if pd.isna(games) else int(round(float(games))),
+        "shortfall": float(row["SHORTFALL"]) if "SHORTFALL" in row else 0.0,
+    }
+
+
 def auction_plan(scores, budget, roster_size, punts=(), shape="stars",
                  cats=NINE_CAT):
     """
@@ -406,7 +712,8 @@ def auction_plan(scores, budget, roster_size, punts=(), shape="stars",
         price = int(best["AUCTION"])
         roster.append({"player": best["PLAYER"], "team": best["TEAM"],
                        "pos": best["POS"], "price": price,
-                       "value": float(best["VALUE"]), "tier": "star"})
+                       "value": float(best["VALUE"]), "tier": "star",
+                       **_auction_health(best)})
         taken.add(best["PLAYER"])
         spent += price
 
@@ -421,7 +728,8 @@ def auction_plan(scores, budget, roster_size, punts=(), shape="stars",
         price = max(1, int(best["AUCTION"]))
         roster.append({"player": best["PLAYER"], "team": best["TEAM"],
                        "pos": best["POS"], "price": price,
-                       "value": float(best["VALUE"]), "tier": "filler"})
+                       "value": float(best["VALUE"]), "tier": "filler",
+                       **_auction_health(best)})
         taken.add(best["PLAYER"])
         fill_budget -= price
 
@@ -432,6 +740,7 @@ def auction_plan(scores, budget, roster_size, punts=(), shape="stars",
         "budget": budget,
         "profile": roster_profile(scores,
                                   [{"player": r["player"]} for r in roster], cats),
+        "durability": roster_durability(roster, baseline_availability(scores)),
     }
 
 
@@ -468,4 +777,59 @@ def slot_notes(teams, slots, rounds, snake=True):
     if len(early) >= 2 and snake:
         notes.append(
             f"Your first three rounds land at picks {', '.join(str(p) for p in early[:3])}.")
+    return notes
+
+
+# Bayragin kullaniciya nasil okunacagi.
+INJURY_WORDS = {
+    "OUT": "out",
+    "INJURY_RESERVE": "on injured reserve",
+    "DOUBTFUL": "doubtful",
+    "QUESTIONABLE": "questionable",
+    "DAY_TO_DAY": "day to day",
+    "SUSPENSION": "suspended",
+}
+
+
+def injury_notes(scores, picks, reach=3, limit=2):
+    """
+    Kullanicinin ilk turlarina denk gelen sakatlik uyarilari.
+
+    Sadece erken secimler icin uretiliyor: orada bir bayrak kadronun
+    tamamini belirliyor, onuncu turda ayni bayrak gurultuden ibaret.
+    """
+    notes = []
+    if scores.empty:
+        return notes
+
+    early = [(rnd, pick) for rnd, pick in picks][:3]
+    seen = set()
+    for rnd, pick in early:
+        pool = available_at(scores, pick, reach).nsmallest(4, "ADP")
+        for _, row in pool.iterrows():
+            status = row["INJURY"]
+            name = row["PLAYER"]
+            if name in seen or status in ("ACTIVE", None, ""):
+                continue
+            seen.add(name)
+            word = INJURY_WORDS.get(status, str(status).replace("_", " ").lower())
+            games = row["GAMES"]
+            games_text = (f" He is projected for {int(round(float(games)))} games."
+                          if not pd.isna(games) else "")
+            notes.append(
+                f"{name} is listed {word} and is still on the board around pick "
+                f"{pick} (round {rnd}).{games_text} That discount is the reason he "
+                "is there; the rosters below price it in rather than ignore it.")
+            if len(notes) >= limit:
+                return notes
+
+    fragile = available_at(scores, early[0][1], reach).nsmallest(
+        max(4, len(early) * 4), "ADP") if early else scores.iloc[0:0]
+    if not notes and not fragile.empty:
+        count = int((fragile["AVAIL"] < FRAGILE_BELOW).sum())
+        if count >= 2:
+            notes.append(
+                f"{count} of the players likely to reach your first pick are "
+                "projected for well under a full season. Nobody is flagged today, "
+                "but the games are already priced into the rosters below.")
     return notes

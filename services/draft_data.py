@@ -2,8 +2,12 @@
 Fantasy NBA draft verisi.
 
 ESPN'in fantasy oyuncu havuzundan draft sıralaması (ADP benzeri),
-auction değeri, pozisyon uygunluğu ve sahiplenme oranını çeker;
-geçen sezonun gerçek istatistikleriyle birleştirir.
+auction değeri, pozisyon uygunluğu, sakatlık durumu ve sahiplenme oranını
+çeker; geçen sezonun gerçek istatistikleriyle birleştirir.
+
+Sıralamanın yanında gelecek sezonun maç başı projeksiyonu da (ESPN'in kendi
+tahmini, PROJ_* sütunları) taşınır. Projeksiyondaki maç sayısı ayrıca bir
+sağlamlık sinyali: bilinen uzun süreli sakatlıkları kısmen içeriyor.
 """
 
 import json
@@ -66,8 +70,62 @@ def _eligible_positions(player):
     return sorted(set(positions), key=lambda p: order.index(p) if p in order else 99)
 
 
+# ---------------------------------------------------------------- projeksiyon
+
+# ESPN aynı "stats" listesinde geçmiş sezonları, haftalık bölümleri ve
+# gelecek sezon projeksiyonunu birlikte döndürür. Bize tek bir kayıt gerekli:
+# seasonId = hedef sezon, statSourceId = 1 (projeksiyon), statSplitTypeId = 0.
+STAT_SOURCE_PROJECTED = 1
+SPLIT_FULL_SEASON = 0
+
+# Fantasy istatistik kimlikleri ESPN'in belgelemediği sabitler. Yanlış
+# eşlersek sayfa hata vermez, sessizce saçma bir sıralama üretir; bu yüzden
+# her çekimde doğrulanıyor (bkz. _projection_is_sane).
+PROJECTION_STAT_IDS = {
+    "0": "PTS", "1": "BLK", "2": "STL", "3": "AST", "6": "REB", "11": "TO",
+    "13": "FGM", "14": "FGA", "15": "FTM", "16": "FTA",
+    "17": "3Pts", "18": "3PTA", "19": "FG%", "20": "FT%", "21": "3P%",
+    "40": "MIN", "42": "GP",
+}
+
+PROJECTION_COLUMNS = [f"PROJ_{name}" for name in PROJECTION_STAT_IDS.values()]
+
+
+def _projection_row(player, season):
+    """Oyuncunun hedef sezon maç başı projeksiyonu; yoksa boş sözlük."""
+    for entry in player.get("stats") or []:
+        if (entry.get("seasonId") == season
+                and entry.get("statSourceId") == STAT_SOURCE_PROJECTED
+                and entry.get("statSplitTypeId") == SPLIT_FULL_SEASON):
+            averages = entry.get("averageStats") or {}
+            row = {f"PROJ_{name}": float(averages[key])
+                   for key, name in PROJECTION_STAT_IDS.items()
+                   if averages.get(key) is not None}
+            return row if _projection_is_sane(row) else {}
+    return {}
+
+
+def _projection_is_sane(row):
+    """
+    Eşlemeyi oyuncunun kendi sayılarıyla doğrular.
+
+    İki kimlik kendi kendini denetliyor: FG% = FGM/FGA ve
+    PTS = 2*FGM + 3PM + FTM. İkisi de tutuyorsa atış, sayı ve isabet
+    kimlikleri doğru yere oturmuş demektir. Tutmuyorsa projeksiyon hiç
+    kullanılmaz ve hesap geçen sezonun gerçekleşen üretimine düşer.
+    """
+    made, att = row.get("PROJ_FGM"), row.get("PROJ_FGA")
+    points = row.get("PROJ_PTS")
+    if not att or made is None or points is None:
+        return False
+    if abs(made / att - (row.get("PROJ_FG%") or 0.0)) > 0.02:
+        return False
+    implied = 2 * made + (row.get("PROJ_3Pts") or 0.0) + (row.get("PROJ_FTM") or 0.0)
+    return abs(implied - points) <= max(1.0, points * 0.06)
+
+
 RANK_COLUMNS = ["PLAYER", "ESPN_ID", "TEAM", "POS", "POSITIONS",
-                "RANK", "AUCTION", "OWNED", "INJURY"]
+                "RANK", "AUCTION", "OWNED", "INJURY"] + PROJECTION_COLUMNS
 
 # Draft siralamasi gunde bir kez bile degismiyor ama ESPN'in bu ucu
 # yogun zamanlarda baglantiyi resetliyor (olculdu: soguk istekte
@@ -79,7 +137,8 @@ _RANK_CACHE_MAX_AGE = 7 * 24 * 3600  # bayat da olsa hicbir seyden iyidir
 
 
 def _rank_cache_path(season):
-    return os.path.join(_RANK_CACHE_DIR, f"draft_ranks_{season}.json")
+    # v2: projeksiyon sutunlari eklendi, eski kayitlar kullanilamaz.
+    return os.path.join(_RANK_CACHE_DIR, f"draft_ranks_v2_{season}.json")
 
 
 def _save_rank_cache(season, rows):
@@ -143,7 +202,7 @@ def _fetch_rank_payload(season, attempts=3):
                 resp.raise_for_status()
                 payload = resp.json()
                 players = payload.get("players") if isinstance(payload, dict) else payload
-                rows = _rows_from_players(players, team_map)
+                rows = _rows_from_players(players, team_map, season)
                 # Sadece "yanit geldi" yetmiyor: ESPN bazen sirali oyuncu
                 # icermeyen kisik bir yanit donuyor. Dogrulamayi burada
                 # yapip boyle bir yaniti da yeniden deneme sebebi sayiyoruz.
@@ -162,9 +221,22 @@ def _fetch_rank_payload(season, attempts=3):
     return None
 
 
-def _rows_from_players(players, team_map):
+def _unwrap(entry):
+    """
+    Iki ucun kayit sekli ayni degil.
+
+    leaguedefaults ucu her oyuncuyu bir lig kaydinin icine sariyor
+    ({"player": {...}, "onTeamId": ...}); genel players ucu oyuncuyu
+    dogrudan veriyor. Ikisini ayni sekle indiriyoruz.
+    """
+    inner = entry.get("player")
+    return inner if isinstance(inner, dict) else entry
+
+
+def _rows_from_players(players, team_map, season):
     rows = []
-    for player in players or []:
+    for entry in players or []:
+        player = _unwrap(entry)
         ranks = (player.get("draftRanksByRankType") or {}).get("STANDARD")
         if not ranks or ranks.get("rank") is None:
             continue
@@ -179,6 +251,7 @@ def _rows_from_players(players, team_map):
             "AUCTION": int(ranks.get("auctionValue") or 0),
             "OWNED": round(float((player.get("ownership") or {}).get("percentOwned") or 0), 1),
             "INJURY": player.get("injuryStatus") or "ACTIVE",
+            **_projection_row(player, season),
         })
     return rows
 
@@ -207,7 +280,15 @@ def fetch_draft_rankings(season_year=None):
     df = df.reset_index(drop=True)
     df["ADP"] = df.index + 1
 
-    print(f"{get_season_label(season)} draft havuzu: {len(df)} sıralı oyuncu")
+    # Projeksiyonu olmayan oyuncu (derin havuz isimleri) kalabilir; sütunların
+    # kendisi her zaman bulunsun ki çağıran taraf varlık kontrolü yapmasın.
+    for column in PROJECTION_COLUMNS:
+        if column not in df.columns:
+            df[column] = float("nan")
+
+    covered = int(df["PROJ_PTS"].notna().sum())
+    print(f"{get_season_label(season)} draft havuzu: {len(df)} sıralı oyuncu, "
+          f"{covered} tanesinde {get_season_label(season)} projeksiyonu")
     return df
 
 
@@ -229,6 +310,13 @@ def _normalize(name):
     return name.replace(".", "").replace("'", "").replace("-", " ").lower().strip()
 
 
+# Tablonun sutun sozlesmesi degistiginde artir. Streamlit onbellek anahtarini
+# SADECE fonksiyonun kendi kaynagindan uretiyor, cagirdiklarindan degil; bu
+# sabit govdede gecmezse calisan bir uygulama veri katmani degistikten sonra
+# da eski tabloyu servis etmeye devam eder.
+BOARD_VERSION = 2
+
+
 @st.cache_data(ttl=21600, show_spinner=False)
 def get_draft_board(weights=None):
     """
@@ -241,6 +329,7 @@ def get_draft_board(weights=None):
     board = fetch_draft_rankings()
     if board.empty:
         return board
+    _ = BOARD_VERSION  # onbellek anahtarina girsin diye govdede geciyor
 
     stats = get_nba_season_stats_official()
     stat_columns = ["GP", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO",

@@ -7,16 +7,23 @@ sonuclanacagini gosteriyor: hangi turda kimin masada kalmasi bekleniyor,
 her strateji hangi kadroyu veriyor ve o kadro hangi kategorilerde
 onde/geride oluyor.
 
-Sayilar tahmin degil; gecen sezonun mac basi uretimi ve bugunku ADP
-uzerinden hesaplaniyor. Sinirlari sayfanin altinda aciklikla yaziyor.
+Uretim olcusu gelecek sezonun mac basi projeksiyonu; yaninda sakatlik
+da hesaba giriyor - hem draft gunu tasinan bayrak hem projeksiyondaki
+mac sayisi. Kullanici riske karsi durusunu kendisi seciyor. Sinirlari
+sayfanin altinda aciklikla yaziyor.
 """
 import streamlit as st
 
 from services.draft_data import fetch_draft_rankings, get_draft_board
-from services.strategy_engine import (AUCTION_SHAPES, CAT_LABELS, NINE_CAT,
-                                     auction_plan, category_scores,
-                                     draftable_depth, league_baseline,
-                                     picks_for_slots, slot_notes,
+from services.nba_season import get_season_label
+from services.strategy_engine import (AUCTION_SHAPES, CAT_LABELS,
+                                     DEFAULT_RISK, FULL_SEASON_GAMES,
+                                     INJURY_WORDS, NINE_CAT, RISK_LEVELS,
+                                     auction_plan, availability_weighted,
+                                     category_scores, draftable_depth,
+                                     fragility_tier, injury_notes,
+                                     league_baseline, picks_for_slots,
+                                     replacement_level, slot_notes,
                                      strategy_report)
 
 # Iraksak palet: mavi (ortalamanin ustu) <-> kirmizi (altinda), notr gri
@@ -73,6 +80,16 @@ def _css():
 
         .ds-meta { font-size: .78rem; color: #6B7893; line-height: 1.6; margin-top: 8px; }
         .ds-meta b { color: #A9B6CE; font-weight: 700; }
+
+        /* Dayaniklilik cubugu: kadronun sezonun ne kadarini oynamasi
+           beklendigi. Sayi her zaman yaninda yaziyor; cubuk tek basina
+           anlam tasimiyor. */
+        .ds-health { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px;
+                     font-size: .78rem; color: #8C99B2; }
+        .ds-health .bar { flex: 0 0 74px; height: 5px; border-radius: 3px;
+                          background: rgba(255,255,255,.1); overflow: hidden; }
+        .ds-health .bar i { display: block; height: 100%; border-radius: 3px; }
+        .ds-health b { color: #E8ECF4; font-weight: 700; }
 
         .ds-limit {
             border: 1px solid rgba(255,255,255,.07);
@@ -151,26 +168,91 @@ def _profile_chart(profile, punts, baseline_note=True):
                    "league. Right of the line is ahead.")
 
 
+# Kadro tablosunda ismin yanina konan uyari. Tek basina renk/ikon anlam
+# tasimasin diye Games ve Injury cut sutunlari ayni satirda duruyor.
+FRAGILE_MARKS = {0: "", 1: " ⚠", 2: " ⚠⚠"}
+
+
+def _player_cell(item):
+    """Oyuncu adi + kirilganlik isareti."""
+    tier = fragility_tier(item.get("availability", 1.0))
+    return f"{item['player']}{FRAGILE_MARKS[tier]}"
+
+
+def _status_text(item):
+    """Sakatlik bayragi okunur hale; sagliklı oyuncuda bos kalir."""
+    status = item.get("injury")
+    if not status or status == "ACTIVE":
+        return ""
+    return INJURY_WORDS.get(status, str(status).replace("_", " ").lower())
+
+
 def _roster_table(roster, auction=False):
     rows = []
     for item in roster:
+        cut = item.get("shortfall") or 0.0
+        common = {
+            "Games": item["games"] if item.get("games") else "-",
+            "Status": _status_text(item),
+            # Sakatlik hesabinin bu oyuncuya ne yaptigi acikca gorunsun:
+            # degerinin yuzde kaci yedek seviyesiyle degistirildi.
+            "Injury cut": f"-{cut * 100:.0f}%" if cut > 0.005 else "-",
+        }
         if auction:
             rows.append({
-                "Player": item["player"],
+                "Player": _player_cell(item),
                 "Pos": item["pos"],
                 "Team": item["team"],
                 "Price": f"${item['price']}",
+                **common,
             })
         else:
             rows.append({
                 "Rd": item["round"],
                 "Pick": f"#{item['pick']}",
-                "Player": item["player"],
+                "Player": _player_cell(item),
                 "Pos": item["pos"],
                 "Team": item["team"],
                 "ADP": item["adp"] if item["adp"] else "-",
+                **common,
             })
     st.dataframe(rows, hide_index=True, width="stretch")
+    marked = sum(1 for item in roster
+                 if fragility_tier(item.get("availability", 1.0)))
+    st.caption(
+        f"⚠ is projected to miss a chunk of the season, ⚠⚠ more "
+        f"than a quarter of it ({marked} of {len(roster)} here). Games is the "
+        f"projected number played out of {FULL_SEASON_GAMES}; Status is the flag "
+        "the player carries today. Injury cut is how much of the player's edge "
+        "was handed back to a replacement for the games he is not expected to "
+        "play - it is what the setting above changes.")
+
+
+def _health_row(durability):
+    """
+    Kadronun beklenen musaitligi: cubuk + her zaman yazili sayi.
+
+    Renk ortalama draft edilen oyuncuya gore anlam tasiyor, sabit bir esige
+    gore degil; sayfanin geri kalaninda da olcut "ortalama bir takim".
+    """
+    share = durability["availability"]
+    reference = durability.get("reference") or 0.0
+    missed = durability["games_missed"]
+    gap = share - reference
+    colour = ABOVE if gap >= -0.01 else (MUTED if gap >= -0.05 else BELOW)
+    fragile = len(durability["fragile"])
+    tail = (f" &middot; {fragile} projected well under a full season"
+            if fragile else "")
+    against = (f" against <b>{reference * 100:.0f}%</b> for an average drafted "
+               "player" if reference else "")
+    st.markdown(f"""
+        <div class="ds-health">
+          <span class="bar"><i style="width:{share * 100:.0f}%;
+                background:{colour}"></i></span>
+          <span>Roster plays <b>{share * 100:.0f}%</b> of the season{against}
+                &middot; <b>{missed}</b> games missed across the roster{tail}</span>
+        </div>
+    """, unsafe_allow_html=True)
 
 
 def _strategy_card(report, index, rounds):
@@ -197,6 +279,13 @@ def _strategy_card(report, index, rounds):
         </div>
     """, unsafe_allow_html=True)
 
+    _health_row(report["durability"])
+    flagged = report["durability"]["flagged"]
+    if flagged:
+        listed = ", ".join(f"{name} ({INJURY_WORDS.get(status, status.lower())})"
+                           for name, status in flagged[:3])
+        st.caption(f"Carrying a flag today: {listed}.")
+
     # En iyi siradaki stratejinin detayi tiklamadan gorunsun
     with st.expander(f"Target roster and category profile - {report['name']}",
                      expanded=top):
@@ -209,12 +298,13 @@ def _strategy_card(report, index, rounds):
 
 def _setup():
     """Lig ayarlari. Degerler oturumda tutulur ki sekme degisince kaybolmasin."""
-    st.markdown("""
+    st.markdown(f"""
         <div class="ds-hero">
           <h1>Draft Strategy</h1>
           <p>Describe your league and see how each strategy plays out from your
              seat: who is likely there at your picks, what roster you end up
-             with, and where that roster wins.</p>
+             with, and where that roster wins. Built on
+             {get_season_label()} projections, with injuries priced in.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -247,12 +337,25 @@ def _setup():
             help="Pick more than one if you run more than one team.")
         if not slots:
             st.info("Choose the position you draft from to see your picks.")
-    return int(teams), int(rounds), draft_type, sorted(slots), int(budget)
+
+    # Sakatliga ne kadar agirlik verilecegi kullanicinin karari: bazi ligler
+    # kirilgan yildizi ucuza almayi tercih eder, bazilari hic dokunmaz.
+    keys = list(RISK_LEVELS)
+    risk = st.radio(
+        "Injury risk", keys,
+        format_func=lambda key: RISK_LEVELS[key]["name"],
+        index=keys.index(st.session_state.get("ds_risk", DEFAULT_RISK)),
+        horizontal=True, key="ds_risk",
+        help="How much a player's expected missed games should count against "
+             "him when the rosters below are built.")
+    st.caption(RISK_LEVELS[risk]["note"])
+
+    return int(teams), int(rounds), draft_type, sorted(slots), int(budget), risk
 
 
 def render_draft_strategy_page():
     _css()
-    teams, rounds, draft_type, slots, budget = _setup()
+    teams, rounds, draft_type, slots, budget, risk = _setup()
 
     if fetch_draft_rankings().empty:
         st.error("The draft pool is unavailable right now - ESPN's fantasy API "
@@ -265,14 +368,26 @@ def render_draft_strategy_page():
     board = get_draft_board()
     scores = category_scores(board, draftable_depth(teams, rounds))
 
+    covered = int(scores["PROJECTED"].sum())
+    if covered < len(scores) * 0.5:
+        st.caption(f"{get_season_label()} projections were unavailable for most "
+                   "of the pool, so last season's per-game production is being "
+                   "used instead.")
+
     st.markdown("---")
 
     if draft_type == "Auction":
+        # Acik artirmada da kadro, mac kacirma beklentisi dusuldukten sonraki
+        # degere gore kuruluyor - yoksa en kirilgan yildiz her zaman en iyi
+        # "para karsiligi" gorunur.
+        weighted = availability_weighted(
+            scores, replacement_level(scores, teams, rounds),
+            risk_weight=RISK_LEVELS[risk]["weight"])
         st.subheader("Budget shapes")
         st.caption(f"${budget} for {rounds} roster spots. Every open spot needs "
                    "at least $1, so the budget below is what is actually spendable.")
         for key, shape in AUCTION_SHAPES.items():
-            plan = auction_plan(scores, budget, rounds, punts=[], shape=key)
+            plan = auction_plan(weighted, budget, rounds, punts=[], shape=key)
             st.markdown(f"""
                 <div class="ds-card">
                   <div class="ds-head">
@@ -285,6 +400,7 @@ def render_draft_strategy_page():
                        <b>Risk:</b> {shape['risk']}</div>
                 </div>
             """, unsafe_allow_html=True)
+            _health_row(plan["durability"])
             with st.expander(f"Sample roster - {shape['name']}"):
                 _roster_table(plan["roster"], auction=True)
                 st.caption(f"Spends ${plan['spent']} of ${budget}.")
@@ -298,13 +414,17 @@ def render_draft_strategy_page():
     picks = picks_for_slots(teams, slots, rounds, snake=(draft_type == "Snake"))
     st.subheader("Your picks")
     _picks_strip(picks)
-    for note in slot_notes(teams, slots, rounds, snake=(draft_type == "Snake")):
+    notes = slot_notes(teams, slots, rounds, snake=(draft_type == "Snake"))
+    notes += injury_notes(scores, picks)
+    for note in notes:
         st.markdown(f'<div class="ds-note">{note}</div>', unsafe_allow_html=True)
 
     st.subheader("Strategies from this seat")
     st.caption("Ordered by how many of the nine categories each roster projects "
-               "to take against an average team in your league.")
-    reports = strategy_report(scores, picks, teams=teams, rounds=rounds)
+               "to take against an average team in your league, after expected "
+               "missed games are taken off.")
+    reports = strategy_report(scores, picks, teams=teams, rounds=rounds,
+                              risk=risk)
     for index, report in enumerate(reports):
         _strategy_card(report, index, rounds)
 
@@ -312,17 +432,32 @@ def render_draft_strategy_page():
 
 
 def _limits():
-    st.markdown("""
+    season = get_season_label()
+    st.markdown(f"""
         <div class="ds-limit">
-          <b>How this is worked out.</b> Category strength comes from last
-          season's per-game production, turned into z-scores across the players
-          your league actually drafts. Percentages are weighted by volume, so a
+          <b>How this is worked out.</b> Category strength comes from ESPN's
+          {season} per-game projections, turned into z-scores across the players
+          your league actually drafts. Players without a projection fall back to
+          last season's production. Percentages are weighted by volume, so a
           high percentage on two attempts does not outrank a good shooter on
-          eight. Availability at each pick comes from current ESPN ADP: anyone
+          eight. Who is left at each pick comes from current ESPN ADP: anyone
           whose ADP is well before your pick is assumed gone.
           <br><br>
-          <b>What it does not know.</b> Weekly variance, injuries, waiver moves
-          and what the other managers in your league actually do. Treat the
-          category counts as a comparison between strategies, not a forecast.
+          <b>How injuries are priced.</b> Two separate signals. The projection
+          carries an expected games total, which already absorbs known long-term
+          absences; on top of that, a player flagged today takes a further cut,
+          and the more serious the flag the larger it is. A missed game is not
+          counted as zero production - the roster spot is assumed to be filled
+          from the waiver wire, so the real cost of an injury is the gap between
+          the player and a replacement-level one. That also means being hurt can
+          never make a player look better. Your league's average team is measured
+          the same way, because every team loses games.
+          <br><br>
+          <b>What it does not know.</b> Weekly variance, a trade or a signing
+          that changes a role, waiver moves during the season, and what the other
+          managers in your league actually do. Projections are one provider's
+          opinion, not fact, and an injury that happens after today's flag is
+          not in them. Treat the category counts as a comparison between
+          strategies, not a forecast.
         </div>
     """, unsafe_allow_html=True)
