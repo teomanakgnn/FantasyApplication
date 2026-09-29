@@ -28,6 +28,7 @@ from services.draft_data import get_draft_board
 from services.nba_season import espn_get, get_current_season_year
 
 STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/basketball/nba/standings"
+TEAMS_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"
 
 GAMES_IN_SEASON = 82
 AVERAGE_WINS = GAMES_IN_SEASON / 2
@@ -63,6 +64,7 @@ def get_last_season_records(season_year=None):
 
     rows = []
     for group in payload.get("children") or []:
+        conference = group.get("abbreviation") or group.get("name") or "?"
         for entry in (group.get("standings") or {}).get("entries") or []:
             team = entry.get("team") or {}
             stats = {s.get("name"): s.get("value") for s in entry.get("stats") or []}
@@ -71,10 +73,45 @@ def get_last_season_records(season_year=None):
             rows.append({
                 "TEAM": team.get("abbreviation") or "?",
                 "NAME": team.get("displayName") or team.get("abbreviation") or "?",
+                "CONF": conference,
                 "WINS": float(stats["wins"]),
                 "LOSSES": float(stats.get("losses") or 0),
             })
     return pd.DataFrame(rows)
+
+
+@st.cache_data(ttl=604800, show_spinner=False)
+def get_team_identity():
+    """
+    Takim logosu ve renkleri: {ABBR: {logo, color, alt}}.
+
+    Koyu zeminli logo varyanti tercih ediliyor; uygulamanin arka plani
+    koyu ve bazi takimlarin normal logosu orada kayboluyor.
+    """
+    try:
+        resp = espn_get(TEAMS_URL, timeout=20)
+        resp.raise_for_status()
+        teams = resp.json()["sports"][0]["leagues"][0]["teams"]
+    except Exception as exc:
+        print(f"Takim kimlikleri alinamadi: {exc}")
+        return {}
+
+    out = {}
+    for wrapper in teams:
+        team = wrapper.get("team") or {}
+        abbr = team.get("abbreviation")
+        if not abbr:
+            continue
+        logos = team.get("logos") or []
+        dark = [l["href"] for l in logos if "dark" in (l.get("rel") or [])]
+        default = [l["href"] for l in logos if "default" in (l.get("rel") or [])]
+        out[abbr] = {
+            "logo": (dark or default or [l.get("href") for l in logos] or [""])[0],
+            "color": f"#{team.get('color') or '3987e5'}",
+            "alt": f"#{team.get('alternateColor') or 'ffffff'}",
+            "short": team.get("shortDisplayName") or abbr,
+        }
+    return out
 
 
 def _roster_strength(board, depth=ROSTER_DEPTH):
@@ -118,7 +155,8 @@ def project_win_totals(season_year=None):
     """
     records = get_last_season_records(season_year)
     if records.empty:
-        return pd.DataFrame(columns=["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE"])
+        return pd.DataFrame(columns=["TEAM", "NAME", "CONF", "LAST_WINS",
+                                     "PROJECTED", "LINE"])
 
     strength = _roster_strength(get_draft_board())
     table = records.copy()
@@ -158,8 +196,9 @@ def project_win_totals(season_year=None):
     table["LINE"] = (projected.round(0) - 0.5).clip(lower=14.5, upper=67.5)
     table["CORRELATION"] = round(correlation, 3)
 
-    return (table[["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE", "CORRELATION"]]
-            if "LAST_WINS" in table.columns else
-            table.assign(LAST_WINS=table["WINS"])[
-                ["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE", "CORRELATION"]]
-            ).sort_values("LINE", ascending=False).reset_index(drop=True)
+    table["LAST_WINS"] = table["WINS"]
+    columns = ["TEAM", "NAME", "CONF", "LAST_WINS", "PROJECTED", "LINE",
+               "CORRELATION"]
+    return (table[columns]
+            .sort_values("LINE", ascending=False)
+            .reset_index(drop=True))

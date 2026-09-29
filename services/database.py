@@ -80,6 +80,7 @@ class Database:
     def __init__(self):
         self._conn = None
         self._schema_ready = False
+        self._win_tables_ready = False
         self._unavailable_reason = None
 
     # ==================== BAGLANTI ====================
@@ -688,7 +689,15 @@ class Database:
         icin cizginin donmasi sart: model her gun yeniden hesaplansa,
         erken tahmin eden ile gec tahmin eden farkli bareme oynamis olur.
         Bir sezon icin bir kez yazilir, sonra hep oradan okunur.
+
+        Surec basina bir kez calisir. Her cagrida calistirmak dort DDL
+        gidis-donusu demekti ve altindaki asil sorguyu golgede birakiyordu:
+        olculdu, basit bir SELECT 1.5 saniye suruyordu, bunun ~1.4'u bu
+        kontroldu.
         """
+        if self._win_tables_ready:
+            return True
+
         lines = self._run(
             """CREATE TABLE IF NOT EXISTS season_win_lines (
                    season INTEGER NOT NULL,
@@ -699,6 +708,14 @@ class Database:
                    frozen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                    PRIMARY KEY (season, team)
                )""")
+        # Konferans ve gecen sezon rekoru sonradan eklendi. Bunlar cizgiyi
+        # degistirmeyen gosterim alanlari ama burada durmalari sart: yoksa
+        # sayfa her acilista sadece bu iki alan icin butun draft tablosunu
+        # (16MB) yeniden cekmek zorunda kaliyor.
+        self._run("ALTER TABLE season_win_lines ADD COLUMN IF NOT EXISTS conf TEXT")
+        self._run("ALTER TABLE season_win_lines "
+                  "ADD COLUMN IF NOT EXISTS last_wins NUMERIC(4,1)")
+        self._win_tables_ready = bool(lines)
         picks = self._run(
             """CREATE TABLE IF NOT EXISTS season_win_picks (
                    user_id INTEGER NOT NULL,
@@ -729,16 +746,35 @@ class Database:
             return False
         for row in rows:
             self._run(
-                "INSERT INTO season_win_lines (season, team, team_name, line, projected) "
-                "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (season, team) DO NOTHING",
-                (season, row["team"], row["team_name"], row["line"], row.get("projected")))
+                "INSERT INTO season_win_lines "
+                "(season, team, team_name, line, projected, conf, last_wins) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (season, team) DO NOTHING",
+                (season, row["team"], row["team_name"], row["line"],
+                 row.get("projected"), row.get("conf"), row.get("last_wins")))
+        return True
+
+    def backfill_win_line_details(self, season, rows):
+        """
+        Dondurulmus satirlara konferans/gecen sezon bilgisini ekler.
+
+        Cizgiye dokunmaz - yalnizca gosterim alanlarini doldurur, ve bir kez
+        doldurulduktan sonra model bir daha hic calistirilmaz.
+        """
+        self.ensure_win_pick_tables()
+        for row in rows:
+            self._run(
+                "UPDATE season_win_lines SET conf = %s, last_wins = %s "
+                "WHERE season = %s AND team = %s AND conf IS NULL",
+                (row.get("conf"), row.get("last_wins"), season, row["team"]))
         return True
 
     def get_win_lines(self, season):
         self.ensure_win_pick_tables()
         return self._run(
-            "SELECT team, team_name, line, projected, frozen_at FROM season_win_lines "
-            "WHERE season = %s ORDER BY line DESC", (season,), fetch="all") or []
+            "SELECT team, team_name, line, projected, conf, last_wins, frozen_at "
+            "FROM season_win_lines WHERE season = %s ORDER BY line DESC",
+            (season,), fetch="all") or []
 
     def save_win_pick(self, user_id, season, team, pick, line):
         """Tahmini yazar veya degistirir (son teslim tarihine kadar)."""
