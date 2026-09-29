@@ -572,8 +572,43 @@ def league_baseline(scores, teams, rounds, cats=NINE_CAT):
     return {cat: float(drafted[cat].sum()) / max(1, teams) for cat in cats}
 
 
+def category_spread(scores, teams, rounds, cats=NINE_CAT):
+    """
+    Ligdeki takimlarin bir kategoride birbirinden ne kadar ayristigi.
+
+    Onceki surumde butun kategoriler icin tek bir sabit yayilim
+    (sqrt(2*kadro)) kullaniliyordu. Olculdu: gercek dagilim kategoriye gore
+    ikiye katlaniyor - PTS'te takimlar arasi fark 2.2 z iken BLK'da 5.0.
+    Tek sayi kullanmak, takimlarin gercekten ayristigi kategorileri
+    (PTS, AST, TO) duzlestiriyor ve butun stratejileri 5.5-6.2 bandina
+    sikistiriyordu; sonucta hangi siradan secerseniz secin ayni tavsiye
+    cikiyordu.
+
+    Olcut, draft edilen havuzun yilan sirasiyla takimlara bolunmesi: gercek
+    bir ligde kadrolarin nasil olustuguna en yakin bolme budur.
+    """
+    drafted = scores.nsmallest(min(teams * rounds, len(scores)), "ADP")
+    drafted = drafted.reset_index(drop=True)
+    if drafted.empty or teams < 2:
+        return {cat: 1.0 for cat in cats}
+
+    owner = []
+    for i in range(len(drafted)):
+        rnd, idx = divmod(i, teams)
+        owner.append(idx if rnd % 2 == 0 else teams - 1 - idx)
+    drafted = drafted.assign(_owner=owner)
+
+    spread = {}
+    for cat in cats:
+        totals = drafted.groupby("_owner")[cat].sum()
+        # Tek bir takimin ortalamadan sapmasi; rakip "ortalama takim"
+        # oldugu icin farkin yayilimi da bu.
+        spread[cat] = max(float(totals.std(ddof=0)), 0.5)
+    return spread
+
+
 def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
-                           baseline=None):
+                           baseline=None, spread=None):
     """
     Haftalik eslesmede beklenen kazanilan kategori sayisi.
 
@@ -588,7 +623,7 @@ def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
     if rows.empty:
         return 0.0, {cat: 0.0 for cat in cats}
 
-    spread = math.sqrt(max(2.0, 2.0 * len(rows)))
+    fallback = math.sqrt(max(2.0, 2.0 * len(rows)))
     chances = {}
     for cat in cats:
         if cat in punts:
@@ -596,7 +631,8 @@ def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
             continue
         mine = float(rows[cat].sum())
         rival = (baseline or {}).get(cat, 0.0)
-        chances[cat] = _phi((mine - rival) / spread)
+        sigma = (spread or {}).get(cat, fallback)
+        chances[cat] = _phi((mine - rival) / sigma)
     return sum(chances.values()), chances
 
 
@@ -614,6 +650,7 @@ def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
     table = availability_weighted(scores, replacement, cats, risk_weight)
 
     baseline = league_baseline(table, teams, rounds, cats)
+    spread = category_spread(table, teams, rounds, cats)
     reference = baseline_availability(table, teams, rounds)
     pace = 1.0 - reference
     reports = []
@@ -623,7 +660,7 @@ def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
                                      risk_weight, pace)
         profile = roster_profile(table, roster, cats)
         wins, chances = expected_category_wins(table, roster, punts, cats,
-                                               baseline)
+                                               baseline, spread)
         live = [c for c in cats if c not in punts]
         reports.append({
             **strategy,

@@ -678,4 +678,102 @@ class Database:
         return bool(affected)
 
 
+    # ==================== ALT/UST TAHMINI ====================
+
+    def ensure_win_pick_tables(self):
+        """
+        Iki tablo: dondurulmus baremler ve kullanici tahminleri.
+
+        Baremler ayri bir tabloda tutuluyor cunku yarismanin adil olmasi
+        icin cizginin donmasi sart: model her gun yeniden hesaplansa,
+        erken tahmin eden ile gec tahmin eden farkli bareme oynamis olur.
+        Bir sezon icin bir kez yazilir, sonra hep oradan okunur.
+        """
+        lines = self._run(
+            """CREATE TABLE IF NOT EXISTS season_win_lines (
+                   season INTEGER NOT NULL,
+                   team TEXT NOT NULL,
+                   team_name TEXT NOT NULL,
+                   line NUMERIC(4,1) NOT NULL,
+                   projected NUMERIC(4,1),
+                   frozen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   PRIMARY KEY (season, team)
+               )""")
+        picks = self._run(
+            """CREATE TABLE IF NOT EXISTS season_win_picks (
+                   user_id INTEGER NOT NULL,
+                   season INTEGER NOT NULL,
+                   team TEXT NOT NULL,
+                   pick TEXT NOT NULL CHECK (pick IN ('over', 'under')),
+                   line NUMERIC(4,1) NOT NULL,
+                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   PRIMARY KEY (user_id, season, team)
+               )""")
+        return bool(lines and picks)
+
+    def win_lines_frozen(self, season):
+        """Bu sezonun baremleri daha once dondurulmus mu?"""
+        self.ensure_win_pick_tables()
+        return int(self._run("SELECT COUNT(*) FROM season_win_lines WHERE season = %s",
+                             (season,), fetch="value") or 0) > 0
+
+    def freeze_win_lines(self, season, rows):
+        """
+        Baremleri bir kez yazar. Zaten varsa hicbir seye dokunmaz.
+
+        rows: [{team, team_name, line, projected}, ...]
+        """
+        self.ensure_win_pick_tables()
+        if self.win_lines_frozen(season):
+            return False
+        for row in rows:
+            self._run(
+                "INSERT INTO season_win_lines (season, team, team_name, line, projected) "
+                "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (season, team) DO NOTHING",
+                (season, row["team"], row["team_name"], row["line"], row.get("projected")))
+        return True
+
+    def get_win_lines(self, season):
+        self.ensure_win_pick_tables()
+        return self._run(
+            "SELECT team, team_name, line, projected, frozen_at FROM season_win_lines "
+            "WHERE season = %s ORDER BY line DESC", (season,), fetch="all") or []
+
+    def save_win_pick(self, user_id, season, team, pick, line):
+        """Tahmini yazar veya degistirir (son teslim tarihine kadar)."""
+        self.ensure_win_pick_tables()
+        return bool(self._run(
+            "INSERT INTO season_win_picks (user_id, season, team, pick, line) "
+            "VALUES (%s, %s, %s, %s, %s) "
+            "ON CONFLICT (user_id, season, team) DO UPDATE SET "
+            "pick = EXCLUDED.pick, updated_at = CURRENT_TIMESTAMP",
+            (user_id, season, team, pick, line)))
+
+    def clear_win_pick(self, user_id, season, team):
+        self.ensure_win_pick_tables()
+        return bool(self._run(
+            "DELETE FROM season_win_picks WHERE user_id = %s AND season = %s AND team = %s",
+            (user_id, season, team), fetch="rowcount"))
+
+    def get_win_picks(self, user_id, season):
+        """{team: pick} seklinde kullanicinin tahminleri."""
+        self.ensure_win_pick_tables()
+        rows = self._run(
+            "SELECT team, pick FROM season_win_picks WHERE user_id = %s AND season = %s",
+            (user_id, season), fetch="all") or []
+        return {row["team"]: row["pick"] for row in rows}
+
+    def win_pick_counts(self, season):
+        """Her takimda kac kisi ust, kac kisi alt demis (kalabalik gorunsun)."""
+        self.ensure_win_pick_tables()
+        rows = self._run(
+            "SELECT team, pick, COUNT(*) AS n FROM season_win_picks "
+            "WHERE season = %s GROUP BY team, pick", (season,), fetch="all") or []
+        out = {}
+        for row in rows:
+            out.setdefault(row["team"], {"over": 0, "under": 0})[row["pick"]] = int(row["n"])
+        return out
+
+
 db = Database()

@@ -1,0 +1,165 @@
+"""
+Sezonluk galibiyet baremleri (alt/ust tahmini icin).
+
+Bu sayilar BAHIS CIZGISI DEGIL. Las Vegas'in sezonluk galibiyet pazari
+ucretsiz bir uctan alinamiyor (ESPN'in futures ucu yalnizca sampiyon,
+konferans ve odul pazarlarini veriyor), o yuzden barem burada kendi
+modelimizle uretiliyor ve ekranda da oyle etiketleniyor.
+
+Model iki sinyali birlestiriyor:
+
+  1. Gecen sezonun galibiyet sayisi, ortalamaya dogru cekilerek. NBA'de
+     takimlar yil bazinda ortalamaya doner; ham gecen sezon tek basina
+     iyi takimi fazla iyi, kotu takimi fazla kotu gosterir.
+  2. Kadro gucu: ESPN'in gelecek sezon oyuncu projeksiyonlarindan her
+     takimin en iyi sekiz oyuncusunun beklenen uretimi. Takas ve serbest
+     oyuncu hareketleri gecen sezonun rekoruna yansimadigi icin bu sinyal
+     gerekli.
+
+Iki sinyalin agirligi sabit degil, veriden cikiyor: kadro gucunun gecen
+sezon galibiyetleriyle korelasyonu olculup regresyon egimi oradan
+aliniyor.
+"""
+
+import pandas as pd
+import streamlit as st
+
+from services.draft_data import get_draft_board
+from services.nba_season import espn_get, get_current_season_year
+
+STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/basketball/nba/standings"
+
+GAMES_IN_SEASON = 82
+AVERAGE_WINS = GAMES_IN_SEASON / 2
+
+# Gecen sezonun ne kadari tasiniyor. NBA'de yil bazinda galibiyet
+# korelasyonu ~0.6-0.7 bandinda; ortasi aliniyor.
+CARRYOVER = 0.65
+
+# Kadro gucu sinyalinin nihai tahmindeki payi.
+ROSTER_WEIGHT = 0.45
+
+# Her takimdan kac oyuncu sayilsin. Fantasy havuzu derin bench'i
+# icermiyor; sekiz oyuncu rotasyonun agirligini temsil ediyor.
+ROSTER_DEPTH = 8
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_last_season_records(season_year=None):
+    """
+    Gecen sezonun takim rekorlari.
+
+    Returns:
+        DataFrame - TEAM, NAME, WINS, LOSSES. Ulasilamazsa bos.
+    """
+    season = (season_year or get_current_season_year()) - 1
+    try:
+        resp = espn_get(STANDINGS_URL, params={"season": season}, timeout=20)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        print(f"NBA klasmani alinamadi: {exc}")
+        return pd.DataFrame(columns=["TEAM", "NAME", "WINS", "LOSSES"])
+
+    rows = []
+    for group in payload.get("children") or []:
+        for entry in (group.get("standings") or {}).get("entries") or []:
+            team = entry.get("team") or {}
+            stats = {s.get("name"): s.get("value") for s in entry.get("stats") or []}
+            if stats.get("wins") is None:
+                continue
+            rows.append({
+                "TEAM": team.get("abbreviation") or "?",
+                "NAME": team.get("displayName") or team.get("abbreviation") or "?",
+                "WINS": float(stats["wins"]),
+                "LOSSES": float(stats.get("losses") or 0),
+            })
+    return pd.DataFrame(rows)
+
+
+def _roster_strength(board, depth=ROSTER_DEPTH):
+    """
+    Her NBA takiminin projeksiyona dayali kadro gucu.
+
+    Oyuncunun beklenen sezonluk katkisi = mac basi fantasy uretimi x
+    oynamasi beklenen mac sayisi. Sakat bir yildiz kadroyu, sahada
+    gecirdigi kadar guclendirir.
+    """
+    if board.empty:
+        return pd.Series(dtype="float64")
+
+    df = board.copy()
+    points = pd.to_numeric(df.get("FPTS"), errors="coerce").fillna(0.0)
+    games = pd.to_numeric(df.get("PROJ_GP"), errors="coerce")
+    games = games.where(games > 0)
+    played = pd.to_numeric(df.get("GP"), errors="coerce")
+    games = games.fillna(played.where(played > 0))
+    games = games.fillna(float(games.median()) if games.notna().any() else 65.0)
+
+    df = df.assign(_CONTRIB=points * games)
+    df = df[df["TEAM"].notna() & (df["TEAM"] != "FA")]
+    return (df.sort_values("_CONTRIB", ascending=False)
+              .groupby("TEAM")
+              .head(depth)
+              .groupby("TEAM")["_CONTRIB"]
+              .sum())
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def project_win_totals(season_year=None):
+    """
+    Takim basina projekte galibiyet sayisi ve alt/ust baremi.
+
+    Barem her zaman .5 ile bitiyor: beraberlik (push) olmasin diye.
+
+    Returns:
+        DataFrame - TEAM, NAME, LAST_WINS, PROJECTED, LINE, kaynak notu ile.
+        Veri yoksa bos DataFrame.
+    """
+    records = get_last_season_records(season_year)
+    if records.empty:
+        return pd.DataFrame(columns=["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE"])
+
+    strength = _roster_strength(get_draft_board())
+    table = records.copy()
+    table["STRENGTH"] = table["TEAM"].map(strength)
+
+    # Kadrosu eslesmeyen takim olursa ligin ortasina oturt.
+    if table["STRENGTH"].notna().any():
+        table["STRENGTH"] = table["STRENGTH"].fillna(table["STRENGTH"].median())
+    else:
+        table["STRENGTH"] = 0.0
+
+    # Gecen sezon, ortalamaya dogru cekilmis hali.
+    regressed = AVERAGE_WINS + CARRYOVER * (table["WINS"] - AVERAGE_WINS)
+
+    # Kadro gucunu galibiyete cevir. Egim veriden: standartlastirilmis
+    # kadro gucunun gecen sezon galibiyetleriyle korelasyonu x galibiyet
+    # dagiliminin std'si (regresyon katsayisinin ta kendisi).
+    strength_sd = float(table["STRENGTH"].std(ddof=0))
+    wins_sd = float(table["WINS"].std(ddof=0))
+    if strength_sd > 0 and wins_sd > 0:
+        z_strength = (table["STRENGTH"] - table["STRENGTH"].mean()) / strength_sd
+        correlation = float(table["STRENGTH"].corr(table["WINS"]) or 0.0)
+        roster_wins = AVERAGE_WINS + z_strength * correlation * wins_sd
+    else:
+        correlation = 0.0
+        roster_wins = pd.Series(AVERAGE_WINS, index=table.index)
+
+    projected = (1 - ROSTER_WEIGHT) * regressed + ROSTER_WEIGHT * roster_wins
+
+    # Lig toplami 82*30/2 = 1230 galibiyet olmak zorunda; modelin toplami
+    # kaymissa hepsini ayni miktarda kaydirip toplami duzeltiyoruz.
+    projected = projected + (AVERAGE_WINS - projected.mean())
+    projected = projected.clip(lower=15.0, upper=68.0)
+
+    table["PROJECTED"] = projected.round(1)
+    # .5'e yuvarla: alt/ust tahmininde beraberlik olmasin.
+    table["LINE"] = (projected.round(0) - 0.5).clip(lower=14.5, upper=67.5)
+    table["CORRELATION"] = round(correlation, 3)
+
+    return (table[["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE", "CORRELATION"]]
+            if "LAST_WINS" in table.columns else
+            table.assign(LAST_WINS=table["WINS"])[
+                ["TEAM", "NAME", "LAST_WINS", "PROJECTED", "LINE", "CORRELATION"]]
+            ).sort_values("LINE", ascending=False).reset_index(drop=True)

@@ -1243,6 +1243,11 @@ with st.sidebar:
         st.session_state.page = "draft_strategy"
         st.rerun()
 
+    if st.button("Over / Under", width='stretch', type="secondary",
+                 key="sidebar_over_under_btn"):
+        st.session_state.page = "over_under"
+        st.rerun()
+
     # Card Game button - accessible to everyone
     if st.button("Card Connections", width='stretch', type="secondary", key="sidebar_card_game_btn"):
         st.session_state.page = "card_game"
@@ -1321,6 +1326,14 @@ if st.session_state.page == "draft_strategy":
     from pages.draft_strategy import render_draft_strategy_page
     render_draft_strategy_page()
     if st.sidebar.button("Back to Home", width='stretch', key="ds_back"):
+        st.session_state.page = "home"
+        st.rerun()
+    st.stop()
+
+if st.session_state.page == "over_under":
+    from pages.over_under import render_over_under_page
+    render_over_under_page()
+    if st.sidebar.button("Back to Home", width='stretch', key="ou_back"):
         st.session_state.page = "home"
         st.rerun()
     st.stop()
