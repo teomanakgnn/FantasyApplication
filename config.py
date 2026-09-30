@@ -34,6 +34,10 @@ _FILE = _load_file()
 def get(name, default=None):
     """Ortam degiskeni, yoksa yerel sir dosyasi, yoksa varsayilan."""
     value = os.environ.get(name)
+    # Panelden yapistirilan degerlerde gorunmez satir sonu () kalabiliyor;
+    # veritabani adresi bu yuzden cozulemiyordu. Her deger kirpiliyor.
+    if value is not None:
+        value = value.strip()
     if value not in (None, ""):
         return value
     for key in (name, name.lower()):
