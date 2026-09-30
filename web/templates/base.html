@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0F17">
+  <title>{% block title %}HoopLife NBA{% endblock %}</title>
+  <meta name="description" content="{% block description %}NBA box scores, fantasy stats, mock drafts, draft strategy and trade tools.{% endblock %}">
+  <link rel="icon" href="/static/img/logo.png">
+  <link rel="apple-touch-icon" href="/static/img/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://a.espncdn.com">
+  <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
+  {% block head %}{% endblock %}
+  {% if ga_id %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','{{ ga_id }}');</script>
+  {% endif %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="topbar">
+    <button class="icon-btn" id="menu-open" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a class="topbar-brand" href="/"><img src="/static/img/logo.png" alt="" width="30" height="30">HoopLife NBA</a>
+    {% if user %}
+      <a class="icon-btn" href="/account" aria-label="Account">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      </a>
+    {% else %}
+      <a class="topbar-signin" href="/login">Sign in</a>
+    {% endif %}
+  </header>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="drawer" id="drawer" aria-label="Main menu">
+    <div class="drawer-head">
+      <a href="/" class="drawer-logo"><img src="/static/img/logo.png" alt="HoopLife NBA" width="96" height="96"></a>
+      <button class="icon-btn drawer-close" id="menu-close" aria-label="Close menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <nav class="nav">
+      {% for item in nav %}
+        {% if item %}
+          <a href="{{ item[1] }}" class="nav-link{% if active == item[0] %} is-active{% endif %}"{% if active == item[0] %} aria-current="page"{% endif %}>
+            {{ item[2] }}{% if item[0] == 'trends' %}<span class="chip chip-pro">PRO</span>{% endif %}
+          </a>
+        {% else %}
+          <div class="nav-sep"></div>
+        {% endif %}
+      {% endfor %}
+    </nav>
+    <div class="drawer-user">
+      {% if user %}
+        <div class="user-card">
+          <div class="user-name">{{ user.username }}</div>
+          <div class="user-mail">{{ user.email }}</div>
+          <span class="chip {{ 'chip-pro' if pro else 'chip-free' }}">{{ 'PRO' if pro else 'FREE' }}</span>
+        </div>
+        <a href="/watchlist" class="nav-link{% if active == 'watchlist' %} is-active{% endif %}">Watchlist</a>
+        <a href="/account" class="nav-link{% if active == 'account' %} is-active{% endif %}">Account</a>
+        <form method="post" action="/logout"><button class="nav-link nav-button" type="submit">Sign out</button></form>
+      {% else %}
+        <div class="user-card">
+          <div class="user-name">Not signed in</div>
+          <div class="user-mail">Track players, save drafts and make picks.</div>
+        </div>
+        <a href="/login" class="btn btn-primary btn-block">Sign in</a>
+        <a href="/register" class="btn btn-ghost btn-block">Create account</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    {% if flash %}
+      <div class="flash flash-{{ flash.kind }}" role="status">{{ flash.message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+    <footer class="footer">
+      <span>© HoopLife NBA</span>
+      <a href="https://hooplifenba.com/privacy">Privacy</a>
+      <a href="https://hooplifenba.com/terms">Terms</a>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog class="modal" id="modal">
+    <div class="modal-inner">
+      <button class="icon-btn modal-close" data-close aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </dialog>
+
+  <script src="/static/js/app.js?v={{ asset_version }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

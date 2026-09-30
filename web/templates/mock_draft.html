@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Mock Draft · HoopLife NBA{% endblock %}
+{% block content %}
+<div id="setup-view">
+  <div class="page-head">
+    <div class="eyebrow">Practice</div>
+    <h1>Mock Draft</h1>
+    <p>Run as many practice drafts as you like on the {{ season }} pool before the real thing. {{ pool_size }} ranked players, ordered by live ESPN average draft position.</p>
+  </div>
+
+  {% if not pool_ok %}
+    <div class="flash flash-error">The draft pool is unavailable right now - ESPN's fantasy API drops connections from time to time. <a href="/mock-draft">Try again</a>.</div>
+  {% endif %}
+
+  <div class="note note-info" id="resume-note" hidden style="margin-bottom:12px">
+    You have a draft in progress. <button class="btn btn-sm btn-accent" id="resume-btn" style="margin-left:8px">Resume</button>
+  </div>
+
+  <form class="card" id="setup-form">
+    <div class="form-row">
+      <div class="field"><span>Draft format</span>
+        <div class="seg seg-block"><label><input type="radio" name="format" value="snake" checked><span>Snake</span></label><label><input type="radio" name="format" value="auction"><span>Auction</span></label></div></div>
+      <div class="field"><span>Opponents</span>
+        <div class="seg seg-block"><label><input type="radio" name="opponent_mode" value="ai" checked><span>AI opponents</span></label><label><input type="radio" name="opponent_mode" value="manual"><span>I pick for all</span></label></div></div>
+    </div>
+    <div class="form-row">
+      <label class="field"><span>Teams</span>
+        <select class="input" name="team_count">{% for n in [4, 6, 8, 10, 12, 14, 16] %}<option value="{{ n }}" {{ 'selected' if n == 10 }}>{{ n }}</option>{% endfor %}</select></label>
+      <label class="field"><span>Rounds</span>
+        <select class="input" name="rounds">{% for n in range(5, 17) %}<option value="{{ n }}" {{ 'selected' if n == 13 }}>{{ n }}</option>{% endfor %}</select></label>
+      <label class="field" data-only="ai"><span>Your draft slot</span>
+        <select class="input" name="user_slot">{% for n in range(1, 17) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}<option value="random">Random</option></select></label>
+      <label class="field" data-only="auction" hidden><span>Budget per team ($)</span>
+        <input class="input" type="number" name="budget" min="50" max="500" step="10" value="200"></label>
+      <label class="field" data-only="ai"><span>Opponents draft</span>
+        <select class="input" name="difficulty"><option value="board">By the board</option><option value="balanced" selected>Balanced</option><option value="wild">Unpredictable</option></select></label>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit" {{ 'disabled' if not pool_ok }}>Start draft</button>
+  </form>
+
+  <h2>Saved drafts</h2>
+  {% if user %}
+    {% if saved %}
+    <div class="grid grid-auto" id="saved-list">
+      {% for row in saved %}
+      <div class="card" data-saved="{{ row.id }}">
+        <div class="row-between"><b>{{ row.name }}</b>{% if row.grade %}<span class="chip chip-accent">{{ row.grade }}</span>{% endif %}</div>
+        <div class="small muted">{{ (row.format or 'snake')|title }}{% if row.team_count %} · {{ row.team_count }} teams{% endif %}{% if row.rounds %} · {{ row.rounds }} rounds{% endif %} · {{ 'Complete' if row.complete else 'In progress' }}</div>
+        <div class="tiny dim">Updated {{ row.updated_at.strftime('%d %b %Y') if row.updated_at else '' }}</div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn btn-sm btn-accent" data-open-saved="{{ row.id }}">Open</button>
+          <button class="btn btn-sm btn-danger" data-delete-saved="{{ row.id }}">Delete</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if not pro %}<p class="tiny dim" style="margin-top:8px">Free accounts keep {{ limit }} saved drafts.</p>{% endif %}
+    {% else %}
+      <p class="muted">Drafts you save appear here.</p>
+    {% endif %}
+  {% else %}
+    <p class="muted"><a href="/login?next=/mock-draft">Sign in</a> to save drafts and pick them up later.</p>
+  {% endif %}
+</div>
+
+<div id="draft-view" hidden>
+  <div class="row-between" style="margin-bottom:12px">
+    <div>
+      <div class="eyebrow">Mock draft</div>
+      <h1 id="d-title" style="margin:0">Mock Draft</h1>
+      <div class="small muted" id="d-sub"></div>
+    </div>
+    <button class="btn btn-ghost" id="new-draft">New draft</button>
+  </div>
+
+  <div class="clock" id="clock"></div>
+  <div class="bar" style="margin:8px 0 12px"><i id="progress" style="background:linear-gradient(90deg,#ff8c00,#ff4b4b)"></i></div>
+  <div class="feed" id="feed"></div>
+  <div id="auction"></div>
+  <div id="results"></div>
+
+  <div class="draft-layout">
+    <section id="pool-section">
+      <div class="pool-tools">
+        <input class="input" type="search" id="pool-search" placeholder="Search name or team" aria-label="Search players">
+        <div class="seg" id="pos-filter" role="group" aria-label="Position">
+          {% for p in ['ALL', 'PG', 'SG', 'SF', 'PF', 'C'] %}<button data-pos="{{ p }}" class="{{ 'is-on' if p == 'ALL' }}">{{ p }}</button>{% endfor %}
+        </div>
+        <select class="input" id="pool-sort" aria-label="Sort by" style="max-width:190px">
+          <option value="adp">ADP</option><option value="fpts">Fantasy points</option><option value="auction">Value ($)</option><option value="owned">Rostered %</option>
+        </select>
+        <label class="check small" style="min-height:0"><input type="checkbox" id="need-only"> Fits my open spots</label>
+      </div>
+      <div class="table-wrap" style="max-height:560px;overflow:auto">
+        <table class="table pool-table">
+          <thead><tr><th class="l sticky-col">Player</th><th></th><th>ADP</th><th>$</th><th>FP</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th></tr></thead>
+          <tbody id="pool-body"></tbody>
+        </table>
+      </div>
+      <p class="tiny dim" id="pool-count" style="margin-top:6px"></p>
+    </section>
+
+    <aside>
+      <div class="tabs" data-tabs="side">
+        <button class="tab" data-tab="mine">My team</button>
+        <button class="tab" data-tab="league">League</button>
+        <button class="tab" data-tab="log">Picks</button>
+      </div>
+      <div class="tab-panel" data-panel-of="side" data-panel="mine" id="my-team"></div>
+      <div class="tab-panel" data-panel-of="side" data-panel="league" id="league"></div>
+      <div class="tab-panel" data-panel-of="side" data-panel="log" id="log"></div>
+    </aside>
+  </div>
+
+  <h2>Draft board</h2>
+  <div class="board-wrap" id="board"></div>
+
+  <section class="card" id="save-box" style="margin-top:16px">
+    <div class="card-title">Save this draft</div>
+    {% if user %}
+      <div class="row"><input class="input" id="save-name" placeholder="Draft name" maxlength="80" style="flex:1;min-width:200px"><button class="btn btn-primary" id="save-btn">Save</button></div>
+    {% else %}
+      <p class="muted" style="margin:0"><a href="/login?next=/mock-draft">Sign in</a> to save this draft.</p>
+    {% endif %}
+  </section>
+</div>
+
+<link rel="stylesheet" href="/static/css/mock.css?v={{ asset_version }}">
+{% endblock %}
+{% block scripts %}
+<script>window.MOCK = { signedIn: {{ 'true' if user else 'false' }} };</script>
+<script src="/static/js/mock.js?v={{ asset_version }}"></script>
+{% endblock %}

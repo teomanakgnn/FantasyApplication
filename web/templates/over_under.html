@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Over / Under {{ season_label }} · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Season win totals</div>
+  <h1>Over / Under {{ season_label }}</h1>
+  <p>Call all 30 Las Vegas win totals before the season tips off, then share your card.</p>
+</div>
+
+{% if not user %}
+  <div class="note note-info" style="margin-bottom:16px"><a href="/login?next=/over-under"><b>Sign in</b></a> to record your picks. The lines are below either way.</div>
+{% elif not db_ok %}
+  <div class="flash flash-error">The database is unreachable, so picks cannot be saved right now.</div>
+{% endif %}
+
+<div class="card ou-top">
+  <div class="row-between">
+    <span class="ou-count"><b id="ou-done">{{ picks|length }}</b><span class="muted"> / {{ total }} teams called</span></span>
+    <span class="chip {{ 'chip-accent' if is_open else 'chip-bad' }}">{{ clock }}</span>
+  </div>
+  <div class="bar" style="margin:10px 0"><i id="ou-bar" style="width:{{ (100 * picks|length / total)|round if total else 0 }}%"></i></div>
+  <div class="row small muted"><span><b id="ou-over" class="good">{{ overs }}</b> over</span><span><b id="ou-under" class="bad">{{ unders }}</b> under</span></div>
+</div>
+
+<div class="filters" style="margin-top:14px">
+  <div class="seg" role="group" aria-label="Show">
+    <button class="is-on" data-show="all">All</button><button data-show="todo">To do</button><button data-show="done">Done</button>
+  </div>
+  <div class="seg" role="group" aria-label="Conference">
+    <button class="is-on" data-conf="">Both</button><button data-conf="East">East</button><button data-conf="West">West</button>
+  </div>
+  <label class="field" style="max-width:220px"><span>Sort</span>
+    <select class="input" id="ou-sort"><option value="line">Highest line</option><option value="low">Lowest line</option><option value="name">Team name</option></select></label>
+</div>
+
+<div class="ou-grid" id="ou-grid">
+  {% for c in cards %}
+  <article class="ou-card" style="--team:{{ c.color }}" data-team="{{ c.team }}" data-line="{{ c.line }}" data-name="{{ c.short }}" data-conf="{{ c.conf_short }}" data-pick="{{ c.pick or '' }}">
+    <div class="ou-head">
+      {% if c.logo %}<img src="{{ c.logo }}" alt="" width="36" height="36" loading="lazy">{% endif %}
+      <div style="min-width:0"><div class="ou-name">{{ c.short }}</div><div class="tiny dim">{{ c.team }}{% if c.last_wins is not none %} · last season {{ c.last_wins|int }}-{{ 82 - c.last_wins|int }}{% endif %}</div></div>
+      <div class="ou-line">{{ '%.1f'|format(c.line) }}</div>
+    </div>
+    <div class="ou-meta tiny">
+      {% if c.over_label %}<span>O <b>{{ c.over_label }}</b></span><span>U <b>{{ c.under_label }}</b></span>{% endif %}
+      {% if c.lean %}<span class="{{ 'good' if c.lean[0] == 'over' else 'bad' }}" style="margin-left:auto;font-weight:700">Vegas leans {{ c.lean[0] }} {{ c.lean[1] }}%</span>{% endif %}
+    </div>
+    {% if c.projected is not none %}<div class="tiny dim">Our model: {{ c.projected|round|int }} wins</div>{% endif %}
+    <div class="ou-crowd tiny dim">
+      {% if c.over_share is not none %}<div class="bar ou-crowdbar"><i style="width:{{ c.over_share }}%"></i></div>{{ c.over_share }}% of players took over ({{ c.votes }})
+      {% else %}No picks from other players yet{% endif %}
+    </div>
+    {% if is_open and user %}
+    <div class="ou-picks" role="group" aria-label="{{ c.short }} pick">
+      <button class="ou-btn over{{ ' is-on' if c.pick == 'over' }}" data-choice="over" aria-pressed="{{ 'true' if c.pick == 'over' else 'false' }}">Over</button>
+      <button class="ou-btn under{{ ' is-on' if c.pick == 'under' }}" data-choice="under" aria-pressed="{{ 'true' if c.pick == 'under' else 'false' }}">Under</button>
+    </div>
+    {% elif user %}
+    <div><span class="chip {{ 'chip-accent' if c.pick == 'over' else 'chip-bad' if c.pick == 'under' else '' }}">{{ (c.pick or 'no pick')|upper }}</span></div>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+<p class="empty" id="ou-empty" hidden>Nothing matches that filter.</p>
+
+{% if user %}
+<section class="card" style="margin-top:20px" id="share">
+  <div class="card-title">Share your picks</div>
+  <p class="muted small">A 1080×1350 image of all 30 picks - sized for WhatsApp, Instagram and X.</p>
+  <div class="row">
+    <button class="btn btn-primary" id="share-btn">Share image</button>
+    <a class="btn" id="download-btn" href="/over-under/card.png" download="over-under-{{ season_label }}.png">Download PNG</a>
+    <a class="btn btn-ghost" href="/over-under/picks.csv">Export CSV</a>
+  </div>
+  <img id="share-preview" alt="Your over/under card" hidden style="margin-top:14px;max-width:420px;width:100%;border-radius:12px;border:1px solid var(--line)">
+</section>
+{% endif %}
+
+<div class="note" style="margin-top:20px">
+  <b>Where the lines come from.</b> These are the Las Vegas season win totals with the price on each side (American odds: -115 means risking 115 to win 100). When the two prices differ, the book expects one side more than the other; "Vegas leans" is that expectation with the bookmaker's margin taken out. Every line ends in .5, so there are no ties.<br><br>
+  <b>Our model.</b> Last season's wins pulled toward .500, plus roster strength from each team's best eight players by projected production. Where it disagrees with Vegas is where a pick is worth a second look - not a betting tip.<br><br>
+  Picks lock when the first game of the season tips off. The lines are frozen, so everyone plays the same numbers.
+</div>
+
+<style>
+  .ou-count b { font-size: 1.15rem; }
+  .ou-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 12px; }
+  .ou-card { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--team); border-radius: 13px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ou-card[data-pick="over"], .ou-card[data-pick="under"] { border-color: rgba(57,135,229,.35); border-left-color: var(--team); }
+  .ou-head { display: flex; align-items: center; gap: 10px; }
+  .ou-head img { width: 36px; height: 36px; object-fit: contain; flex: 0 0 auto; }
+  .ou-name { font-weight: 800; }
+  .ou-line { margin-left: auto; font-size: 1.4rem; font-weight: 800; }
+  .ou-meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--dim); }
+  .ou-meta b { color: var(--muted); }
+  .ou-crowdbar { height: 4px; background: var(--bad-soft); margin-bottom: 4px; }
+  .ou-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ou-btn { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--muted); font: 700 .92rem var(--font); cursor: pointer; }
+  .ou-btn:hover { color: var(--text); }
+  .ou-btn.over.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ou-btn.under.is-on { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .ou-btn:disabled { opacity: .6; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const { api, toast } = window.HL;
+  const grid = document.getElementById("ou-grid");
+  const cards = Array.from(grid.children);
+  const total = cards.length;
+  let show = "all", conf = "", preview = null;
+
+  function tally() {
+    const picked = cards.filter((c) => c.dataset.pick);
+    const overs = picked.filter((c) => c.dataset.pick === "over").length;
+    document.getElementById("ou-done").textContent = picked.length;
+    document.getElementById("ou-over").textContent = overs;
+    document.getElementById("ou-under").textContent = picked.length - overs;
+    document.getElementById("ou-bar").style.width = (total ? 100 * picked.length / total : 0) + "%";
+  }
+  function apply() {
+    let visible = 0;
+    cards.forEach((c) => {
+      const ok = (show === "all" || (show === "done") === !!c.dataset.pick) && (!conf || c.dataset.conf === conf);
+      c.hidden = !ok; if (ok) visible++;
+    });
+    document.getElementById("ou-empty").hidden = visible > 0;
+  }
+  document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
+    show = b.dataset.show; document.querySelectorAll("[data-show]").forEach((x) => x.classList.toggle("is-on", x === b)); apply();
+  }));
+  document.querySelectorAll("[data-conf]").forEach((b) => b.addEventListener("click", () => {
+    conf = b.dataset.conf; document.querySelectorAll("[data-conf]").forEach((x) => x.classList.toggle("is-on", x === b)); apply();
+  }));
+  document.getElementById("ou-sort").addEventListener("change", (e) => {
+    const key = e.target.value;
+    cards.sort((a, b) => key === "name" ? a.dataset.name.localeCompare(b.dataset.name)
+      : key === "low" ? a.dataset.line - b.dataset.line : b.dataset.line - a.dataset.line);
+    cards.forEach((c) => grid.appendChild(c));
+  });
+
+  // Secim: aninda gorunur, sunucu reddederse geri alinir
+  grid.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".ou-btn");
+    if (!btn) return;
+    const card = btn.closest(".ou-card");
+    const previous = card.dataset.pick;
+    const next = previous === btn.dataset.choice ? "" : btn.dataset.choice;
+    const paint = (value) => {
+      card.dataset.pick = value;
+      card.querySelectorAll(".ou-btn").forEach((b) => {
+        const on = b.dataset.choice === value;
+        b.classList.toggle("is-on", on); b.setAttribute("aria-pressed", String(on));
+      });
+      tally();
+    };
+    paint(next);
+    card.querySelectorAll(".ou-btn").forEach((b) => (b.disabled = true));
+    try {
+      await api("/api/ou/pick", { method: "POST", body: { team: card.dataset.team, pick: next || null } });
+      preview = null;
+    } catch (err) {
+      paint(previous); toast(err.message, true);
+    } finally {
+      card.querySelectorAll(".ou-btn").forEach((b) => (b.disabled = false));
+    }
+  });
+
+  // Paylas: telefonda dogrudan WhatsApp / Instagram paylasim ekrani
+  const shareBtn = document.getElementById("share-btn");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", async () => {
+      shareBtn.classList.add("is-loading");
+      try {
+        const res = await fetch("/over-under/card.png?t=" + Date.now(), { credentials: "same-origin" });
+        if (!res.ok) throw new Error("Could not draw the card.");
+        const blob = await res.blob();
+        const file = new File([blob], "over-under-picks.png", { type: "image/png" });
+        const img = document.getElementById("share-preview");
+        if (preview) URL.revokeObjectURL(preview);
+        preview = URL.createObjectURL(blob);
+        img.src = preview; img.hidden = false;
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "My over/under picks", text: "My NBA win total picks - make yours at hooplifenba.com" });
+        } else {
+          toast("Image ready - use Download PNG to save it.");
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") toast(err.message || "Sharing failed.", true);
+      } finally {
+        shareBtn.classList.remove("is-loading");
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

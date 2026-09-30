@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Account · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Account</div>
+  <h1>{{ user.username }}</h1>
+  <p>{{ user.email }} · <span class="chip {{ 'chip-pro' if pro else 'chip-free' }}">{{ 'PRO' if pro else 'FREE' }}</span>
+    {% if user.created_at %}<span class="dim small"> · member since {{ user.created_at.strftime('%d %b %Y') }}</span>{% endif %}</p>
+</div>
+
+<div class="grid grid-2">
+  <section class="card">
+    <div class="card-title">Plan</div>
+    {% if pro %}
+      <p>You have Pro. Everything below is unlocked.{% if user.plan_expires_at %} Access runs until {{ user.plan_expires_at.strftime('%d %b %Y') }}.{% endif %}</p>
+    {% else %}
+      <p class="muted">You are on the free plan. Pro adds:</p>
+    {% endif %}
+    <ul style="margin:0;padding-left:18px">
+      {% for name, detail in features %}<li style="margin:4px 0"><b>{{ name }}</b> <span class="muted">— {{ detail }}</span></li>{% endfor %}
+    </ul>
+    {% if not pro %}<p class="small dim" style="margin-top:10px">{{ upgrade_note }}</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-title">Usage</div>
+    <div class="grid grid-2">
+      <div class="kpi"><div class="kpi-label">Watchlist</div><div class="kpi-value">{{ watch_count }}{% if not pro %}<span class="dim small"> / {{ watch_limit }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="kpi-label">Saved drafts</div><div class="kpi-value">{{ draft_count }}{% if not pro %}<span class="dim small"> / {{ draft_limit }}</span>{% endif %}</div></div>
+    </div>
+  </section>
+
+  <section class="card" id="security">
+    <div class="card-title">Password</div>
+    <form method="post" action="/account/password" data-loading>
+      <label class="field"><span>Current password</span><input class="input" type="password" name="current" autocomplete="current-password" required></label>
+      <label class="field"><span>New password</span><input class="input" type="password" name="new" minlength="8" autocomplete="new-password" required></label>
+      <label class="field"><span>Confirm new password</span><input class="input" type="password" name="again" minlength="8" autocomplete="new-password" required></label>
+      <button class="btn btn-primary" type="submit">Update password</button>
+    </form>
+    <hr>
+    <div class="card-title">Email</div>
+    <form method="post" action="/account/email" class="row" data-loading>
+      <input class="input" type="email" name="email" value="{{ user.email }}" required style="flex:1;min-width:200px">
+      <button class="btn" type="submit">Update email</button>
+    </form>
+  </section>
+
+  <section class="card" id="display">
+    <div class="card-title">Game scores</div>
+    <form method="post" action="/account/display">
+      <label class="check"><input type="radio" name="mode" value="full" {{ 'checked' if display not in ('spoiler_protected', 'hidden') }} data-autosubmit> Show final scores</label>
+      <label class="check"><input type="radio" name="mode" value="spoiler_protected" {{ 'checked' if display in ('spoiler_protected', 'hidden') }} data-autosubmit> Hide scores until I tap them</label>
+      <noscript><button class="btn" type="submit">Save</button></noscript>
+    </form>
+    <hr>
+    <div class="card-title" id="devices">Signed-in devices</div>
+    {% for s in sessions %}
+      <div class="row-between" style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <div><div><b>{{ s.device }}</b></div><div class="small dim">{{ s.ip_address or 'unknown IP' }} · since {{ s.created_at.strftime('%d %b %Y') if s.created_at else '-' }}</div></div>
+      </div>
+    {% else %}
+      <p class="muted small">No other active sessions.</p>
+    {% endfor %}
+    {% if sessions|length > 1 %}
+    <form method="post" action="/account/sessions" style="margin-top:10px"><button class="btn btn-sm" type="submit">Sign out other devices</button></form>
+    {% endif %}
+  </section>
+
+  {% if is_admin %}
+  <section class="card" id="admin">
+    <div class="card-title">Grant Pro <span class="chip">ADMIN</span></div>
+    <form method="post" action="/account/grant" data-loading>
+      <label class="field"><span>Username</span><input class="input" name="username" required></label>
+      <div class="form-row">
+        <label class="field"><span>Days (0 = no expiry)</span><input class="input" type="number" name="days" min="0" max="3650" value="365"></label>
+        <label class="field"><span>Plan</span><select class="input" name="plan">{% for p in plans %}<option>{{ p }}</option>{% endfor %}</select></label>
+      </div>
+      <button class="btn btn-primary" type="submit">Apply</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="card" id="delete">
+    <div class="card-title bad">Delete account</div>
+    <p class="small muted">Removes your account, watchlist, saved drafts, over/under picks and sessions. This cannot be undone.</p>
+    <form method="post" action="/account/delete" data-confirm="Delete your account permanently?">
+      <label class="field"><span>Type your username to confirm</span><input class="input" name="confirm" autocomplete="off" required></label>
+      <button class="btn btn-danger" type="submit">Delete my account</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

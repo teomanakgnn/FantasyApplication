@@ -26,11 +26,16 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 
+import threading
+import time
+
 import bcrypt
 import psycopg2
-import streamlit as st
 from psycopg2 import errors as pg_errors
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import ThreadedConnectionPool
+
+import config
 
 # ==================== PLANLAR ====================
 
@@ -78,50 +83,67 @@ class Database:
     """Uygulamanin tek veritabani giris noktasi."""
 
     def __init__(self):
-        self._conn = None
+        self._pool = None
+        self._pool_lock = threading.Lock()
         self._schema_ready = False
         self._win_tables_ready = False
         self._unavailable_reason = None
+        self._last_failure = 0.0
 
     # ==================== BAGLANTI ====================
 
     def _credentials(self):
         """Sirlari okur. Tanimli degilse None doner (ekrana hata basmaz)."""
-        try:
-            return {
-                "host": st.secrets["DB_HOST"],
-                "dbname": st.secrets["DB_NAME"],
-                "user": st.secrets["DB_USER"],
-                "password": st.secrets["DB_PASSWORD"],
-                "port": st.secrets.get("DB_PORT", 5432),
-            }
-        except Exception:
+        host = config.get("DB_HOST")
+        if not host:
             self._unavailable_reason = "missing_secrets"
             return None
+        return {
+            "host": host,
+            "dbname": config.get("DB_NAME"),
+            "user": config.get("DB_USER"),
+            "password": config.get("DB_PASSWORD"),
+            "port": int(config.get("DB_PORT", 5432) or 5432),
+        }
 
-    def _open(self):
-        creds = self._credentials()
-        if not creds:
+    def _ensure_pool(self):
+        """
+        Baglanti havuzu. Web sunucusu istekleri paralel isliyor; tek bir
+        paylasilan baglanti istekleri birbirinin transaction'ina
+        karistirirdi. Havuz her istege kendi baglantisini verir.
+        """
+        if self._pool is not None:
+            return self._pool
+        # Veritabani ulasilamazken her istekte 10 saniyelik baglanti
+        # denemesi yapmayalim: basarisiz denemeden sonra 30 saniye bekle.
+        if time.time() - self._last_failure < 30:
             return None
-        try:
-            conn = psycopg2.connect(sslmode="require", connect_timeout=10, **creds)
-            conn.autocommit = False
-            return conn
-        except Exception as exc:
-            self._unavailable_reason = str(exc)
-            return None
+        with self._pool_lock:
+            if self._pool is not None:
+                return self._pool
+            creds = self._credentials()
+            if not creds:
+                return None
+            try:
+                self._pool = ThreadedConnectionPool(
+                    1, 10, sslmode="require", connect_timeout=10,
+                    keepalives=1, keepalives_idle=30, keepalives_interval=10,
+                    keepalives_count=3, **creds)
+            except Exception as exc:
+                self._unavailable_reason = str(exc)
+                self._last_failure = time.time()
+                return None
+        self._ensure_schema()
+        return self._pool
 
     def get_connection(self):
-        if self._conn is None or self._conn.closed:
-            self._conn = self._open()
-            if self._conn is not None:
-                self._ensure_schema()
-        return self._conn
+        """Geriye donuk uyumluluk: havuz kurulabiliyor mu."""
+        return self._ensure_pool()
 
     @property
     def available(self):
         """Veritabani kullanilabilir mi? Ekrana hata basmadan kontrol eder."""
-        return self.get_connection() is not None
+        return self._ensure_pool() is not None
 
     @property
     def unavailable_reason(self):
@@ -134,12 +156,18 @@ class Database:
         fetch: None (sadece calistir), "one", "all", "value",
         "rowcount" (etkilenen satir sayisi -- sahiplik kontrollu
         silme/guncellemelerde "hicbir sey eslesmedi"yi ayirt etmek icin).
-        Baglanti kopmussa bir kez yeniden baglanip tekrar dener; Neon
+        Baglanti kopmussa bir kez yeni baglantiyla tekrar dener; Neon
         bosta kalan baglantilari kapattigi icin bu sart.
         """
-        conn = self.get_connection()
-        if conn is None:
+        pool = self._ensure_pool()
+        if pool is None:
             return None
+        try:
+            conn = pool.getconn()
+        except Exception as exc:
+            self._unavailable_reason = str(exc)
+            return None
+        broken = False
         try:
             factory = RealDictCursor if fetch in ("one", "all") else None
             with conn.cursor(cursor_factory=factory) as cur:
@@ -162,30 +190,34 @@ class Database:
             conn.commit()
             return result
         except (psycopg2.OperationalError, psycopg2.InterfaceError):
-            # Baglanti dusmus: bir kez yeniden kur ve tekrar dene
-            try:
-                if self._conn and not self._conn.closed:
-                    self._conn.close()
-            except Exception:
-                pass
-            self._conn = None
+            # Baglanti dusmus: havuzdan at, bir kez yenisiyle dene
+            broken = True
             if _retry:
+                pool.putconn(conn, close=True)
+                conn = None
                 return self._run(sql, params, fetch, _retry=False)
             return None
         except pg_errors.UniqueViolation:
             conn.rollback()
             raise
-        except Exception:
+        except Exception as exc:
+            print(f"DB error: {exc.__class__.__name__}: {exc}")
             try:
                 conn.rollback()
             except Exception:
-                pass
+                broken = True
             return None
+        finally:
+            if conn is not None:
+                try:
+                    pool.putconn(conn, close=broken or conn.closed)
+                except Exception:
+                    pass
 
     def close(self):
-        if self._conn and not self._conn.closed:
-            self._conn.close()
-        self._conn = None
+        if self._pool is not None:
+            self._pool.closeall()
+        self._pool = None
 
     # ==================== SEMA ====================
 
@@ -207,6 +239,9 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at)",
             "CREATE INDEX IF NOT EXISTS idx_watchlists_user ON watchlists (user_id)",
+            # Tercih yazimi ON CONFLICT (user_id) kullaniyor; bu kural olmadan
+            # her kayit hata veriyordu ve spoiler ayari hic saklanamiyordu.
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_user ON user_preferences (user_id)",
             # Giris denemesi hiz siniri
             """CREATE TABLE IF NOT EXISTS login_attempts (
                    id SERIAL PRIMARY KEY,
@@ -216,24 +251,54 @@ class Database:
                    attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                )""",
             "CREATE INDEX IF NOT EXISTS idx_login_attempts ON login_attempts (username, attempted_at)",
-            # Seri tablosunda gun bilgisi yoksa seri artirilamiyor
+            # Trivia gecmisi ve serisi. Bu iki tablo hic olusturulmamisti;
+            # yazma sessizce basarisiz oluyor, seri hep 0 kaliyordu.
+            """CREATE TABLE IF NOT EXISTS user_trivia_history (
+                   user_id INTEGER NOT NULL,
+                   played_date DATE NOT NULL,
+                   correct BOOLEAN,
+                   PRIMARY KEY (user_id, played_date)
+               )""",
+            """CREATE TABLE IF NOT EXISTS user_trivia_streak (
+                   user_id INTEGER PRIMARY KEY,
+                   streak INTEGER NOT NULL DEFAULT 0,
+                   last_played DATE
+               )""",
             "ALTER TABLE user_trivia_streak ADD COLUMN IF NOT EXISTS last_played DATE",
+            # Kayitli mock draftlar (eskiden ilk kayitta tembel olusturuluyordu)
+            """CREATE TABLE IF NOT EXISTS mock_drafts (
+                   id SERIAL PRIMARY KEY,
+                   user_id INTEGER NOT NULL,
+                   name TEXT NOT NULL,
+                   state JSONB NOT NULL,
+                   grade TEXT,
+                   complete BOOLEAN DEFAULT FALSE,
+                   format TEXT,
+                   team_count INTEGER,
+                   rounds INTEGER,
+                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+               )""",
         ]
-        conn = self._conn
-        if conn is None:
+        pool = self._pool
+        if pool is None:
             return
-        for sql in steps:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(sql)
-                conn.commit()
-            except Exception:
-                # Tablo henuz yoksa veya yetki yoksa sessizce gec;
-                # uygulamanin acilisini engellememeli.
+        conn = pool.getconn()
+        try:
+            for sql in steps:
                 try:
-                    conn.rollback()
+                    with conn.cursor() as cur:
+                        cur.execute(sql)
+                    conn.commit()
                 except Exception:
-                    pass
+                    # Tablo henuz yoksa veya yetki yoksa sessizce gec;
+                    # uygulamanin acilisini engellememeli.
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+        finally:
+            pool.putconn(conn)
         self._schema_ready = True
 
     # ==================== KAYIT / GIRIS ====================
@@ -259,8 +324,12 @@ class Database:
 
         username = username.strip()
         email = email.strip().lower()
-        conn = self.get_connection()
-        if conn is None:
+        pool = self._ensure_pool()
+        if pool is None:
+            return False, "Service is temporarily unavailable. Try again shortly."
+        try:
+            conn = pool.getconn()
+        except Exception:
             return False, "Service is temporarily unavailable. Try again shortly."
 
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -298,6 +367,8 @@ class Database:
             except Exception:
                 pass
             return False, "Could not create the account. Try again."
+        finally:
+            pool.putconn(conn)
 
     def _recent_failures(self, username):
         count = self._run(
@@ -395,7 +466,8 @@ class Database:
         if self.get_connection() is None:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
-                      "mock_drafts", "user_trivia_history", "user_trivia_streak"):
+                      "mock_drafts", "user_trivia_history", "user_trivia_streak",
+                      "season_win_picks"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
         affected = self._run("DELETE FROM users WHERE id = %s", (user_id,), fetch="rowcount")
@@ -594,7 +666,7 @@ class Database:
         return self._run(
             "SELECT id, question, option_a, option_b, option_c, option_d, "
             "correct_option, explanation FROM trivia_questions "
-            "WHERE date = CURRENT_DATE LIMIT 1", fetch="one")
+            "WHERE game_date = CURRENT_DATE LIMIT 1", fetch="one")
 
     def get_user_streak(self, user_id):
         """Kac gundur ust uste oynandigi. Cagiranlar tam sayi bekliyor."""
@@ -608,64 +680,79 @@ class Database:
             "WHERE user_id = %s AND played_date = CURRENT_DATE",
             (user_id,), fetch="value"))
 
-    def mark_user_trivia_played(self, user_id):
+    def mark_user_trivia_played(self, user_id, correct=True):
         """
-        Gunu isaretler ve seriyi gunceller. Eskiden seri hicbir yerde
-        artmiyordu: yalnizca gecmise satir ekleniyordu, bu yuzden
-        "Current streak" hep 0 goruluyordu.
+        Gunu isaretler ve seriyi gunceller.
+
+        Dogru cevap seriyi bir artirir (dun de oynandiysa), yanlis cevap
+        sifirlar. Eski surum ekranda "seriniz sifirlandi" yazip seriyi
+        yine de artiriyordu.
         """
         played = self._run(
-            "INSERT INTO user_trivia_history (user_id, played_date) "
-            "VALUES (%s, CURRENT_DATE) ON CONFLICT (user_id, played_date) DO NOTHING",
-            (user_id,))
-        if played is None:
+            "INSERT INTO user_trivia_history (user_id, played_date, correct) "
+            "VALUES (%s, CURRENT_DATE, %s) ON CONFLICT (user_id, played_date) DO NOTHING",
+            (user_id, bool(correct)), fetch="rowcount")
+        if not played:
             return False
-        self._run(
-            "INSERT INTO user_trivia_streak (user_id, streak, last_played) "
-            "VALUES (%s, 1, CURRENT_DATE) "
-            "ON CONFLICT (user_id) DO UPDATE SET "
-            "streak = CASE "
-            "  WHEN user_trivia_streak.last_played = CURRENT_DATE THEN user_trivia_streak.streak "
-            "  WHEN user_trivia_streak.last_played = CURRENT_DATE - 1 THEN user_trivia_streak.streak + 1 "
-            "  ELSE 1 END, "
-            "last_played = CURRENT_DATE",
-            (user_id,))
+        if correct:
+            self._run(
+                "INSERT INTO user_trivia_streak (user_id, streak, last_played) "
+                "VALUES (%s, 1, CURRENT_DATE) "
+                "ON CONFLICT (user_id) DO UPDATE SET "
+                "streak = CASE "
+                "  WHEN user_trivia_streak.last_played = CURRENT_DATE THEN user_trivia_streak.streak "
+                "  WHEN user_trivia_streak.last_played = CURRENT_DATE - 1 THEN user_trivia_streak.streak + 1 "
+                "  ELSE 1 END, "
+                "last_played = CURRENT_DATE",
+                (user_id,))
+        else:
+            self._run(
+                "INSERT INTO user_trivia_streak (user_id, streak, last_played) "
+                "VALUES (%s, 0, CURRENT_DATE) "
+                "ON CONFLICT (user_id) DO UPDATE SET streak = 0, last_played = CURRENT_DATE",
+                (user_id,))
         return True
 
     # ==================== KAYITLI MOCK DRAFTLAR ====================
 
     def ensure_draft_table(self):
-        return bool(self._run(
-            """CREATE TABLE IF NOT EXISTS mock_drafts (
-                   id SERIAL PRIMARY KEY,
-                   user_id INTEGER NOT NULL,
-                   name TEXT NOT NULL,
-                   state JSONB NOT NULL,
-                   grade TEXT,
-                   complete BOOLEAN DEFAULT FALSE,
-                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-               )"""))
+        """Tablo sema adiminda olusuyor; eski surumlerden kalan tabloya eksik sutunlari ekler."""
+        for sql in ("ALTER TABLE mock_drafts ADD COLUMN IF NOT EXISTS format TEXT",
+                    "ALTER TABLE mock_drafts ADD COLUMN IF NOT EXISTS team_count INTEGER",
+                    "ALTER TABLE mock_drafts ADD COLUMN IF NOT EXISTS rounds INTEGER"):
+            self._run(sql)
+        return True
 
     def saved_draft_count(self, user_id):
         return int(self._run("SELECT COUNT(*) FROM mock_drafts WHERE user_id = %s",
                              (user_id,), fetch="value") or 0)
 
     def save_mock_draft(self, user_id, name, state_blob, grade=None, draft_id=None):
-        self.ensure_draft_table()
+        """
+        Draftin kaydi. Liste ekraninin gosterdigi ozet alanlar (format,
+        takim sayisi, tur, bitti mi) ayri sutunlarda tutuluyor; eskiden
+        yalnizca JSON'a yaziliyordu ve liste ekrani bu alanlari
+        bulamayip cokuyordu.
+        """
+        meta = (state_blob.get("format"), state_blob.get("team_count"),
+                state_blob.get("rounds"), bool(state_blob.get("complete")))
         if draft_id:
-            return bool(self._run(
-                "UPDATE mock_drafts SET name = %s, state = %s, grade = %s, "
+            updated = self._run(
+                "UPDATE mock_drafts SET name = %s, state = %s, grade = %s, format = %s, "
+                "team_count = %s, rounds = %s, complete = %s, "
                 "updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s",
-                (name, json.dumps(state_blob), grade, draft_id, user_id)))
+                (name, json.dumps(state_blob), grade, *meta, draft_id, user_id),
+                fetch="rowcount")
+            return draft_id if updated else None
         return self._run(
-            "INSERT INTO mock_drafts (user_id, name, state, grade) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (user_id, name, json.dumps(state_blob), grade), fetch="value")
+            "INSERT INTO mock_drafts (user_id, name, state, grade, format, team_count, "
+            "rounds, complete) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (user_id, name, json.dumps(state_blob), grade, *meta), fetch="value")
 
     def list_mock_drafts(self, user_id, limit=25):
         return self._run(
-            "SELECT id, name, grade, complete, created_at, updated_at "
+            "SELECT id, name, grade, complete, format, team_count, rounds, "
+            "created_at, updated_at "
             "FROM mock_drafts WHERE user_id = %s ORDER BY updated_at DESC LIMIT %s",
             (user_id, limit), fetch="all") or []
 

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Card Connections · HoopLife NBA{% endblock %}
+{% block body_class %}page-game{% endblock %}
+{% block content %}
+<iframe class="game-frame" src="/card-game/play" title="Card Connections game" allow="clipboard-write"></iframe>
+<style>
+  .page-game .main { padding: 0; max-width: none; }
+  .page-game .footer, .page-game .flash { display: none; }
+  .game-frame { display: block; width: 100%; border: 0; height: 100vh; height: 100dvh; background: #070B14; }
+  @media (max-width: 960px) { .game-frame { height: calc(100vh - var(--topbar)); height: calc(100dvh - var(--topbar)); } }
+</style>
+{% endblock %}

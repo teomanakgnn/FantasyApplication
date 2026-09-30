@@ -1,30 +1,28 @@
-# Iki farkli kural, iki farkli sebep:
+# Iki kural, iki sebep:
 #
-# SAF PYTHON paketler kesin sabitleniyor (==). Bunlarin tekerlegi
-# "py3-none-any", yani her Python surumunde ayni dosya kuruluyor; sabit
-# tutmak risksiz ve uygulama bu API'lere gore yazildi. Ozellikle
-# streamlit: 1.52 ile 1.64 arasi on iki ara surum var ve aradaki
-# degisiklikler denenmedi.
+# SAF PYTHON paketler kesin sabitleniyor (==): her Python surumunde ayni
+# tekerlek kuruluyor, uygulama bu API'lere gore yazildi.
 #
-# DERLENEN paketler aralikla veriliyor (>=, <). Bunlarin tekerlegi
-# Python surumune ozel. Onceki denemede hepsi "==" ile sabitlenmisti;
-# pandas==2.2.2'nin Python 3.13 tekerlegi olmadigi ve Streamlit Cloud
-# 3.13 kullandigi icin pip kaynaktan derlemeye calisti, TUM kurulum
-# dustu ve requirements.txt'teki hicbir paket kurulmadi. Ust sinirlar
-# asil korkulan seyi hala karsiliyor: pandas 3 ve numpy 3 disarida.
+# DERLENEN paketler aralikla veriliyor (>=, <): tekerlekleri Python
+# surumune ozel. Kesin sabitlenmis bir surumun o Python icin tekerlegi
+# yoksa pip kaynaktan derlemeye calisip kurulumu dusurebiliyor.
 
-# --- saf python: kesin surum ---
-streamlit==1.52.2
-extra-streamlit-components==0.1.81
-streamlit-javascript==0.1.5
-beautifulsoup4==4.14.3
-feedparser==6.0.12
-requests-oauthlib==2.0.0
+# --- web ---
+fastapi==0.115.12
+starlette==0.46.2
+uvicorn[standard]==0.34.2
+jinja2==3.1.6
+python-multipart==0.0.20
+
+# --- veri / dis servisler ---
 requests==2.32.5
 urllib3==2.6.3
+requests-oauthlib==2.0.0
+feedparser==6.0.12
 
-# --- derlenen: calisma ortamina uyan surum secilsin ---
+# --- derlenen ---
 pandas>=2.2,<3
 numpy<3
 psycopg2-binary>=2.9.9,<3
 bcrypt>=4.1,<6
+pillow>=10.4,<13

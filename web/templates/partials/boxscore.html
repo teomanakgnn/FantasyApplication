@@ -1,0 +1,34 @@
+<h2 style="margin:0 40px 12px 0">Box score</h2>
+{% if not teams %}
+  <div class="empty">Box score details are not available yet.</div>
+{% else %}
+  <div class="tabs" data-tabs="box">
+    {% for team in teams %}<button class="tab" data-tab="t{{ loop.index }}">{{ team }}</button>{% endfor %}
+  </div>
+  {% for team, players in teams.items() %}
+  <div class="tab-panel" data-panel-of="box" data-panel="t{{ loop.index }}">
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th class="l sticky-col">Player</th><th>Min</th><th>PTS</th><th>REB</th><th>AST</th>
+          <th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th>
+          {% if user %}<th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+        {% for p in players %}
+          <tr>
+            <td class="l sticky-col"><span class="player-name">{{ p.PLAYER }}</span>{% if p.PLAYER in watch %} <span class="chip chip-good">Watching</span>{% endif %}</td>
+            <td>{{ p.MIN }}</td><td><b>{{ p.PTS }}</b></td><td>{{ p.REB }}</td><td>{{ p.AST }}</td>
+            <td>{{ p.STL }}</td><td>{{ p.BLK }}</td><td>{{ p.TO }}</td>
+            <td>{{ p.FGM }}-{{ p.FGA }}</td><td>{{ p['3Pts'] }}-{{ p['3PTA'] }}</td><td>{{ p.FTM }}-{{ p.FTA }}</td>
+            <td>{{ p['+/-'] }}</td>
+            {% if user %}<td>{% if p.PLAYER not in watch %}<button class="btn btn-sm btn-ghost" data-watch="{{ p.PLAYER }}">Track</button>{% endif %}</td>{% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+  {% if not user %}<p class="small muted" style="margin-top:10px"><a href="/login">Sign in</a> to add players to your watchlist.</p>{% endif %}
+{% endif %}

@@ -1,0 +1,27 @@
+.br-capture { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 16px; }
+.br-capture.is-capturing { width: 1100px; }
+.br-title { font-weight: 800; font-size: 1.1rem; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.br-title span { color: var(--dim); font-size: .8rem; font-weight: 600; }
+.br-label { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+.br-e .br-label { color: #4da6ff; }
+.br-w .br-label { color: #ff6b6b; }
+.br-rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: center; }
+.br-round { display: flex; flex-direction: column; gap: 8px; justify-content: space-around; height: 100%; }
+.br-rh { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 800; }
+.br-series { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.br-team { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 7px 10px; border: 0; background: transparent; color: var(--text); font: 600 .86rem var(--font); cursor: pointer; text-align: left; }
+.br-team + .br-team { border-top: 1px solid var(--line); }
+.br-team:hover { background: var(--surface-2); }
+.br-team.is-win { background: linear-gradient(90deg, rgba(242, 201, 76, .2), transparent); color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
+.br-team.is-lose { opacity: .4; }
+.br-team.is-empty { color: var(--dim); cursor: default; }
+.br-seed { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; flex: 0 0 auto; }
+.br-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-finals { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 0; display: grid; gap: 8px; max-width: 420px; width: 100%; justify-self: center; }
+.br-champ { text-align: center; border: 1px solid rgba(242, 201, 76, .35); background: rgba(242, 201, 76, .08); border-radius: 12px; padding: 12px; }
+.br-champ span { display: block; font-size: .7rem; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-weight: 800; }
+.br-champ b { font-size: 1.2rem; color: var(--gold); }
+@media (max-width: 760px) {
+  .br-rounds { grid-template-columns: minmax(0, 1fr); }
+  .br-capture { padding: 12px; }
+}

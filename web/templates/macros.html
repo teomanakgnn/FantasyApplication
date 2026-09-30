@@ -1,0 +1,56 @@
+{% macro stat(v, d) -%}{{ v|num(d) }}{%- endmacro %}
+
+{% macro player_table(rows, decimals, show_games=False, rank=False, id='') -%}
+<div class="table-wrap">
+  <table class="table" {% if id %}id="{{ id }}"{% endif %}>
+    <thead>
+      <tr>
+        {% if rank %}<th class="sortable" data-first="asc">#</th>{% endif %}
+        <th class="l sticky-col sortable" data-first="asc">Player</th>
+        <th class="sortable">Score</th>
+        {% if show_games %}<th class="sortable">GP</th>{% endif %}
+        <th class="sortable">Min</th>
+        <th class="sortable">PTS</th>
+        <th class="sortable">REB</th>
+        <th class="sortable">AST</th>
+        <th class="sortable">STL</th>
+        <th class="sortable">BLK</th>
+        <th class="sortable">TO</th>
+        <th class="sortable">3PM</th>
+        <th>FG</th>
+        <th>FT</th>
+        <th class="sortable">+/-</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in rows %}
+      <tr class="clickable" data-row='{{ p|tojson|forceescape }}'>
+        {% if rank %}<td data-v="{{ loop.index }}">{{ loop.index }}</td>{% endif %}
+        <td class="l sticky-col" data-v="{{ p.player }}">
+          <div class="player-cell">
+            <img class="avatar" src="{{ p.photo }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+            <div style="min-width:0">
+              <div class="player-name">{{ p.player }}</div>
+              <div class="player-sub">{{ p.team }}{% if p.traded %} · {{ p.traded }}{% endif %}</div>
+            </div>
+          </div>
+        </td>
+        <td class="score" data-v="{{ p.score }}">{{ p.score|num(1) }}</td>
+        {% if show_games %}<td data-v="{{ p.games }}">{{ p.games }}</td>{% endif %}
+        <td data-v="{{ p.min }}">{{ p.min|num(0) }}</td>
+        <td data-v="{{ p.pts }}">{{ stat(p.pts, decimals) }}</td>
+        <td data-v="{{ p.reb }}">{{ stat(p.reb, decimals) }}</td>
+        <td data-v="{{ p.ast }}">{{ stat(p.ast, decimals) }}</td>
+        <td data-v="{{ p.stl }}">{{ stat(p.stl, decimals) }}</td>
+        <td data-v="{{ p.blk }}">{{ stat(p.blk, decimals) }}</td>
+        <td data-v="{{ p.to }}">{{ stat(p.to, decimals) }}</td>
+        <td data-v="{{ p.tpm }}">{{ stat(p.tpm, decimals) }}</td>
+        <td>{{ stat(p.fgm, decimals) }}/{{ stat(p.fga, decimals) }}</td>
+        <td>{{ stat(p.ftm, decimals) }}/{{ stat(p.fta, decimals) }}</td>
+        <td data-v="{{ p.pm }}">{{ '%+.0f'|format(p.pm) if decimals == 0 else '%+.1f'|format(p.pm) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{%- endmacro %}

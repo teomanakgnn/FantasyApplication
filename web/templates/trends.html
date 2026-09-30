@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Player Trends · HoopLife NBA{% endblock %}
+{% macro mover(r, up) -%}
+<div class="card tight">
+  <div class="player-cell"><img class="avatar" src="{{ r.photo }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+    <div style="min-width:0"><div class="player-name">{{ r.player }}</div><div class="player-sub">{{ r.team }}</div></div></div>
+  <div class="row-between" style="margin-top:8px"><span class="kpi-value" style="font-size:1.3rem">{{ '%.1f'|format(r.a1) }}</span>
+    <span class="{{ 'good' if up else 'bad' }}" style="font-weight:800">{{ '%+.1f'|format(r.diff) }}</span></div>
+  <div class="tiny dim">was {{ '%.1f'|format(r.a2) }} · {{ r.g1 }}/{{ r.g2 }} games</div>
+</div>
+{%- endmacro %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Pro</div>
+  <h1>Player Form &amp; Trends</h1>
+  <p>Who is heating up and who is fading: fantasy average in one period against another.</p>
+</div>
+
+<form class="card" method="get" action="/trends" data-loading="tr-loading">
+  <div class="form-row">
+    <label class="field"><span>Recent period</span><select class="input" name="p1">{% for k, v in periods.items() %}<option value="{{ k }}" {{ 'selected' if k == p1 }}>{{ v }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Compare with</span><select class="input" name="p2">{% for k, v in periods.items() %}<option value="{{ k }}" {{ 'selected' if k == p2 }}>{{ v }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Min games (recent)</span><input class="input" type="number" name="g1" min="1" max="30" value="{{ g1 }}"></label>
+    <label class="field"><span>Min games (compare)</span><input class="input" type="number" name="g2" min="1" max="60" value="{{ g2 }}"></label>
+    <label class="field"><span>Min average</span><input class="input" type="number" name="lo" min="0" max="150" step="5" value="{{ lo }}"></label>
+    <label class="field"><span>Max average</span><input class="input" type="number" name="hi" min="0" max="150" step="5" value="{{ hi }}"></label>
+  </div>
+  <button class="btn btn-primary" type="submit">Compare</button>
+  <p class="small muted" id="tr-loading" hidden style="margin:10px 0 0">Collecting box scores - the first load of a long range can take a few seconds.</p>
+</form>
+
+{% if not has_games %}
+  <div class="empty" style="margin-top:16px">No games in this range yet - trends start once the season is under way.</div>
+{% elif not table %}
+  <div class="empty" style="margin-top:16px">No players match these filters.</div>
+{% else %}
+  <h2>Rising</h2>
+  <div class="grid grid-auto">{% for r in risers %}{{ mover(r, True) }}{% endfor %}</div>
+  <h2>Falling</h2>
+  <div class="grid grid-auto">{% for r in fallers %}{{ mover(r, False) }}{% endfor %}</div>
+  <h2>All players ({{ table|length }})</h2>
+  <div class="table-wrap" style="max-height:600px;overflow:auto"><table class="table">
+    <thead><tr><th class="l sticky-col sortable" data-first="asc">Player</th><th class="sortable">G recent</th><th class="sortable">G compare</th><th class="sortable">{{ periods[p1] }}</th><th class="sortable">{{ periods[p2] }}</th><th class="sortable">Change</th></tr></thead>
+    <tbody>{% for r in table %}<tr><td class="l sticky-col" data-v="{{ r.player }}"><b>{{ r.player }}</b> <span class="dim small">{{ r.team }}</span></td><td>{{ r.g1 }}</td><td>{{ r.g2 }}</td><td data-v="{{ r.a1 }}">{{ '%.1f'|format(r.a1) }}</td><td data-v="{{ r.a2 }}">{{ '%.1f'|format(r.a2) }}</td><td data-v="{{ r.diff }}" class="{{ 'good' if r.diff > 0 else 'bad' }}">{{ '%+.1f'|format(r.diff) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+{% endif %}
+
+<h2>Trade rumours</h2>
+{% for r in rumors %}
+  <article class="card" style="margin-bottom:10px">
+    <div class="row-between"><span class="chip {{ 'chip-good' if r.likelihood == 'High' else 'chip-warn' if r.likelihood.startswith('Medium') else 'chip-bad' }}">{{ r.likelihood }}</span>
+      <span class="tiny dim">{{ r.source }} · {{ 'Today' if r.days_ago == 0 else 'Yesterday' if r.days_ago == 1 else r.days_ago ~ ' days ago' }}</span></div>
+    <h3 style="margin:8px 0 4px">{% if r.link %}<a href="{{ r.link }}" target="_blank" rel="noopener" style="color:var(--text)">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}</h3>
+    {% if r.content %}<p class="small muted">{{ r.content }}</p>{% endif %}
+    <div class="row" style="gap:4px">{% for t in r.teams[:5] %}<span class="chip">{{ t }}</span>{% endfor %}</div>
+  </article>
+{% else %}
+  <div class="empty">No trade talk in the last seven days from our sources.</div>
+{% endfor %}
+{% endblock %}

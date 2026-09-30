@@ -3,12 +3,13 @@
     "appName": "HoopLife NBA",
     "webDir": "www",
     "server": {
-        "url": "https://fantasyapplication.streamlit.app/?app=true",
+        "url": "https://app.hooplifenba.com/",
         "cleartext": false,
         "androidScheme": "https",
         "allowNavigation": [
-            "*.streamlit.app",
-            "*.streamlit.io"
+            "app.hooplifenba.com",
+            "hooplifenba.com",
+            "*.yahoo.com"
         ]
     },
     "plugins": {

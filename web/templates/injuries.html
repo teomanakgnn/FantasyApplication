@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Injury Report · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head row-between">
+  <div>
+    <div class="eyebrow">League update · {{ today.strftime('%B %d, %Y') }}</div>
+    <h1>Injury Report</h1>
+    <p>Every player ESPN lists on an NBA injury report, newest first.</p>
+  </div>
+  <form method="post" action="/injuries/refresh" data-loading><button class="btn btn-ghost" type="submit">Refresh</button></form>
+</div>
+
+{% if not items %}
+  <div class="empty">No injury data is available right now. ESPN may be updating - try Refresh in a minute.</div>
+{% else %}
+<div class="grid grid-3" style="margin-bottom:14px">
+  <div class="kpi"><div class="kpi-label">Listed</div><div class="kpi-value" id="k-total">{{ items|length }}</div></div>
+  <div class="kpi"><div class="kpi-label">Out</div><div class="kpi-value bad" id="k-out">{{ items|selectattr('kind', 'equalto', 'out')|list|length }}</div></div>
+  <div class="kpi"><div class="kpi-label">Day to day</div><div class="kpi-value warn" id="k-dtd">{{ items|selectattr('kind', 'equalto', 'dtd')|list|length }}</div></div>
+</div>
+
+<div class="filters">
+  <label class="field"><span>Search</span><input class="input" type="search" id="f-search" placeholder="Player name"></label>
+  <label class="field"><span>Team</span>
+    <select class="input" id="f-team"><option value="">All teams</option>{% for abbr, name, logo in teams %}<option value="{{ abbr }}">{{ name }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Status</span>
+    <select class="input" id="f-status"><option value="">All statuses</option>{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Sort</span>
+    <select class="input" id="f-sort"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="team">Team</option></select></label>
+</div>
+
+<div class="inj-grid" id="inj-grid">
+  {% for i in items %}
+  <article class="card inj-card inj-{{ i.kind }}" data-team="{{ i.team }}" data-status="{{ i.status }}" data-name="{{ i.player|lower }}" data-ts="{{ i.ts }}" data-kind="{{ i.kind }}">
+    <div class="row" style="flex-wrap:nowrap">
+      <img class="avatar avatar-lg" src="{{ i.player_photo or '/static/img/player.svg' }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+      <div style="min-width:0;flex:1">
+        <div class="player-name">{{ i.player }}</div>
+        <div class="player-sub">{% if i.team_logo %}<img src="{{ i.team_logo }}" alt="" width="14" height="14" style="vertical-align:-2px" loading="lazy"> {% endif %}{{ i.team }} · {{ i.position }}</div>
+      </div>
+      {% if i.recent %}<span class="chip chip-good">NEW</span>{% endif %}
+    </div>
+    <div class="inj-status">{{ i.status }}</div>
+    <div class="small"><b>{{ i.injury_type }}</b></div>
+    <p class="small muted" style="margin:4px 0 6px">{{ i.details }}</p>
+    <div class="tiny dim">Updated {{ i.age }}</div>
+  </article>
+  {% endfor %}
+</div>
+<p class="empty" id="inj-empty" hidden>No players match those filters.</p>
+{% endif %}
+
+<style>
+  .inj-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  @media (max-width: 640px) { .inj-grid { grid-template-columns: minmax(0, 1fr); } }
+  .inj-card { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--line-strong); }
+  .inj-status { align-self: flex-start; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; padding: 3px 9px; border-radius: 999px; background: var(--surface-3); }
+  .inj-out { border-left-color: var(--bad); } .inj-out .inj-status { background: var(--bad-soft); color: var(--bad); }
+  .inj-dtd, .inj-questionable { border-left-color: var(--warn); } .inj-dtd .inj-status, .inj-questionable .inj-status { background: var(--warn-soft); color: var(--warn); }
+  .inj-doubtful { border-left-color: #f97316; } .inj-doubtful .inj-status { background: rgba(249,115,22,.15); color: #fb923c; }
+  .inj-card p { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .inj-card.is-open p { -webkit-line-clamp: unset; }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const grid = document.getElementById("inj-grid");
+  if (!grid) return;
+  const cards = Array.from(grid.children);
+  const f = (id) => document.getElementById(id);
+  function apply() {
+    const q = f("f-search").value.trim().toLowerCase(), team = f("f-team").value, status = f("f-status").value, sort = f("f-sort").value;
+    let shown = 0, out = 0, dtd = 0;
+    cards.forEach((c) => {
+      const ok = (!q || c.dataset.name.includes(q)) && (!team || c.dataset.team === team) && (!status || c.dataset.status === status);
+      c.hidden = !ok;
+      if (ok) { shown++; if (c.dataset.kind === "out") out++; if (c.dataset.kind === "dtd") dtd++; }
+    });
+    cards.sort((a, b) => sort === "old" ? a.dataset.ts - b.dataset.ts : sort === "team" ? a.dataset.team.localeCompare(b.dataset.team) || b.dataset.ts - a.dataset.ts : b.dataset.ts - a.dataset.ts);
+    cards.forEach((c) => grid.appendChild(c));
+    f("k-total").textContent = shown; f("k-out").textContent = out; f("k-dtd").textContent = dtd;
+    f("inj-empty").hidden = shown > 0;
+  }
+  ["f-search", "f-team", "f-status", "f-sort"].forEach((id) => f(id).addEventListener(id === "f-search" ? "input" : "change", apply));
+  grid.addEventListener("click", (e) => { const c = e.target.closest(".inj-card"); if (c) c.classList.toggle("is-open"); });
+})();
+</script>
+{% endblock %}

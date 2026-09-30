@@ -80,7 +80,7 @@ class YahooFantasyService:
         
         print(f"Requesting: {url}") # Terminalde URL'i görmek için
         
-        response = self.oauth.get(url, headers=headers)
+        response = self.oauth.get(url, headers=headers, timeout=20)
         
         # Eğer hata varsa (400, 401, 500 vs.)
         if response.status_code != 200:

@@ -13,14 +13,15 @@
  *     kosuyor, bu site eposta ve parola topluyor.
  *   - Cerez onayi yoktu. Birlesik Krallik/AB trafigi icin analitik
  *     cerezleri once onay ister.
- *   - Ziyaretci, Streamlit uygulamasi uyanana kadar bos ekrana bakiyordu.
+ *   - Ziyaretci, Streamlit uygulamasi uyanana kadar bos ekrana bakiyordu
+ *     (uygulama artik Railway'de, uyumuyor; uyandirma istegi kaldirildi).
  *
  * Bu surum alan adinda gercek bir acilis sayfasi sunuyor: Cloudflare
  * kenarindan aninda aciliyor, olcum ve onay iceriyor, uygulamaya
  * reklam parametrelerini (gclid, utm_*) tasiyarak gonderiyor.
  */
 
-const APP = 'https://fantasyapplication.streamlit.app'
+const APP = 'https://app.hooplifenba.com'
 const SITE = 'https://hooplifenba.com'
 const LOGO = 'https://raw.githubusercontent.com/teomanakgnn/FantasyApplication/main/HoopLifeNBA_logo.png'
 const GA_ID = 'G-L36E2X2BQK'
@@ -365,7 +366,7 @@ const SCRIPT = `<script>
     // Uygulama baska bir kaynakta calisiyor; ayni ziyaret olarak
     // sayilmasi icin alan adlari birbirine baglaniyor.
     gtag('config','${GA_ID}',{
-      linker:{domains:['hooplifenba.com','fantasyapplication.streamlit.app']}
+      linker:{domains:['hooplifenba.com','app.hooplifenba.com']}
     });
   }
 
@@ -402,16 +403,6 @@ const SCRIPT = `<script>
       if(q && q.length>1) a.href='/app'+q;
     });
   });
-
-  // Streamlit uygulamasi bos beklemeden sonra sogukta aciliyor. Ziyaretci
-  // acilis sayfasini okurken arka planda bir istek atip uyandiriyoruz;
-  // butona bastiginda uygulama cogu zaman ayakta oluyor. Yanit okunmuyor,
-  // istegin sunucuya ulasmasi yeterli; bu yuzden no-cors.
-  if(document.querySelector('a[href^="/app"]')){
-    setTimeout(function(){
-      try{ fetch('${APP}/', {mode:'no-cors', cache:'no-store'}); }catch(e){}
-    }, 500);
-  }
 
   // Sezon geri sayimi
   var k=document.getElementById('kicker');

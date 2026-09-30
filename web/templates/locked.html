@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ feature }} · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin:24px auto">
+  <span class="chip chip-pro">PRO</span>
+  <h1 style="margin-top:10px">{{ feature }}</h1>
+  <p class="muted">{{ body }}</p>
+  {% if user %}
+    <p class="small dim">{{ note }}</p>
+    <div class="row"><a class="btn btn-primary" href="/account">Your account</a><a class="btn btn-ghost" href="/">Back to home</a></div>
+  {% else %}
+    <div class="row"><a class="btn btn-primary" href="/login?next={{ request.url.path }}">Sign in</a><a class="btn btn-ghost" href="/">Back to home</a></div>
+  {% endif %}
+</div>
+{% endblock %}

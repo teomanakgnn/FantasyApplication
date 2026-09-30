@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Sign in' if mode == 'login' else 'Create account' }} · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="auth-card card">
+    <img class="auth-logo" src="/static/img/logo.png" alt="HoopLife NBA" width="120" height="120">
+    <p class="muted center">Daily box scores, mock drafts and trade math.</p>
+    <div class="seg seg-block" style="margin-bottom:18px">
+      <a href="/login{% if next and next != '/' %}?next={{ next|urlencode }}{% endif %}" class="{{ 'is-on' if mode == 'login' }}">Sign in</a>
+      <a href="/register" class="{{ 'is-on' if mode == 'register' }}">Create account</a>
+    </div>
+    {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
+
+    {% if mode == 'login' %}
+    <form method="post" action="/login" data-loading>
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="field"><span>Username</span>
+        <input class="input" name="username" autocomplete="username" autocapitalize="none" value="{{ form.username or '' }}" required autofocus></label>
+      <label class="field"><span>Password</span>
+        <input class="input" type="password" name="password" autocomplete="current-password" required></label>
+      <label class="check"><input type="checkbox" name="remember" value="1" checked> Keep me signed in for 30 days</label>
+      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+    </form>
+    {% else %}
+    <form method="post" action="/register" data-loading>
+      <label class="field"><span>Username</span>
+        <input class="input" name="username" autocomplete="username" autocapitalize="none" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}" title="3-32 letters, numbers, dot, underscore or hyphen" value="{{ form.username or '' }}" required></label>
+      <label class="field"><span>Email</span>
+        <input class="input" type="email" name="email" autocomplete="email" value="{{ form.email or '' }}" required></label>
+      <div class="form-row">
+        <label class="field"><span>Password</span>
+          <input class="input" type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+        <label class="field"><span>Confirm password</span>
+          <input class="input" type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
+      </div>
+      <p class="tiny dim">At least 8 characters.</p>
+      <label class="check"><input type="checkbox" name="terms" value="1" required> I agree to the <a href="https://hooplifenba.com/terms" target="_blank" rel="noopener">Terms of Service</a></label>
+      <button class="btn btn-primary btn-block" type="submit">Create free account</button>
+    </form>
+    <div class="grid grid-2" style="margin-top:16px">
+      <div class="note"><b>Free</b><br>Scores, stats, mock drafts, over/under picks, a {{ 10 }}-player watchlist.</div>
+      <div class="note"><b>Pro</b> <span class="chip chip-pro">INVITE</span><br>Player trends, unlimited watchlist and saved drafts.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<style>
+  .auth { display: flex; justify-content: center; padding: 12px 0 24px; }
+  .auth-card { width: 100%; max-width: 440px; padding: 24px 22px; }
+  .auth-logo { display: block; margin: 0 auto 6px; width: 120px; height: 120px; object-fit: contain; }
+  @media (max-width: 640px) { .auth-card { padding: 18px 14px; } .auth-logo { width: 92px; height: 92px; } }
+</style>
+{% endblock %}

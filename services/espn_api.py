@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime, timedelta
-import streamlit as st
+from services.cache import cache_data
 from functools import lru_cache
 import concurrent.futures
 from typing import Dict, List, Optional, Union
@@ -25,7 +25,7 @@ SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/s
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
 INJURIES_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
 
-@st.cache_data(ttl=86400) # 24 saat cache
+@cache_data(ttl=86400) # 24 saat cache
 def get_nba_teams_dynamic():
     """
     ESPN API'den güncel NBA takımlarını ve ID'lerini dinamik olarak çeker.
@@ -54,7 +54,7 @@ def get_nba_teams_dynamic():
         print(f"Takım listesi çekilemedi: {e}")
         return {}
 
-@st.cache_data(ttl=3600)
+@cache_data(ttl=3600)
 def get_game_ids(date):
     date_str = date.strftime("%Y%m%d")
     url = f"{SCOREBOARD_URL}?dates={date_str}"
@@ -150,7 +150,7 @@ def get_scoreboard(date):
             continue
     return games
 
-@st.cache_data(ttl=86400)
+@cache_data(ttl=86400)
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
 
@@ -223,7 +223,7 @@ def get_boxscore(game_id):
 
     return players
 
-@st.cache_data(ttl=3600)
+@cache_data(ttl=3600)
 def get_injuries():
     """TÜM TAKIM SAKATLIKLARI"""
     try:
@@ -380,7 +380,7 @@ def _fetch_byathlete_page(season_year, page, limit, season_type):
     return response.json()
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@cache_data(ttl=3600, show_spinner=False)
 def get_nba_season_stats_official(season_year=None, season_type=SEASON_TYPE_REGULAR):
     """
     Resmî ESPN sezon ortalamalarını çeker.
@@ -477,7 +477,7 @@ def get_nba_season_stats_official(season_year=None, season_type=SEASON_TYPE_REGU
 
     return df.sort_values(by="PTS", ascending=False).reset_index(drop=True)
 
-@st.cache_data(ttl=86400)
+@cache_data(ttl=86400)
 def get_current_team_rosters():
     """
     Tüm NBA takımlarının güncel rosterlerini çeker.
@@ -488,7 +488,7 @@ def get_current_team_rosters():
     nba_teams = get_nba_teams_dynamic()
     
     if not nba_teams:
-        st.error("NBA takım listesi API'den çekilemedi.")
+        print("NBA takim listesi API den cekilemedi.")
         return {}
 
     player_team_map = {}
@@ -731,7 +731,7 @@ _ACTIVE_STATS_COLUMNS = [
 ]
 
 
-@st.cache_data(ttl=3600)
+@cache_data(ttl=3600)
 def get_active_players_stats(days=None, season_stats=True):
     """
     Aktif oyuncuların maç loglarından toplanmış ortalamalarını çeker.
@@ -1084,7 +1084,7 @@ def get_score_color(score):
     elif score >= 5.0: return "#f97316" # Turuncu (Eh)
     return "#ef4444" # Kırmızı (Sıkıcı)
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@cache_data(ttl=3600, show_spinner=False)
 def get_season_game_days(around_date):
     """
     Scoreboard yanitindaki takvimden, o tarihin ait oldugu sezonun tum

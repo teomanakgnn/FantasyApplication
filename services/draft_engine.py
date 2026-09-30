@@ -85,8 +85,8 @@ def create_draft(
         is_user = (i == user_slot) and opponent_mode == "ai"
         teams.append({
             "slot": i,
-            "name": "Senin Takımın" if is_user else (
-                ai_names[(i - 1) % len(ai_names)] if opponent_mode == "ai" else f"Takım {i}"
+            "name": "Your team" if is_user else (
+                ai_names[(i - 1) % len(ai_names)] if opponent_mode == "ai" else f"Team {i}"
             ),
             "is_user": is_user,
             "picks": [],           # [{player, round, pick, price}]
@@ -361,13 +361,13 @@ def make_pick(state, player_id, price=None, buyer_slot=None):
         (ok: bool, message: str)
     """
     if state["complete"]:
-        return False, "Draft zaten tamamlandı."
+        return False, "The draft is already complete."
 
     player = next((p for p in state["pool"] if p["id"] == player_id), None)
     if player is None:
-        return False, "Oyuncu havuzda bulunamadı."
+        return False, "That player is not in the pool."
     if player_id in state["drafted_ids"]:
-        return False, f"{player['name']} zaten seçilmiş."
+        return False, f"{player['name']} has already been drafted."
 
     if state["format"] == "auction":
         return _auction_purchase(state, player, price, buyer_slot)
@@ -382,7 +382,7 @@ def is_roster_full(state, team):
 def _snake_pick(state, player):
     team = current_team(state)
     if team is None:
-        return False, "Sıradaki takım bulunamadı."
+        return False, "No team is on the clock."
 
     team["picks"].append({
         "player": player,
@@ -417,9 +417,9 @@ def _auction_purchase(state, player, price, buyer_slot=None):
     team = _team_by_slot(state, slot)
 
     if team is None:
-        return False, "Alıcı takım bulunamadı."
+        return False, "The buying team was not found."
     if is_roster_full(state, team):
-        return False, f"{team['name']} kadrosu dolu ({state['rounds']} oyuncu)."
+        return False, f"{team['name']} already has a full roster ({state['rounds']} players)."
 
     price = max(1, int(price if price is not None else max(1, player["auction"])))
 
@@ -427,8 +427,8 @@ def _auction_purchase(state, player, price, buyer_slot=None):
     slots_left = state["rounds"] - len(team["picks"])
     remaining = team["budget"] - team["spent"]
     if price > remaining - (slots_left - 1):
-        return False, (f"{team['name']} bu fiyatı karşılayamaz "
-                       f"(kalan ${remaining}, doldurulacak {slots_left} yer).")
+        return False, (f"{team['name']} cannot afford that "
+                       f"(${remaining} left for {slots_left} open spots).")
 
     team["picks"].append({
         "player": player,
@@ -561,17 +561,17 @@ def nominate(state, player_id):
         (ok, message)
     """
     if state["format"] != "auction":
-        return False, "Bu format açık artırma değil."
+        return False, "This is not an auction draft."
     if state["complete"]:
-        return False, "Draft tamamlandı."
+        return False, "The draft is complete."
     if state.get("current_nomination"):
-        return False, "Devam eden bir açık artırma var."
+        return False, "Finish the current auction first."
 
     player = next((p for p in state["pool"] if p["id"] == player_id), None)
     if player is None:
-        return False, "Oyuncu havuzda bulunamadı."
+        return False, "That player is not in the pool."
     if player_id in state["drafted_ids"]:
-        return False, f"{player['name']} zaten seçilmiş."
+        return False, f"{player['name']} has already been drafted."
 
     state["current_nomination"] = {
         "player_id": player_id,
@@ -583,7 +583,7 @@ def nominate(state, player_id):
         "history": [],
     }
     _run_ai_bidding(state)
-    return True, f"{player['name']} açık artırmada"
+    return True, f"{player['name']} is up for auction"
 
 
 def _run_ai_bidding(state):
@@ -640,35 +640,35 @@ def user_bid(state, amount):
     """Kullanıcı mevcut teklifin üstüne çıkar; ardından yapay zekâlar cevap verir."""
     nom = state.get("current_nomination")
     if not nom:
-        return False, "Devam eden bir açık artırma yok."
+        return False, "There is no auction running."
 
     user = user_team(state)
     if user is None:
-        return False, "Kullanıcı takımı yok."
+        return False, "You do not have a team in this draft."
     if is_roster_full(state, user):
         return False, "Kadron dolu."
 
     amount = int(amount)
     if amount <= nom["high_bid"]:
-        return False, f"Teklif en az ${nom['high_bid'] + 1} olmalı."
+        return False, f"Bid at least ${nom['high_bid'] + 1}."
 
     ceiling = max_affordable_bid(state, user)
     if amount > ceiling:
-        return False, f"En fazla ${ceiling} teklif verebilirsin (kalan yerler için 1$ ayrılıyor)."
+        return False, f"You can bid at most ${ceiling} ($1 is held back for each open spot)."
 
     nom["high_bid"] = amount
     nom["high_slot"] = user["slot"]
     nom["history"].append({"slot": user["slot"], "team": user["name"], "bid": amount})
 
     _run_ai_bidding(state)
-    return True, f"${amount} teklif verildi."
+    return True, f"You bid ${amount}."
 
 
 def user_pass(state):
     """Kullanıcı bu oyuncudan çekilir; açık artırma sonuçlanır."""
     nom = state.get("current_nomination")
     if not nom:
-        return False, "Devam eden bir açık artırma yok."
+        return False, "There is no auction running."
     nom["awaiting_user"] = False
     return finalize_nomination(state)
 
@@ -677,9 +677,9 @@ def finalize_nomination(state):
     """Açık artırmayı kapatır ve oyuncuyu en yüksek teklifi verene satar."""
     nom = state.get("current_nomination")
     if not nom:
-        return False, "Devam eden bir açık artırma yok."
+        return False, "There is no auction running."
     if nom.get("awaiting_user"):
-        return False, "Önce teklif ver veya pas geç."
+        return False, "Bid or pass first."
 
     return _auction_purchase(state, nom["player"], nom["high_bid"], nom["high_slot"])
 
@@ -802,7 +802,7 @@ def draft_board_grid(state):
 def best_available(state, position=None, limit=10):
     """Sıradaki en iyi mevcut oyuncular; istenirse pozisyona göre süzülür."""
     pool = available_players(state)
-    if position and position != "TÜMÜ":
+    if position and position not in ("ALL", "TÜMÜ"):
         pool = [p for p in pool if position in (p.get("positions") or [p["pos"]])]
     return sorted(pool, key=lambda p: p["adp"])[:limit]
 
@@ -819,7 +819,7 @@ def upcoming_picks(state, count=5):
         result.append({
             "overall": n,
             "round": (n - 1) // state["team_count"] + 1,
-            "team": team["name"] if team else f"Takım {slot}",
+            "team": team["name"] if team else f"Team {slot}",
             "is_user": bool(team and team["is_user"]),
         })
     return result

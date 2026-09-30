@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% from "macros.html" import player_table %}
+{% block title %}HoopLife NBA · Box scores and fantasy stats{% endblock %}
+{% block content %}
+<div class="page-head row-between">
+  <div>
+    <div class="eyebrow">Daily fantasy</div>
+    <h1>NBA Player Stats &amp; Analysis</h1>
+    <p>Box score based performance, scored the way your league scores it.</p>
+  </div>
+  <a class="btn btn-ghost hide-mobile" href="/bracket">Playoff bracket</a>
+</div>
+
+{% if offseason_note %}<div class="note note-info" style="margin-bottom:16px">{{ offseason_note }}</div>{% endif %}
+
+<form class="filters card" method="get" action="/" id="filters">
+  <input type="hidden" name="period" value="{{ period }}">
+  <label class="field"><span>Game date</span>
+    <input class="input" type="date" name="date" value="{{ requested.isoformat() }}" max="{{ (requested.today()).isoformat() }}" data-autosubmit></label>
+  <label class="field"><span>Scoring build</span>
+    <select class="input" name="build" data-autosubmit>
+      {% for key, b in builds.items() %}<option value="{{ key }}" {{ 'selected' if key == build }}>{{ b[0] }}</option>{% endfor %}
+      {% for key, b in pro_builds.items() %}<option value="{{ key }}" {{ 'selected' if key == build }}>{{ b[0] }}{{ '' if pro else ' (Pro)' }}</option>{% endfor %}
+    </select></label>
+  <details class="more" style="flex:1 1 100%">
+    <summary>Scoring weights</summary>
+    <div class="more-body">
+      <div class="form-row">
+        {% for key, value in base_weights.items() %}
+        <label class="field"><span>{{ '3PM' if key == '3Pts' else key }}</span>
+          <input class="input" type="number" step="0.05" name="w_{{ key }}" value="{{ overrides.get(key, value) }}"></label>
+        {% endfor %}
+      </div>
+      <div class="row"><button class="btn btn-primary" type="submit">Apply weights</button>
+        <a class="btn btn-ghost" href="/?period={{ period }}&build={{ build }}">Reset</a></div>
+    </div>
+  </details>
+  {% if locked %}<p class="small warn" style="flex:1 1 100%;margin:0">That build is part of Pro - showing the default weights.</p>{% endif %}
+</form>
+
+<div class="row-between" style="margin:22px 0 10px">
+  <h2 style="margin:0">Games{% if resolved %} <span class="muted small" style="font-weight:600">· {{ resolved.strftime('%A, %B %d, %Y') }}</span>{% endif %}</h2>
+  {% if user %}
+  <span class="small muted">{{ 'Scores hidden until you tap' if spoiler else '' }}</span>
+  {% endif %}
+</div>
+{% if games %}
+<div class="games" id="games">
+  {% for g in games %}
+  <div class="game">
+    <div class="game-top">
+      <span>{{ g.status }}</span>
+      {% if g.excitement %}<span class="excite" style="background:{{ g.excite_color }}" title="Excitement score">{{ g.excitement }}</span>{% endif %}
+    </div>
+    <div class="game-row">
+      <div class="team"><img src="{{ g.away_logo }}" alt="" loading="lazy">{{ g.away_team }}</div>
+      <div class="game-score{{ ' hidden-score' if spoiler and g.final }}" {% if spoiler and g.final %}title="Tap to reveal" role="button" tabindex="0"{% endif %}>{{ g.away_score }} – {{ g.home_score }}</div>
+      <div class="team home">{{ g.home_team }}<img src="{{ g.home_logo }}" alt="" loading="lazy"></div>
+    </div>
+    <button class="btn btn-sm btn-ghost" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}">Box score</button>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">No NBA games found near that date.</div>
+{% endif %}
+
+<div class="row-between" style="margin:30px 0 12px">
+  <h2 style="margin:0">Fantasy performances</h2>
+  <nav class="seg seg-fill" aria-label="Time period">
+    {% for key, label in periods.items() %}
+      <a href="/?period={{ key }}&build={{ build }}&date={{ requested.isoformat() }}{% for k, v in overrides.items() %}&w_{{ k }}={{ v }}{% endfor %}" class="{{ 'is-on' if key == period }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+<p class="small muted" style="margin-top:-4px">
+  {% if period == 'today' %}Every player from {{ resolved.strftime('%B %d') if resolved else 'the selected day' }}.
+  {% else %}Per-game averages, {{ range_start.strftime('%b %d') }} – {{ range_end.strftime('%b %d, %Y') }}.{% endif %}
+  Tap a player for the full breakdown.
+</p>
+
+{% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+
+{% if top %}
+<div class="leaders">
+  {% for p in top[:5] %}
+  <button class="leader" data-row='{{ p|tojson|forceescape }}'>
+    <span class="leader-rank">{{ loop.index }}</span>
+    <div class="player-cell">
+      <img class="avatar avatar-lg" src="{{ p.photo }}" alt="" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+      <div style="min-width:0"><div class="player-name">{{ p.player }}</div><div class="player-sub">{{ p.team }}</div></div>
+    </div>
+    <div class="leader-score">{{ p.score|num(1) }}<small>SCORE</small></div>
+    <div class="leader-line">{{ p.pts|num(decimals) }} PTS · {{ p.reb|num(decimals) }} REB · {{ p.ast|num(decimals) }} AST</div>
+  </button>
+  {% endfor %}
+</div>
+
+<h3>Top 10</h3>
+{{ player_table(top, decimals, show_games=period != 'today') }}
+{% if low %}
+<h3 style="margin-top:22px">Lowest 10 <span class="muted small" style="font-weight:500">· 20+ minutes</span></h3>
+{{ player_table(low, decimals, show_games=period != 'today') }}
+{% endif %}
+
+<details class="more" style="margin-top:16px">
+  <summary>Every player ({{ rows|length }})</summary>
+  <div class="more-body">
+    <input class="input" type="search" placeholder="Search players or teams" id="player-search" style="margin-bottom:10px">
+    {{ player_table(rows, decimals, show_games=period != 'today', rank=True, id='all-players') }}
+  </div>
+</details>
+{% elif not error %}
+<div class="empty">No stats for {{ periods[period] | lower }} yet{% if period in ('week', 'month') %} - no games have been played in this range{% endif %}.</div>
+{% endif %}
+
+{% if mvp or lvp %}
+<h2>MVP / LVP · {{ periods[period] }}</h2>
+<p class="small muted">How often each player finished in the top or bottom ten of a game day ({{ mvp_days }} game days, 20+ minutes).</p>
+<div class="grid grid-2">
+  {% for title, list, color in [('Most top-10 nights', mvp, 'var(--good)'), ('Most bottom-10 nights', lvp, 'var(--bad)')] %}
+  <div class="card">
+    <div class="card-title">{{ title }}</div>
+    {% set most = (list|map(attribute='count')|max) if list else 1 %}
+    {% for p in list %}
+      <div class="row" style="margin:8px 0;flex-wrap:nowrap">
+        <img class="avatar" src="{{ p.photo }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+        <div style="flex:1;min-width:0">
+          <div class="row-between" style="flex-wrap:nowrap"><span class="player-name">{{ p.player }}</span><b>{{ p.count }}</b></div>
+          <div class="bar"><i style="width:{{ (100 * p.count / most)|round }}%;background:{{ color }}"></i></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<dialog class="modal" id="trivia-modal">
+  <div class="modal-inner" style="max-width:520px;margin:auto">
+    <button class="icon-btn modal-close" data-trivia-close aria-label="Close">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="trivia-body"></div>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const { api, toast, openModal, escapeHtml } = window.HL;
+
+  // Oyuncu satiri / lider karti -> analiz penceresi
+  document.addEventListener("click", async (e) => {
+    const el = e.target.closest("[data-row]");
+    if (!el || e.target.closest("th")) return;
+    openModal('<div class="spinner"></div>');
+    try {
+      openModal(await api("/api/insight", { method: "POST", body: JSON.parse(el.dataset.row) }));
+    } catch (err) { openModal(`<p class="bad">${escapeHtml(err.message)}</p>`); }
+  });
+
+  // Spoiler: dokununca skoru ac
+  document.querySelectorAll(".hidden-score").forEach((el) => {
+    const reveal = () => el.classList.remove("hidden-score");
+    el.addEventListener("click", reveal);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") reveal(); });
+  });
+
+  // Tum oyuncular: arama
+  const search = document.getElementById("player-search");
+  if (search) {
+    search.addEventListener("input", () => {
+      const needle = search.value.trim().toLowerCase();
+      document.querySelectorAll("#all-players tbody tr").forEach((tr) => {
+        tr.hidden = needle && !tr.cells[1].textContent.toLowerCase().includes(needle);
+      });
+    });
+  }
+
+  // ---------------- Gunun sorusu ----------------
+  const modal = document.getElementById("trivia-modal");
+  const body = document.getElementById("trivia-body");
+  const today = new Date().toISOString().slice(0, 10);
+  const seenKey = "hl_trivia_" + today;
+  function store(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+  function read(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal || e.target.closest("[data-trivia-close]")) { modal.close(); store(seenKey, "1"); }
+  });
+
+  async function loadTrivia() {
+    let data;
+    try { data = await api("/api/trivia"); } catch (e) { return; }
+    if (!data.question || data.played || read(seenKey)) return;
+    const q = data.question;
+    const streak = data.signed_in ? `<span class="chip chip-accent">${data.streak || 0} day streak</span>`
+      : `<span class="chip">Sign in to keep a streak</span>`;
+    body.innerHTML = `
+      <div class="row-between" style="margin-bottom:10px"><span class="eyebrow" style="margin:0">Daily trivia</span>${streak}</div>
+      <h3 style="font-size:1.15rem">${escapeHtml(q.text)}</h3>
+      <form id="trivia-form" class="stack">
+        ${Object.entries(q.options).map(([k, v]) => `
+          <label class="check card tight" style="margin:6px 0"><input type="radio" name="choice" value="${k}" required> <b>${k}</b> ${escapeHtml(v)}</label>`).join("")}
+        <button class="btn btn-primary btn-block" type="submit">Answer</button>
+      </form>`;
+    modal.showModal();
+    document.getElementById("trivia-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const choice = new FormData(e.target).get("choice");
+      try {
+        const res = await api("/api/trivia", { method: "POST", body: { id: q.id, choice } });
+        store(seenKey, "1");
+        body.innerHTML = `
+          <div class="flash ${res.correct ? "flash-ok" : "flash-error"}">${res.correct ? "Correct." : `Not quite - the answer was ${res.answer}) ${escapeHtml(res.answer_text)}.`}</div>
+          ${res.explanation ? `<p class="muted">${escapeHtml(res.explanation)}</p>` : ""}
+          ${res.streak !== null && res.streak !== undefined ? `<p><b>Streak:</b> ${res.streak} day${res.streak === 1 ? "" : "s"}</p>` : ""}
+          <button class="btn btn-block" data-trivia-close>Close</button>`;
+      } catch (err) { toast(err.message, true); }
+    });
+  }
+  loadTrivia();
+})();
+</script>
+{% endblock %}

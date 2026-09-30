@@ -23,7 +23,7 @@ aliniyor.
 """
 
 import pandas as pd
-import streamlit as st
+from services.cache import cache_data
 
 from services.draft_data import get_draft_board
 from services.nba_season import espn_get, get_current_season_year
@@ -91,7 +91,7 @@ ROSTER_WEIGHT = 0.45
 ROSTER_DEPTH = 8
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@cache_data(ttl=86400, show_spinner=False)
 def get_last_season_records(season_year=None):
     """
     Gecen sezonun takim rekorlari.
@@ -126,7 +126,7 @@ def get_last_season_records(season_year=None):
     return pd.DataFrame(rows)
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@cache_data(ttl=604800, show_spinner=False)
 def get_team_identity():
     """
     Takim logosu ve renkleri: {ABBR: {logo, color, alt}}.
@@ -188,7 +188,7 @@ def _roster_strength(board, depth=ROSTER_DEPTH):
               .sum())
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@cache_data(ttl=86400, show_spinner=False)
 def project_win_totals(season_year=None):
     """
     Takim basina projekte galibiyet sayisi ve alt/ust baremi.

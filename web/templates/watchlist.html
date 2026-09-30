@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Watchlist · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head row-between">
+  <div>
+    <div class="eyebrow">Your players</div>
+    <h1>Watchlist</h1>
+    <p>{{ total }} player{{ '' if total == 1 else 's' }} tracked{% if not pro %} · {{ limit - total if limit > total else 0 }} of {{ limit }} free slots left{% endif %}.</p>
+  </div>
+  {% if total %}<a class="btn btn-ghost" href="/watchlist.csv">Export CSV</a>{% endif %}
+</div>
+
+<form class="card" method="post" action="/watchlist/add" data-loading style="margin-bottom:16px">
+  <div class="card-title">Add a player</div>
+  <div class="form-row">
+    <label class="field"><span>Player name</span><input class="input" name="player" placeholder="e.g. Victor Wembanyama" required maxlength="80"></label>
+    <label class="field"><span>Note (optional)</span><input class="input" name="notes" maxlength="500" placeholder="Why you are watching"></label>
+  </div>
+  <button class="btn btn-primary" type="submit">Add to watchlist</button>
+  <p class="small dim" style="margin:10px 0 0">Tip: you can also add players straight from a box score or the stats tables.</p>
+</form>
+
+{% if total %}
+<form class="filters" method="get" action="/watchlist">
+  <label class="field"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="Filter by name"></label>
+  <label class="field"><span>Sort</span>
+    <select class="input" name="sort" data-autosubmit>
+      <option value="recent" {{ 'selected' if sort == 'recent' }}>Recently added</option>
+      <option value="name" {{ 'selected' if sort == 'name' }}>A–Z</option>
+      <option value="notes" {{ 'selected' if sort == 'notes' }}>With notes first</option>
+    </select></label>
+  <button class="btn" type="submit">Filter</button>
+</form>
+{% endif %}
+
+<div class="grid grid-auto">
+  {% for item in items %}
+  <div class="card">
+    <div class="player-cell">
+      <img class="avatar avatar-lg" src="{{ item.photo }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+      <div style="min-width:0">
+        <div class="player-name">{{ item.player_name }}</div>
+        <div class="player-sub">Added {{ item.created_at.strftime('%d %b %Y') if item.created_at else '' }}</div>
+      </div>
+    </div>
+    <form method="post" action="/watchlist/{{ item.id }}/notes" style="margin-top:10px">
+      <textarea class="input" name="notes" maxlength="500" placeholder="Add a note" aria-label="Notes for {{ item.player_name }}" style="min-height:64px">{{ item.notes or '' }}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn btn-sm" type="submit">Save note</button>
+      </div>
+    </form>
+    <form method="post" action="/watchlist/{{ item.id }}/remove" data-confirm="Remove {{ item.player_name }} from your watchlist?" style="margin-top:6px">
+      <button class="btn btn-sm btn-danger" type="submit">Remove</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="empty" style="grid-column:1/-1">{% if q %}No players match “{{ q }}”.{% else %}Your watchlist is empty. Add a player above or from any box score.{% endif %}</div>
+  {% endfor %}
+</div>
+
+{% if total > 1 %}
+<form method="post" action="/watchlist/clear" data-confirm="Remove every player from your watchlist?" style="margin-top:20px">
+  <button class="btn btn-danger btn-sm" type="submit">Clear watchlist</button>
+</form>
+{% endif %}
+{% endblock %}

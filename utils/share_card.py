@@ -16,7 +16,7 @@ import io
 import os
 
 import requests
-import streamlit as st
+from services.cache import cache_data
 from PIL import Image, ImageDraw, ImageFont
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +44,7 @@ def _font(weight, size):
         return ImageFont.load_default(size)
 
 
-@st.cache_data(ttl=604800, show_spinner=False)
+@cache_data(ttl=604800, show_spinner=False)
 def _logo_bytes(url):
     """Takim logosu (ham PNG baytlari). Ulasilamazsa None."""
     if not url:

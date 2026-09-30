@@ -8,6 +8,8 @@ adresini uretip her yerde kullanilabilir hale getiriyor.
 """
 import pandas as pd
 
+from services.cache import cache_data
+
 # ESPN'in boyutlandirilabilir fotograf adresi. w/h istenen olcuyu verir;
 # kucuk isteyip buyutmek yerine dogru olcuyu istemek daha net gorunuyor.
 _ESPN = ("https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/"
@@ -54,17 +56,12 @@ def name_to_id_map():
 
     Bazi bolumlerin elinde yalnizca ad var (MVP/LVP sayaci, izleme
     listesi). Sezon istatistigi tablosu hem adi hem kimligi tasidigi
-    icin harita oradan kuruluyor. Streamlit onbellegi varsa kullanilir;
-    yoksa (test/konsol) her cagrida yeniden kurulur.
+    icin harita oradan kuruluyor ve 6 saat bellekte tutuluyor.
     """
-    try:
-        import streamlit as st
-        cached = st.cache_data(ttl=6 * 3600, show_spinner=False)(_build_name_map)
-        return cached()
-    except Exception:
-        return _build_name_map()
+    return _build_name_map()
 
 
+@cache_data(ttl=6 * 3600, show_spinner=False, copy_result=False)
 def _build_name_map():
     try:
         from services.espn_api import get_nba_season_stats_official

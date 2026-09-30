@@ -16,7 +16,7 @@ import tempfile
 import time
 
 import pandas as pd
-import streamlit as st
+from services.cache import cache_data
 
 from services.espn_api import get_nba_season_stats_official
 from services.nba_season import (
@@ -43,7 +43,7 @@ DEFAULT_FANTASY_WEIGHTS = {
 }
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@cache_data(ttl=86400, show_spinner=False)
 def get_pro_team_map(season_year=None):
     """ESPN fantasy proTeamId -> takım kısaltması haritası."""
     season = season_year or get_current_season_year()
@@ -304,7 +304,7 @@ def market_positions(df):
     return out
 
 
-@st.cache_data(ttl=21600, show_spinner=False)
+@cache_data(ttl=21600, show_spinner=False)
 def fetch_draft_rankings(season_year=None):
     """
     ESPN fantasy havuzundan draft sıralamalı oyuncuları çeker.
@@ -364,7 +364,7 @@ def _normalize(name):
 BOARD_VERSION = 3
 
 
-@st.cache_data(ttl=21600, show_spinner=False)
+@cache_data(ttl=21600, show_spinner=False)
 def get_draft_board(weights=None):
     """
     Draft sıralamasını geçen sezonun gerçek istatistikleriyle birleştirir.

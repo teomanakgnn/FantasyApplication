@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ year }} Playoff Bracket · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Predictions</div>
+  <h1>{{ year }} NBA Playoff Bracket</h1>
+  <p>Pick every series, then download your bracket or share the link. Seeds follow the {{ season }} Las Vegas win totals until real standings exist.</p>
+</div>
+
+<div class="row" style="margin-bottom:14px">
+  <button class="btn btn-primary" id="br-download">Download image</button>
+  <button class="btn" id="br-share">Share link</button>
+  <button class="btn btn-ghost" id="br-reset">Reset</button>
+</div>
+
+<div id="bracket" class="bracket"></div>
+
+<link rel="stylesheet" href="/static/css/bracket.css?v={{ asset_version }}">
+{% endblock %}
+{% block scripts %}
+<script>window.BRACKET = { year: {{ year }}, east: {{ east|tojson }}, west: {{ west|tojson }} };</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="/static/js/bracket.js?v={{ asset_version }}" defer></script>
+{% endblock %}

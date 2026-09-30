@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Draft Strategy · HoopLife NBA{% endblock %}
+
+{% macro health(h) -%}
+<div class="ds-health">
+  <span class="bar" style="flex:0 0 74px"><i style="width:{{ (h.share * 100)|round }}%;background:{{ h.colour }}"></i></span>
+  <span>Roster plays <b>{{ (h.share * 100)|round|int }}%</b> of the season{% if h.reference %} against <b>{{ (h.reference * 100)|round|int }}%</b> for an average drafted player{% endif %} · <b>{{ h.missed }}</b> games missed{% if h.fragile %} · {{ h.fragile }} projected well under a full season{% endif %}</span>
+</div>
+{% if h.flagged %}<p class="tiny dim" style="margin:4px 0 0">Carrying a flag today: {{ h.flagged|join(', ') }}.</p>{% endif %}
+{%- endmacro %}
+
+{% macro roster_table(roster, auction=False) -%}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr>
+      {% if not auction %}<th>Rd</th><th>Pick</th>{% endif %}
+      <th class="l sticky-col">Player</th><th class="l">Pos</th><th class="l">Team</th>
+      {% if auction %}<th>Price</th>{% else %}<th>ADP</th><th>On board</th><th class="l">Why now</th><th class="l">If gone</th>{% endif %}
+      <th>Games</th><th class="l">Status</th><th>Injury cut</th>
+    </tr></thead>
+    <tbody>
+      {% for item in roster %}
+      <tr>
+        {% if not auction %}<td>{{ item.round }}</td><td>#{{ item.pick }}</td>{% endif %}
+        <td class="l sticky-col"><b>{{ item.player }}</b>{% if item.fragile == 1 %} <span class="warn" title="Projected to miss a chunk of the season">⚠</span>{% elif item.fragile == 2 %} <span class="bad" title="Projected to miss over a quarter of the season">⚠⚠</span>{% endif %}</td>
+        <td class="l">{{ item.pos }}</td><td class="l">{{ item.team }}</td>
+        {% if auction %}<td>${{ item.price }}</td>
+        {% else %}<td>{{ item.adp|num(0) if item.adp else '-' }}</td>
+          <td>{{ ((item.odds or 0) * 100)|round|int }}%</td>
+          <td class="l small">{{ item.why }}</td>
+          <td class="l small">{{ (item.backups or [])|join(', ') or '-' }}</td>{% endif %}
+        <td>{{ item.games or '-' }}</td><td class="l small">{{ item.status }}</td><td>{{ item.cut }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="tiny dim" style="margin-top:6px">⚠ projected to miss a chunk of the season, ⚠⚠ more than a quarter. Games is the projected number played out of {{ full_games }}. Injury cut is how much of the player's edge was handed to a replacement for the games he is not expected to play.{% if not auction %} On board is the chance he is still there at that pick; If gone lists who the plan falls back to.{% endif %}</p>
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Draft prep</div>
+  <h1>Draft Strategy</h1>
+  <p>Describe your league and see how each strategy plays out from your seat: who is likely there at your picks, what roster you end up with, and where that roster wins. Built on {{ season }} projections, with injuries priced in.</p>
+</div>
+
+<form class="card" method="get" action="/draft-strategy" data-loading="ds-loading">
+  <div class="form-row">
+    <label class="field"><span>Teams in your league</span><input class="input" type="number" name="teams" min="4" max="20" value="{{ teams }}" data-autosubmit></label>
+    <label class="field"><span>Roster size (rounds)</span><input class="input" type="number" name="rounds" min="5" max="20" value="{{ rounds }}"></label>
+    <label class="field"><span>Draft type</span>
+      <select class="input" name="type" data-autosubmit>
+        <option value="snake" {{ 'selected' if draft_type == 'snake' }}>Snake</option>
+        <option value="linear" {{ 'selected' if draft_type == 'linear' }}>Linear</option>
+        <option value="auction" {{ 'selected' if draft_type == 'auction' }}>Auction</option>
+      </select></label>
+    {% if draft_type == 'auction' %}
+    <label class="field"><span>Budget per team ($)</span><input class="input" type="number" name="budget" min="50" max="500" step="10" value="{{ budget }}"></label>
+    {% endif %}
+  </div>
+  {% if draft_type != 'auction' %}
+  <div class="field"><span>Your draft slot <span class="dim">(pick more than one if you run more than one team)</span></span>
+    <div class="slot-grid">
+      {% for s in range(1, teams + 1) %}
+      <label class="slot"><input type="checkbox" name="slot" value="{{ s }}" {{ 'checked' if s in slots }}><span>{{ s }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="field"><span>Injury risk</span>
+    <div class="seg" role="radiogroup">
+      {% for key, level in risk_levels.items() %}
+      <label><input type="radio" name="risk" value="{{ key }}" {{ 'checked' if key == risk }}><span>{{ level.name }}</span></label>
+      {% endfor %}
+    </div>
+    <span class="tiny dim">{{ risk_levels[risk].note }}</span>
+  </div>
+  <button class="btn btn-primary" type="submit">Show strategies</button>
+  <p class="small muted" id="ds-loading" hidden style="margin:10px 0 0">Building every strategy from your seat…</p>
+</form>
+
+{% if result is none %}
+  <div class="flash flash-error" style="margin-top:16px">The draft pool is unavailable right now - ESPN's fantasy API drops connections from time to time. <a href="">Try again</a>.</div>
+{% else %}
+  {% if result.fallback %}<p class="small warn" style="margin-top:12px">{{ season }} projections were unavailable for most of the pool, so last season's per-game production is being used instead.</p>{% endif %}
+
+  {% if draft_type == 'auction' %}
+    <h2>Budget shapes</h2>
+    <p class="small muted">${{ budget }} for {{ rounds }} roster spots. Every open spot needs at least $1.</p>
+    {% for shape in result.shapes %}
+      <div class="card ds-card">
+        <div class="row-between"><span class="ds-name">{{ shape.name }}</span><span class="small muted">top {{ shape.stars }} take <b style="color:var(--text)">${{ shape.top_budget }}</b></span></div>
+        <p class="ds-blurb">{{ shape.blurb }}</p>
+        <p class="tiny dim"><b>Works when:</b> {{ shape.works_when }}<br><b>Risk:</b> {{ shape.risk }}</p>
+        {{ health(shape.health) }}
+        <details class="more" style="margin-top:10px"><summary>Sample roster · spends ${{ shape.plan.spent }} of ${{ budget }}</summary>
+          <div class="more-body ds-detail"><div>{{ roster_table(shape.roster, auction=True) }}</div><div>{{ shape.svg|safe }}</div></div>
+        </details>
+      </div>
+    {% endfor %}
+  {% else %}
+    <h2>Your picks</h2>
+    <div class="ds-picks">{% for rnd, pick in result.picks %}<span class="ds-pick"><b>#{{ pick }}</b> <span>R{{ rnd }}</span></span>{% endfor %}</div>
+    {% for note in result.notes %}<div class="ds-note">{{ note }}</div>{% endfor %}
+
+    <h2>Strategies from this seat</h2>
+    <p class="small muted">Ordered by how many of the nine categories each roster projects to take against an average team in your league, after expected missed games are taken off.</p>
+    {% for r in result.reports %}
+      <div class="card ds-card{{ ' top' if loop.first }}">
+        <div class="row-between"><span class="ds-name">{{ r.name }}{% if loop.first %} <span class="chip chip-accent">BEST FIT</span>{% endif %}</span><span class="small muted"><b style="color:var(--text);font-size:1rem">{{ '%.1f'|format(r.expected_wins) }}</b> / 9 cats</span></div>
+        <p class="ds-blurb">{{ r.blurb }}</p>
+        <div class="row" style="gap:5px">
+          {% for c in r.strong %}<span class="chip chip-accent">{{ cat_labels[c] }}</span>{% endfor %}
+          {% for c in r.weak %}<span class="chip chip-bad">{{ cat_labels[c] }}</span>{% endfor %}
+          {% for c in r.punts %}<span class="chip">{{ cat_labels[c] }} punted</span>{% endfor %}
+        </div>
+        <p class="tiny dim" style="margin-top:8px"><b>Works when:</b> {{ r.works_when }}<br><b>Risk:</b> {{ r.risk }}</p>
+        {{ health(r.health) }}
+        <details class="more" style="margin-top:10px" {{ 'open' if loop.first }}><summary>Target roster and category profile</summary>
+          <div class="more-body ds-detail"><div>{{ roster_table(r.roster) }}</div><div>{{ r.svg|safe }}<p class="tiny dim">Each bar is this roster against an average team in your league. Right of the line is ahead.</p></div></div>
+        </details>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="note" style="margin-top:18px">
+    <b>How this is worked out.</b> Category strength comes from ESPN's {{ season }} per-game projections, turned into z-scores across the players your league actually drafts. Percentages are weighted by volume. Who is left at each pick comes from ESPN's live average draft position; a player's draft spot is treated as spread around his ADP, tight early and a round wide later. A player is only planned at a pick he is more likely than not to reach, and each pick weighs taking him now against what will still be there at your next one.<br><br>
+    <b>How injuries are priced.</b> The projection carries an expected games total; a player flagged today takes a further cut. A missed game costs the gap between the player and a replacement-level one, never more.<br><br>
+    <b>What it does not know.</b> Weekly variance, role changes, waiver moves and what the other managers actually do. Treat the category counts as a comparison between strategies, not a forecast.
+  </div>
+{% endif %}
+
+<style>
+  .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; }
+  .slot { position: relative; }
+  .slot input { position: absolute; opacity: 0; }
+  .slot span { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--bg); font-weight: 700; cursor: pointer; }
+  .slot input:checked + span { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .slot input:focus-visible + span { outline: 2px solid var(--accent); }
+  .ds-card { margin-top: 12px; }
+  .ds-card.top { border-color: rgba(57,135,229,.45); }
+  .ds-name { font-size: 1.05rem; font-weight: 800; }
+  .ds-blurb { color: var(--muted); font-size: .9rem; margin: 6px 0 8px; }
+  .ds-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ds-pick { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 5px 9px; font-size: .8rem; }
+  .ds-pick span { color: var(--dim); }
+  .ds-note { border-left: 2px solid var(--line-strong); padding: 2px 0 2px 11px; margin: 10px 0; color: var(--muted); font-size: .9rem; }
+  .ds-health { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: .8rem; color: var(--muted); }
+  .ds-health b { color: var(--text); }
+  .ds-detail { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 960px) { .ds-detail { grid-template-columns: minmax(0, 1fr); } }
+</style>
+{% endblock %}

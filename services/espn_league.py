@@ -17,7 +17,7 @@ geliyor); o yuzden kategori tablosu sezon toplami olarak etiketleniyor.
 """
 import pandas as pd
 import requests
-import streamlit as st
+from services.cache import cache_data
 
 from services.nba_season import get_current_season_year
 
@@ -47,13 +47,13 @@ def _cookies():
     donuyor; istek yine denenir ve ozel ligse 401 ile anlasilir bir
     hata uretilir.
     """
-    try:
-        return {"espn_s2": st.secrets["espn_s2"], "SWID": st.secrets["swid"]}
-    except Exception:
-        return {}
+    import config
+    if config.ESPN_S2 and config.ESPN_SWID:
+        return {"espn_s2": config.ESPN_S2, "SWID": config.ESPN_SWID}
+    return {}
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@cache_data(ttl=600, show_spinner=False)
 def fetch_league(league_id, season=None, views=("mTeam", "mSettings")):
     """Lig verisini ceker. On bellek 10 dakika."""
     season = int(season or get_current_season_year())

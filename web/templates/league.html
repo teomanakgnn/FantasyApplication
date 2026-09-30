@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}My League · HoopLife NBA{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Fantasy league</div>
+  <h1>My League</h1>
+  <p>Standings, matchups, an all-play-all power ranking and a roto simulation for your ESPN or Yahoo league.</p>
+</div>
+
+<nav class="seg" style="margin-bottom:14px">
+  <a href="/league?platform=espn" class="{{ 'is-on' if platform == 'espn' }}">ESPN</a>
+  <a href="/league?platform=yahoo" class="{{ 'is-on' if platform == 'yahoo' }}">Yahoo</a>
+</nav>
+
+{% if not platform %}
+  <div class="grid grid-2">
+    <a class="card" href="/league?platform=espn" style="color:var(--text);text-decoration:none">
+      <h3 style="color:#ef4444">ESPN</h3><p class="muted small" style="margin:0">Paste your league ID - no sign-in needed for public leagues.</p></a>
+    <a class="card" href="/league?platform=yahoo" style="color:var(--text);text-decoration:none">
+      <h3 style="color:#8b5cf6">Yahoo</h3><p class="muted small" style="margin:0">Connect your Yahoo account to pick one of your leagues.</p></a>
+  </div>
+{% elif platform == 'espn' %}
+  <form class="card filters" method="get" action="/league" data-loading>
+    <input type="hidden" name="platform" value="espn">
+    <label class="field" style="flex:2 1 260px"><span>League ID or league URL</span>
+      <input class="input" name="league_id" value="{{ league_input or '' }}" placeholder="e.g. 987023001" required></label>
+    <label class="field" style="max-width:160px"><span>Matchup week (0 = latest)</span>
+      <input class="input" type="number" name="week" min="0" max="30" value="{{ week }}"></label>
+    <button class="btn btn-primary" type="submit">Load league</button>
+  </form>
+  <p class="tiny dim">Category totals are season to date; the week picker changes which matchups are shown. Private leagues need the site's ESPN cookies configured.</p>
+{% else %}
+  {% if not yahoo_ready %}
+    <div class="note note-warn">Yahoo is not configured on this server yet.</div>
+  {% elif not yahoo or not yahoo.authed %}
+    <div class="card">
+      <div class="card-title">Connect Yahoo</div>
+      <ol class="small muted" style="padding-left:18px">
+        <li><a href="/league/yahoo/connect" target="_blank" rel="noopener">Open Yahoo sign-in</a> in a new tab and approve access.</li>
+        <li>Yahoo shows a code - copy it and paste it below.</li>
+      </ol>
+      <form method="post" action="/league/yahoo/code" class="row" data-loading>
+        <input class="input" name="code" placeholder="Yahoo code" required style="flex:1;min-width:200px" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Connect</button>
+      </form>
+    </div>
+  {% else %}
+    <form class="card filters" method="get" action="/league" data-loading>
+      <input type="hidden" name="platform" value="yahoo">
+      <label class="field" style="flex:2 1 260px"><span>League</span>
+        {% if yahoo.leagues %}
+        <select class="input" name="league_key">{% for l in yahoo.leagues %}<option value="{{ l.league_key }}" {{ 'selected' if l.league_key == league_key }}>{{ l.name }} ({{ l.season }})</option>{% endfor %}</select>
+        {% else %}<input class="input" name="league_key" value="{{ league_key }}" placeholder="428.l.123456" required>{% endif %}</label>
+      <label class="field" style="max-width:160px"><span>Week (0 = current)</span><input class="input" type="number" name="week" min="0" max="25" value="{{ week }}"></label>
+      <button class="btn btn-primary" type="submit">Load league</button>
+    </form>
+    <form method="post" action="/league/yahoo/disconnect"><button class="btn btn-sm btn-ghost" type="submit">Disconnect Yahoo</button></form>
+  {% endif %}
+{% endif %}
+
+{% if error %}<div class="flash flash-error" style="margin-top:14px">{{ error }}</div>{% endif %}
+
+{% if standings is not none or matchups %}
+<div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
+  <button class="tab" data-tab="standings">Standings</button>
+  <button class="tab" data-tab="matchups">Matchups</button>
+  <button class="tab" data-tab="power">Power rank</button>
+  <button class="tab" data-tab="roto">Roto</button>
+</div>
+
+<div class="tab-panel" data-panel-of="league" data-panel="standings">
+  {% if standings %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr>{% for k in standings[0].keys() %}<th class="{{ 'l' if k in ('Team', 'team', 'name') }}">{{ k }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for row in standings %}<tr>{% for k, v in row.items() %}<td class="{{ 'l' if k in ('Team', 'team', 'name') }}">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty">No standings yet.</div>{% endif %}
+</div>
+
+<div class="tab-panel" data-panel-of="league" data-panel="matchups">
+  {% for m in matchups or [] %}
+  <div class="card" style="margin-bottom:10px">
+    <div class="game-row">
+      <div><b>{{ m.away_team.name }}</b>{% if m.away_team.weekly_games is defined %}<div class="tiny dim">{{ m.away_team.weekly_games }} games this week</div>{% endif %}</div>
+      <div class="game-score" style="font-size:1.1rem">
+        {% if m.away_score is defined %}{{ m.away_score }} – {{ m.home_score }}
+        {% elif m.away_team.period_score %}{{ m.away_team.period_score.wins|int }}-{{ m.away_team.period_score.losses|int }}-{{ m.away_team.period_score.ties|int }}
+        {% else %}vs{% endif %}</div>
+      <div class="right"><b>{{ m.home_team.name }}</b>{% if m.home_team.weekly_games is defined %}<div class="tiny dim">{{ m.home_team.weekly_games }} games this week</div>{% endif %}</div>
+    </div>
+  </div>
+  {% else %}<div class="empty">No matchups for that week.</div>{% endfor %}
+</div>
+
+<div class="tab-panel" data-panel-of="league" data-panel="power">
+  {% if power %}
+  <p class="small muted">Every team against every other team on the nine categories.</p>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>#</th><th class="l">Team</th><th>Cat wins</th><th>Cat losses</th><th>Win %</th><th>Teams beaten</th></tr></thead>
+    <tbody>{% for r in power %}<tr><td>{{ loop.index }}</td><td class="l"><b>{{ r.team }}</b></td><td>{{ r.wins }}</td><td>{{ r.losses }}</td><td>{{ '%.1f'|format(100 * r.pct) }}%</td><td>{{ r.beaten }} / {{ power|length - 1 }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% for r in power %}
+  <details class="more" style="margin-top:8px"><summary>{{ r.team }} - head to head</summary>
+    <div class="more-body">{% for d in r.details %}<div class="row-between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>vs {{ d.opponent }}</span><span><span class="dim">{{ d.record }}</span> <span class="chip {{ 'chip-good' if d.result == 'WIN' else 'chip-bad' if d.result == 'LOSS' else '' }}">{{ d.result }}</span></span></div>{% endfor %}</div>
+  </details>
+  {% endfor %}
+  {% else %}<div class="empty">Load matchups to see the power ranking.</div>{% endif %}
+</div>
+
+<div class="tab-panel" data-panel-of="league" data-panel="roto">
+  {% if roto_points %}
+  <h3>Roto points</h3>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th class="l">Team</th>{% for c in cats %}<th>{{ labels.get(c, c) }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <tbody>{% for r in roto_points %}<tr><td class="l"><b>{{ r.Team }}</b></td>{% for c in cats %}<td>{{ r[c]|int }}</td>{% endfor %}<td class="score">{{ r.Total|int }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <h3 style="margin-top:16px">Raw totals</h3>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th class="l">Team</th>{% for c in cats %}<th>{{ labels.get(c, c) }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in roto_raw %}<tr><td class="l">{{ r.Team }}</td>{% for c in cats %}<td>{{ '%.3f'|format(r[c]) if '%' in c else r[c]|int }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty">Load matchups to run the roto simulation.</div>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

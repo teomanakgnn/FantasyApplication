@@ -1,0 +1,76 @@
+{% set single = info.single %}
+<div class="insight-head">
+  <img class="insight-photo" src="{{ p.photo }}" alt="" onerror="this.onerror=null;this.src='/static/img/player.svg'">
+  <div style="min-width:0">
+    <h2 style="margin:0">{{ p.player }}</h2>
+    <div class="muted">{{ team_name }}{% if p.traded %} · {{ p.traded }}{% endif %}</div>
+    <div class="small dim">{{ 'Single game' if single else 'Averages over ' ~ info.games ~ ' games' }}</div>
+  </div>
+  <div class="insight-score"><b>{{ p.score|num(1) }}</b><span>Fantasy points</span></div>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));margin:16px 0">
+  {% for label, value in info.kpis %}
+  <div class="kpi"><div class="kpi-label">{{ label }}</div><div class="kpi-value" style="font-size:1.2rem">{{ value }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="grid grid-2">
+  <div>
+    <h3>Analysis</h3>
+    {% for n in info.notes %}
+      <div class="insight {{ n.kind }}"><b>{{ n.title }}</b>{{ n.text }}</div>
+    {% else %}
+      <p class="muted">A standard line - nothing stands out either way.</p>
+    {% endfor %}
+    <h3 style="margin-top:14px">Team context</h3>
+    {% if teammates_out %}
+      <div class="insight warn"><b>{{ teammates_out|length }} teammate{{ 's' if teammates_out|length > 1 }} out</b>
+        {{ teammates_out|map(attribute='player')|join(', ') }}. A bigger role now may shrink when they return.</div>
+    {% else %}
+      <p class="muted small">No teammates listed out right now.</p>
+    {% endif %}
+  </div>
+  <div>
+    <h3>Box score</h3>
+    <table class="table" style="font-size:.9rem">
+      <tbody>
+        <tr><td class="l">Points</td><td><b>{{ p.pts|num(1) }}</b></td></tr>
+        <tr><td class="l">Rebounds</td><td>{{ p.reb|num(1) }}</td></tr>
+        <tr><td class="l">Assists</td><td>{{ p.ast|num(1) }}</td></tr>
+        <tr><td class="l">Steals / blocks</td><td>{{ p.stl|num(1) }} / {{ p.blk|num(1) }}</td></tr>
+        <tr><td class="l">Turnovers</td><td>{{ p.to|num(1) }}</td></tr>
+        <tr><td class="l">FG</td><td>{{ info.shooting.fg }}</td></tr>
+        <tr><td class="l">3PT</td><td>{{ info.shooting.tp }}</td></tr>
+        <tr><td class="l">FT</td><td>{{ info.shooting.ft }}</td></tr>
+        <tr><td class="l">Minutes</td><td>{{ p.min|num(0) }}</td></tr>
+      </tbody>
+    </table>
+    {% set o = info.outlook %}
+    <div class="insight {{ {'elite':'good','good':'good','neutral':'info','warn':'warn','bad':'bad'}[o.rating] }}" style="margin-top:12px">
+      <b>Fantasy outlook: {{ o.title }}</b>
+    </div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:16px">
+  {% if user %}
+    {% if watching %}<span class="chip chip-good">On your watchlist</span>
+    {% else %}<button class="btn btn-accent" data-watch="{{ p.player }}">Add to watchlist</button>{% endif %}
+  {% else %}
+    <a class="btn btn-ghost" href="/login?next=/">Sign in to track this player</a>
+  {% endif %}
+  <button class="btn btn-ghost" data-close>Close</button>
+</div>
+<style>
+  .insight-head { display: flex; gap: 14px; align-items: center; padding-right: 40px; }
+  .insight-photo { width: 96px; height: 70px; object-fit: cover; object-position: top; border-radius: 12px; background: #0C1119; flex: 0 0 auto; }
+  .insight-score { margin-left: auto; text-align: right; }
+  .insight-score b { display: block; font-size: 2.2rem; line-height: 1; color: var(--good); }
+  .insight-score span { font-size: .7rem; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+  @media (max-width: 640px) {
+    .insight-head { flex-wrap: wrap; }
+    .insight-photo { width: 72px; height: 54px; }
+    .insight-score { margin-left: 0; text-align: left; flex-basis: 100%; }
+  }
+</style>
