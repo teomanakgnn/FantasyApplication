@@ -151,6 +151,58 @@ def yahoo_disconnect(request: Request):
     return response
 
 
+@router.post("/league/yahoo/rosters")
+def yahoo_rosters(request: Request, league_key: str = Form("")):
+    _, entry = _yahoo_entry(request)
+    if not entry or not entry.get("authed"):
+        return redirect("/league?platform=yahoo", "Connect Yahoo first.", "error")
+    try:
+        entry.setdefault("rosters", {})[league_key] = entry["service"].get_league_rosters(league_key)
+    except Exception as exc:
+        print(f"yahoo rosters failed: {exc}")
+        return redirect(f"/league?platform=yahoo&league_key={league_key}#trade",
+                        "Yahoo could not load the rosters. Try again.", "error")
+    return redirect(f"/league?platform=yahoo&league_key={league_key}#trade", "Rosters loaded.")
+
+
+def yahoo_trade(entry, league_key, q):
+    """Yahoo liginde iki takim arasi takasin kategori etkisi (eski sayfadaki hesap)."""
+    rosters = (entry.get("rosters") or {}).get(league_key)
+    if not rosters:
+        return None
+    names = list(rosters)
+    team_a = q.get("team_a") if q.get("team_a") in rosters else names[0]
+    others = [n for n in names if n != team_a]
+    team_b = q.get("team_b") if q.get("team_b") in others else (others[0] if others else team_a)
+    give = [k for k in q.getlist("give") if any(p["player_key"] == k for p in rosters[team_a]["players"])]
+    get = [k for k in q.getlist("get") if any(p["player_key"] == k for p in rosters[team_b]["players"])]
+    result = {"teams": names, "team_a": team_a, "team_b": team_b,
+              "players_a": rosters[team_a]["players"], "players_b": rosters[team_b]["players"],
+              "give": give, "get": get, "impact": None, "error": None}
+    if give or get:
+        try:
+            stats = entry["service"].get_players_stats(league_key, give + get)
+        except Exception as exc:
+            print(f"yahoo player stats failed: {exc}")
+            stats = []
+        if not stats:
+            result["error"] = "Yahoo did not return stats for those players."
+            return result
+        key_of = {p["name"]: p["player_key"] for p in rosters[team_a]["players"] + rosters[team_b]["players"]}
+        out_side = [p for p in stats if key_of.get(p["name"]) in give]
+        in_side = [p for p in stats if key_of.get(p["name"]) in get]
+
+        def total(side, cat):
+            values = [_num(p["stats"].get(cat, 0)) for p in side]
+            if not values:
+                return 0.0
+            return sum(values) / len(values) if "%" in cat else sum(values)
+        result["impact"] = [{"cat": c, "label": LABELS.get(c, c),
+                             "delta": total(in_side, c) - total(out_side, c)} for c in CATS]
+        result["out_side"], result["in_side"] = out_side, in_side
+    return result
+
+
 # ==================== SAYFA ====================
 
 def _parse_league_id(value):
@@ -206,6 +258,7 @@ def league(request: Request):
             except Exception as exc:
                 print(f"yahoo league failed: {exc}")
                 context["error"] = "Yahoo could not load that league. Reconnect and try again."
+            context["trade"] = yahoo_trade(entry, league_key, q)
 
     if context["matchups"]:
         context["power"] = power_rank(context["matchups"])

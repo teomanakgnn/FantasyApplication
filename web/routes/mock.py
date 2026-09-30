@@ -7,8 +7,9 @@ liste olarak doner ve istemci onlari sirayla canlandirir. Streamlit
 surumunde "canli" akis her secimde 0.3 saniye uyuyup sayfayi yeniden
 ciziyordu; butun sayfa o sure boyunca kilitliydi.
 
-Durum bellekte oldugu icin sunucu yeniden baslarsa suren draft kaybolur;
-giris yapmis kullanici draftini kaydedip sonra acabilir.
+Durum bellekte tutulur ama her hamleden sonra veritabanina da yazilir
+(live_drafts). Sunucu yeniden baslarsa (her yayinda oluyor) bellekte
+olmayan draft oradan geri yuklenir; kullanici kaldigi yerden devam eder.
 """
 import json
 import secrets
@@ -52,8 +53,45 @@ def _owner(request):
     return f"g{guest}" if guest else None
 
 
+_last_purge = [0.0]
+
+
+def _persist(entry):
+    """Draft'in son halini veritabanina yazar (sunucu yeniden baslarsa diye)."""
+    state = entry["state"]
+    blob = serialize(state)
+    blob["current_nomination"] = state.get("current_nomination")
+    try:
+        db.save_live_draft(entry["id"], entry["owner"], blob, entry.get("saved_id"))
+    except Exception as exc:
+        print(f"live draft save failed: {exc}")
+
+
+def _restore(draft_id, owner):
+    """Bellekte olmayan draft'i veritabanindan geri kurar."""
+    if not owner or not db.available:
+        return None
+    found = db.load_live_draft(draft_id, owner)
+    if not found:
+        return None
+    blob, saved_id = found
+    board = get_draft_board()
+    state = deserialize(blob, board if not board.empty else None)
+    entry = {"id": draft_id, "state": state, "owner": owner, "touched": time.time(),
+             "saved_id": saved_id, "lock": threading.Lock()}
+    with _LOCK:
+        entry = _DRAFTS.setdefault(draft_id, entry)
+    return entry
+
+
 def _prune():
     now = time.time()
+    if now - _last_purge[0] > 3600:
+        _last_purge[0] = now
+        try:
+            db.purge_live_drafts()
+        except Exception:
+            pass
     stale = [k for k, v in _DRAFTS.items() if now - v["touched"] > _IDLE_LIMIT]
     for key in stale:
         _DRAFTS.pop(key, None)
@@ -63,16 +101,17 @@ def _prune():
 
 
 def _get(request, draft_id):
-    entry = _DRAFTS.get(draft_id)
-    if not entry or entry["owner"] != _owner(request):
+    owner = _owner(request)
+    entry = _DRAFTS.get(draft_id) or _restore(draft_id, owner)
+    if not entry or entry["owner"] != owner:
         return None
     entry["touched"] = time.time()
     return entry
 
 
 def _missing():
-    return JSONResponse({"error": "That draft is no longer running. Start a new one "
-                                  "or open a saved draft."}, 404)
+    return JSONResponse({"error": "That draft could not be found. Drafts are kept for "
+                                  "three days - start a new one or open a saved draft."}, 404)
 
 
 # ==================== GORUNUM ====================
@@ -203,6 +242,7 @@ def start(request: Request, body: dict = Body(...)):
         _DRAFTS[draft_id] = entry
     with entry["lock"]:
         made = _advance(state)
+        _persist(entry)
         return _payload(entry, ai=made, pool=True)
 
 
@@ -221,6 +261,8 @@ def _act(request, draft_id, action):
     with entry["lock"]:
         state = entry["state"]
         ok, message, made = action(state)
+        if ok:
+            _persist(entry)
         code = 200 if ok else 400
         return JSONResponse(_payload(entry, ai=made, message=message, ok=ok), status_code=code)
 
@@ -304,6 +346,7 @@ def save(request: Request, draft_id: str, body: dict = Body(...)):
     if not saved_id:
         return JSONResponse({"error": "Could not save the draft. Try again."}, 500)
     entry["saved_id"] = saved_id
+    _persist(entry)
     return {"ok": True, "saved_id": saved_id, "message": "Draft saved."}
 
 
@@ -328,6 +371,7 @@ def load(request: Request, saved_id: int):
         _DRAFTS[draft_id] = entry
     with entry["lock"]:
         made = _advance(state)
+        _persist(entry)
         return _payload(entry, ai=made, pool=True)
 
 

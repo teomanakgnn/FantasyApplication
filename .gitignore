@@ -27,3 +27,4 @@ railway.env
 
 # Wrangler yerel onbellegi
 .wrangler/
+.pytest_cache/

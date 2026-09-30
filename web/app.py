@@ -97,7 +97,12 @@ async def http_error(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(Exception)
 async def server_error(request: Request, exc: Exception):
     import traceback
-    traceback.print_exc()
+    detail = traceback.format_exc()
+    print(detail)
+    # Yoneticiye e-posta (Resend tanimliysa; ayni hata 15 dk'da bir)
+    from services import mailer
+    mailer.alert(f"{exc.__class__.__name__} on {request.method} {request.url.path}",
+                 f"{request.method} {request.url}" + "\n\n" + detail)
     if request.url.path.startswith("/api/"):
         return JSONResponse({"error": "Server error. Try again."}, status_code=500)
     return render(request, "error.html", status_code=500, title="Something went wrong",

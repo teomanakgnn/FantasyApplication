@@ -71,6 +71,15 @@ ESPN_SWID = get("ESPN_SWID") or get("swid")
 # istek hicbir sey kazanmaz).
 PROXY_SECRET = get("PROXY_SECRET")
 
+# E-posta (Resend). Anahtar yoksa sifre sifirlama ve hata bildirimi kapali.
+RESEND_API_KEY = get("RESEND_API_KEY")
+MAIL_FROM = get("MAIL_FROM", "HoopLife NBA <no-reply@hooplifenba.com>")
+ALERT_EMAIL = get("ALERT_EMAIL")
+
+# Kayit formunda bot korumasi (Cloudflare Turnstile). Anahtarlar yoksa kapali.
+TURNSTILE_SITE_KEY = get("TURNSTILE_SITE_KEY")
+TURNSTILE_SECRET_KEY = get("TURNSTILE_SECRET_KEY")
+
 # Hesap panelinde "Grant Pro" formunu gorebilen kullanici adlari.
 ADMIN_USERNAMES = {u.strip() for u in (get("ADMIN_USERNAMES", "admin") or "").split(",")
                    if u.strip()}

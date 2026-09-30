@@ -21,6 +21,7 @@
       <label class="check"><input type="checkbox" name="remember" value="1" checked> Keep me signed in for 30 days</label>
       <button class="btn btn-primary btn-block" type="submit">Sign in</button>
     </form>
+    <p class="small center" style="margin:14px 0 0"><a href="/forgot-password">Forgot your password?</a></p>
     {% else %}
     <form method="post" action="/register" data-loading>
       <label class="field"><span>Username</span>
@@ -35,6 +36,10 @@
       </div>
       <p class="tiny dim">At least 8 characters.</p>
       <label class="check"><input type="checkbox" name="terms" value="1" required> I agree to the <a href="https://hooplifenba.com/terms" target="_blank" rel="noopener">Terms of Service</a></label>
+      {% if turnstile %}
+      <div class="cf-turnstile" data-sitekey="{{ turnstile }}" data-theme="dark" data-size="flexible" style="margin:8px 0 12px"></div>
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+      {% endif %}
       <button class="btn btn-primary btn-block" type="submit">Create free account</button>
     </form>
     <div class="grid grid-2" style="margin-top:16px">

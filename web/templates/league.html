@@ -66,6 +66,7 @@
   <button class="tab" data-tab="matchups">Matchups</button>
   <button class="tab" data-tab="power">Power rank</button>
   <button class="tab" data-tab="roto">Roto</button>
+  {% if platform == 'yahoo' %}<button class="tab" data-tab="trade">Trade</button>{% endif %}
 </div>
 
 <div class="tab-panel" data-panel-of="league" data-panel="standings">
@@ -121,5 +122,35 @@
   </table></div>
   {% else %}<div class="empty">Load matchups to run the roto simulation.</div>{% endif %}
 </div>
+{% if platform == 'yahoo' and league_key %}
+<div class="tab-panel" data-panel-of="league" data-panel="trade">
+  {% if not trade %}
+    <p class="muted">Load every roster in this league to compare a trade on real Yahoo stats.</p>
+    <form method="post" action="/league/yahoo/rosters" data-loading><input type="hidden" name="league_key" value="{{ league_key }}"><button class="btn btn-primary" type="submit">Load rosters</button></form>
+  {% else %}
+    <form method="get" action="/league#trade" data-loading>
+      <input type="hidden" name="platform" value="yahoo"><input type="hidden" name="league_key" value="{{ league_key }}"><input type="hidden" name="week" value="{{ week }}">
+      <div class="grid grid-2">
+        {% for side, label, team, players, picked in [('a', 'Your team gives', trade.team_a, trade.players_a, trade.give), ('b', 'Your team gets', trade.team_b, trade.players_b, trade.get)] %}
+        <div class="card">
+          <label class="field"><span>{{ 'Your team' if side == 'a' else 'Trade partner' }}</span>
+            <select class="input" name="team_{{ side }}" data-autosubmit>{% for t in trade.teams %}{% if side == 'a' or t != trade.team_a %}<option {{ 'selected' if t == team }}>{{ t }}</option>{% endif %}{% endfor %}</select></label>
+          <div class="label">{{ label }}</div>
+          {% for p in players %}<label class="check"><input type="checkbox" name="{{ 'give' if side == 'a' else 'get' }}" value="{{ p.player_key }}" {{ 'checked' if p.player_key in picked }}> {{ p.name }} <span class="dim small">{{ p.position }}</span></label>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary" type="submit" style="margin-top:12px">Analyze trade</button>
+    </form>
+    {% if trade.error %}<div class="flash flash-error" style="margin-top:12px">{{ trade.error }}</div>{% endif %}
+    {% if trade.impact %}
+      <h3 style="margin-top:16px">Net impact for {{ trade.team_a }}</h3>
+      <div class="table-wrap"><table class="table"><thead><tr>{% for i in trade.impact %}<th>{{ i.label }}</th>{% endfor %}</tr></thead>
+        <tbody><tr>{% for i in trade.impact %}{% set good = (i.delta < 0) if i.cat == 'TO' else (i.delta > 0) %}<td class="{{ 'good' if good and i.delta != 0 else 'bad' if i.delta != 0 else '' }}">{{ '%+.3f'|format(i.delta) if '%' in i.cat else '%+.1f'|format(i.delta) }}</td>{% endfor %}</tr></tbody></table></div>
+      <p class="tiny dim">Season totals from Yahoo. Percentages are averaged across the players on each side; turnovers going down is good.</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}

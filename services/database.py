@@ -58,7 +58,8 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
 MIN_PASSWORD_LENGTH = 8
 
 # Kullanicidan gizlenecek alanlar (parola ozeti disariya cikmamali)
-_PRIVATE_USER_FIELDS = {"password_hash", "reset_token", "reset_token_expires"}
+_PRIVATE_USER_FIELDS = {"password_hash", "reset_token", "reset_token_expires",
+                        "reset_token_hash"}
 
 
 def _hash_token(raw):
@@ -241,6 +242,9 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at)",
             "CREATE INDEX IF NOT EXISTS idx_watchlists_user ON watchlists (user_id)",
+            # Sifre sifirlama: yalnizca anahtarin ozeti ve son gecerlilik saklanir.
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP",
             # Tercih yazimi ON CONFLICT (user_id) kullaniyor; bu kural olmadan
             # her kayit hata veriyordu ve spoiler ayari hic saklanamiyordu.
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_user ON user_preferences (user_id)",
@@ -267,6 +271,16 @@ class Database:
                    last_played DATE
                )""",
             "ALTER TABLE user_trivia_streak ADD COLUMN IF NOT EXISTS last_played DATE",
+            # Suren mock draftlar: sunucu yeniden baslayinca (her yayinda)
+            # kullanicinin yarim draft'i kaybolmasin diye her hamlede yaziliyor.
+            """CREATE TABLE IF NOT EXISTS live_drafts (
+                   id TEXT PRIMARY KEY,
+                   owner TEXT NOT NULL,
+                   state JSONB NOT NULL,
+                   saved_id INTEGER,
+                   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_live_drafts_updated ON live_drafts (updated_at)",
             # Kayitli mock draftlar (eskiden ilk kayitta tembel olusturuluyordu)
             """CREATE TABLE IF NOT EXISTS mock_drafts (
                    id SERIAL PRIMARY KEY,
@@ -443,6 +457,54 @@ class Database:
             self._run("DELETE FROM sessions WHERE user_id = %s", (user_id,))
             return True, "Password updated. Other devices have been signed out."
         return False, "Could not update the password."
+
+    # ==================== SIFRE SIFIRLAMA ====================
+
+    RESET_MINUTES = 60
+
+    def create_password_reset(self, email):
+        """
+        E-postaya ait hesap varsa tek kullanimlik sifirlama anahtari uretir.
+
+        Returns:
+            (kullanici, ham anahtar) ya da (None, None). Anahtarin yalnizca
+            ozeti saklanir; veritabanini goren biri linki uretemez.
+        """
+        email = (email or "").strip().lower()
+        if not EMAIL_RE.match(email):
+            return None, None
+        row = self._run("SELECT * FROM users WHERE LOWER(email) = %s", (email,), fetch="one")
+        if not row:
+            return None, None
+        raw = secrets.token_urlsafe(32)
+        self._run("UPDATE users SET reset_token_hash = %s, reset_token_expires = "
+                  "CURRENT_TIMESTAMP + %s * INTERVAL '1 minute' WHERE id = %s",
+                  (_hash_token(raw), self.RESET_MINUTES, row["id"]))
+        return _public_user(row), raw
+
+    def reset_token_valid(self, raw):
+        if not raw:
+            return False
+        return bool(self._run(
+            "SELECT 1 FROM users WHERE reset_token_hash = %s AND reset_token_expires > CURRENT_TIMESTAMP",
+            (_hash_token(raw),), fetch="value"))
+
+    def reset_password(self, raw, new_password):
+        if len(new_password or "") < MIN_PASSWORD_LENGTH:
+            return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+        row = self._run(
+            "SELECT id FROM users WHERE reset_token_hash = %s AND reset_token_expires > CURRENT_TIMESTAMP",
+            (_hash_token(raw or ""),), fetch="one")
+        if not row:
+            return False, "This reset link has expired or was already used. Ask for a new one."
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        done = self._run("UPDATE users SET password_hash = %s, reset_token_hash = NULL, "
+                         "reset_token_expires = NULL WHERE id = %s", (new_hash, row["id"]))
+        if not done:
+            return False, "Could not update the password. Try again."
+        # Eski oturumlar duser: sifreyi baskasi biliyorsa artik giremez.
+        self._run("DELETE FROM sessions WHERE user_id = %s", (row["id"],))
+        return True, "Password updated. Sign in with your new password."
 
     def update_email(self, user_id, email):
         email = (email or "").strip().lower()
@@ -664,11 +726,24 @@ class Database:
     # ==================== GUNLUK TRIVIA ====================
 
     def get_daily_trivia(self):
-        """Bugunun sorusu. Tablo gun basina tek soru tutuyor."""
+        """
+        Bugunun sorusu.
+
+        Once bugune yazilmis soru aranir. Yoksa (yeni soru girilmediyse)
+        butun sorular arasindan gunun sirasina gore biri secilir: herkes
+        ayni gun ayni soruyu gorur ve sorular hic tukenmez.
+        """
+        columns = ("id, question, option_a, option_b, option_c, option_d, "
+                   "correct_option, explanation")
+        today = self._run(f"SELECT {columns} FROM trivia_questions "
+                          "WHERE game_date = CURRENT_DATE LIMIT 1", fetch="one")
+        if today:
+            return today
         return self._run(
-            "SELECT id, question, option_a, option_b, option_c, option_d, "
-            "correct_option, explanation FROM trivia_questions "
-            "WHERE game_date = CURRENT_DATE LIMIT 1", fetch="one")
+            f"SELECT {columns} FROM trivia_questions ORDER BY id "
+            "OFFSET (CURRENT_DATE - DATE '2026-01-01') % "
+            "GREATEST((SELECT COUNT(*) FROM trivia_questions), 1) LIMIT 1",
+            fetch="one")
 
     def get_user_streak(self, user_id):
         """Kac gundur ust uste oynandigi. Cagiranlar tam sayi bekliyor."""
@@ -757,6 +832,30 @@ class Database:
             "created_at, updated_at "
             "FROM mock_drafts WHERE user_id = %s ORDER BY updated_at DESC LIMIT %s",
             (user_id, limit), fetch="all") or []
+
+    # ==================== SUREN MOCK DRAFTLAR ====================
+
+    def save_live_draft(self, draft_id, owner, state_blob, saved_id=None):
+        return bool(self._run(
+            "INSERT INTO live_drafts (id, owner, state, saved_id, updated_at) "
+            "VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP) "
+            "ON CONFLICT (id) DO UPDATE SET state = EXCLUDED.state, "
+            "saved_id = EXCLUDED.saved_id, updated_at = CURRENT_TIMESTAMP",
+            (draft_id, owner, json.dumps(state_blob), saved_id)))
+
+    def load_live_draft(self, draft_id, owner):
+        row = self._run("SELECT state, saved_id FROM live_drafts WHERE id = %s AND owner = %s",
+                        (draft_id, owner), fetch="one")
+        if not row:
+            return None
+        state = row["state"]
+        if isinstance(state, str):
+            state = json.loads(state)
+        return state, row.get("saved_id")
+
+    def purge_live_drafts(self, days=3):
+        return self._run("DELETE FROM live_drafts WHERE updated_at < CURRENT_TIMESTAMP - %s * INTERVAL '1 day'",
+                         (days,), fetch="rowcount")
 
     def load_mock_draft(self, user_id, draft_id):
         return self._run("SELECT * FROM mock_drafts WHERE id = %s AND user_id = %s",
