@@ -163,7 +163,7 @@ def _throttled(key, limit, window=3600):
 
 @router.get("/forgot-password")
 def forgot_page(request: Request):
-    return render(request, "password.html", mode="forgot", mail_ready=mailer.enabled())
+    return render(request, "password.html", mode="forgot", mail_ready=mailer.reset_enabled())
 
 
 @router.post("/forgot-password")
@@ -171,7 +171,7 @@ def forgot(request: Request, email: str = Form("")):
     email = email.strip().lower()
     # Hesap olsun olmasin ayni cevap: kimin kayitli oldugu buradan ogrenilemez.
     done = render(request, "password.html", mode="sent", email=email)
-    if not mailer.enabled():
+    if not mailer.reset_enabled():
         return render(request, "password.html", mode="forgot", mail_ready=False,
                       error="Password reset by email is not available yet.")
     if _throttled(f"ip:{client_ip(request)}", 8) or _throttled(f"mail:{email}", 3):

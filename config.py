@@ -74,7 +74,13 @@ PROXY_SECRET = get("PROXY_SECRET")
 # E-posta (Resend). Anahtar yoksa sifre sifirlama ve hata bildirimi kapali.
 RESEND_API_KEY = get("RESEND_API_KEY")
 MAIL_FROM = get("MAIL_FROM", "HoopLife NBA <no-reply@hooplifenba.com>")
+# Kullanicilara (sifre sifirlama) e-posta ancak alan adi Resend'de
+# dogrulaninca gidebilir; o zamana kadar bu kapali.
+PASSWORD_RESET_EMAIL = flag("PASSWORD_RESET_EMAIL")
+# Hata bildirimleri yalnizca yoneticiye gider; Resend'in test gondericisi
+# hesap sahibine alan adi dogrulamasi olmadan da teslim eder.
 ALERT_EMAIL = get("ALERT_EMAIL")
+ALERT_FROM = get("ALERT_FROM", "HoopLife alerts <onboarding@resend.dev>")
 
 # Kayit formunda bot korumasi (Cloudflare Turnstile). Anahtarlar yoksa kapali.
 TURNSTILE_SITE_KEY = get("TURNSTILE_SITE_KEY")

@@ -19,7 +19,12 @@ def enabled():
     return bool(config.RESEND_API_KEY)
 
 
-def send(to, subject, html, text=None):
+def reset_enabled():
+    """Sifre sifirlama e-postasi gonderilebilir mi (alan adi dogrulandi mi)?"""
+    return enabled() and config.PASSWORD_RESET_EMAIL
+
+
+def send(to, subject, html, text=None, sender=None):
     if not enabled():
         print(f"email skipped (no RESEND_API_KEY): {subject}")
         return False
@@ -27,7 +32,7 @@ def send(to, subject, html, text=None):
         resp = requests.post(API, timeout=15, headers={
             "Authorization": f"Bearer {config.RESEND_API_KEY}",
             "Content-Type": "application/json",
-        }, json={"from": config.MAIL_FROM, "to": [to], "subject": subject,
+        }, json={"from": sender or config.MAIL_FROM, "to": [to], "subject": subject,
                  "html": html, **({"text": text} if text else {})})
         if resp.status_code >= 300:
             print(f"email failed {resp.status_code}: {resp.text[:200]}")
@@ -60,7 +65,7 @@ def alert(title, detail):
     body = (f"<p><b>{_esc(title)}</b></p><pre style='white-space:pre-wrap;font-size:12px'>"
             f"{_esc(detail[-6000:])}</pre><p>HoopLife NBA - app.hooplifenba.com</p>")
     threading.Thread(target=send, args=(config.ALERT_EMAIL, f"[HoopLife] {title[:120]}", body),
-                     daemon=True).start()
+                     kwargs={"sender": config.ALERT_FROM}, daemon=True).start()
 
 
 def _esc(value):
