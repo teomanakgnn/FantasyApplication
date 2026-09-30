@@ -21,7 +21,8 @@ from fastapi.responses import JSONResponse
 
 from services.database import FREE_SAVED_DRAFT_LIMIT, db
 from services.draft_data import get_draft_board
-from services.draft_engine import (SLOT_ELIGIBILITY, create_draft, current_round,
+from services.draft_engine import (DEFAULT_ROSTER_SLOTS, SLOT_ELIGIBILITY,
+                                   create_draft, current_round,
                                    current_team, deserialize, draft_board_grid,
                                    finalize_nomination, grade_draft, is_user_turn,
                                    make_pick, max_affordable_bid, nominate,
@@ -126,6 +127,23 @@ def _compact(p):
             "rookie": bool(p.get("rookie"))}
 
 
+def _lineup(team, rounds):
+    """Kadronun pozisyon slotlarina yerlesimi (motorun roster_needs mantigiyla)."""
+    slots = DEFAULT_ROSTER_SLOTS[:] + ["BENCH"] * max(0, rounds - len(DEFAULT_ROSTER_SLOTS))
+    filled = [None] * len(slots)
+    for pick in team["picks"]:
+        player = pick["player"]
+        positions = set(player.get("positions") or [player.get("pos")])
+        spot = next((i for i, slot in enumerate(slots)
+                     if filled[i] is None and positions & SLOT_ELIGIBILITY.get(slot, set())), None)
+        if spot is None:
+            spot = next((i for i in range(len(slots) - 1, -1, -1) if filled[i] is None), None)
+        if spot is not None:
+            filled[spot] = {"id": player["id"], "name": player["name"], "pos": player["pos"],
+                            "team": player["team"], "price": pick["price"], "round": pick["round"]}
+    return [{"slot": slot, "player": filled[i]} for i, slot in enumerate(slots)]
+
+
 def _view(state, entry):
     teams = []
     for t in state["teams"]:
@@ -135,6 +153,7 @@ def _view(state, entry):
             "budget": t["budget"], "spent": t["spent"], "remaining": summary["remaining"],
             "fpts": summary["fpts"], "players": summary["players"],
             "needs": roster_needs(t, state["rounds"]),
+            "lineup": _lineup(t, state["rounds"]) if t["is_user"] or state["opponent_mode"] == "manual" else None,
             "picks": [{"round": p["round"], "overall": p["overall"], "price": p["price"],
                        "player": {k: p["player"][k] for k in ("id", "name", "pos", "team", "fpts", "adp")}}
                       for p in t["picks"]],
@@ -145,11 +164,14 @@ def _view(state, entry):
     if nom:
         high = next((t for t in state["teams"] if t["slot"] == nom["high_slot"]), None)
         me = user_team(state)
+        nominator = next((t for t in state["teams"] if t["slot"] == nom.get("nominator_slot")), None)
         nomination = {
             "player": _compact(nom["player"]), "high_bid": nom["high_bid"],
             "high_team": high["name"] if high else "?",
+            "high_is_user": bool(high and high["is_user"]),
+            "nominator": nominator["name"] if nominator else None,
             "awaiting_user": bool(nom.get("awaiting_user")),
-            "history": nom.get("history", [])[-5:],
+            "history": nom.get("history", [])[-8:],
             "max_bid": max_affordable_bid(state, me) if me and me["is_user"] else 0,
         }
     grades = grade_draft(state) if state["complete"] else {}

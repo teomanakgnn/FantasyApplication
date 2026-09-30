@@ -65,19 +65,24 @@
 </div>
 
 <div id="draft-view" hidden>
-  <div class="row-between" style="margin-bottom:12px">
+  <div class="md-head">
     <div>
       <div class="eyebrow">Mock draft</div>
       <h1 id="d-title" style="margin:0">Mock Draft</h1>
       <div class="small muted" id="d-sub"></div>
     </div>
-    <button class="btn btn-ghost" id="new-draft">New draft</button>
+    <div class="row">
+      <div class="seg md-speed" role="group" aria-label="Opponent speed">
+        <button data-speed="slow">Slow</button><button data-speed="normal">Normal</button><button data-speed="fast">Fast</button>
+      </div>
+      <button class="btn btn-ghost" id="new-draft">New draft</button>
+    </div>
   </div>
 
-  <div class="clock" id="clock"></div>
-  <div class="bar" style="margin:8px 0 12px"><i id="progress" style="background:linear-gradient(90deg,#ff8c00,#ff4b4b)"></i></div>
+  <section class="stage" id="stage" aria-live="polite"></section>
+  <div class="md-progress"><div class="bar"><i id="progress"></i></div><span id="progress-label"></span></div>
+
   <div class="feed" id="feed"></div>
-  <div id="auction"></div>
   <div id="results"></div>
 
   <div class="draft-layout">
@@ -87,21 +92,16 @@
         <div class="seg" id="pos-filter" role="group" aria-label="Position">
           {% for p in ['ALL', 'PG', 'SG', 'SF', 'PF', 'C'] %}<button data-pos="{{ p }}" class="{{ 'is-on' if p == 'ALL' }}">{{ p }}</button>{% endfor %}
         </div>
-        <select class="input" id="pool-sort" aria-label="Sort by" style="max-width:190px">
-          <option value="adp">ADP</option><option value="fpts">Fantasy points</option><option value="auction">Value ($)</option><option value="owned">Rostered %</option>
+        <select class="input" id="pool-sort" aria-label="Sort by">
+          <option value="adp">Sort: ADP</option><option value="fpts">Sort: Fantasy pts</option><option value="auction">Sort: Value ($)</option><option value="owned">Sort: Rostered %</option>
         </select>
-        <label class="check small" style="min-height:0"><input type="checkbox" id="need-only"> Fits my open spots</label>
+        <label class="check small"><input type="checkbox" id="need-only"> Fits my open spots</label>
       </div>
-      <div class="table-wrap" style="max-height:560px;overflow:auto">
-        <table class="table pool-table">
-          <thead><tr><th class="l sticky-col">Player</th><th></th><th>ADP</th><th>$</th><th>FP</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th></tr></thead>
-          <tbody id="pool-body"></tbody>
-        </table>
-      </div>
+      <div class="pool-list" id="pool-list"></div>
       <p class="tiny dim" id="pool-count" style="margin-top:6px"></p>
     </section>
 
-    <aside>
+    <aside class="md-side">
       <div class="tabs" data-tabs="side">
         <button class="tab" data-tab="mine">My team</button>
         <button class="tab" data-tab="league">League</button>
@@ -120,8 +120,9 @@
     <div class="card-title">Save this draft</div>
     {% if user %}
       <div class="row"><input class="input" id="save-name" placeholder="Draft name" maxlength="80" style="flex:1;min-width:200px"><button class="btn btn-primary" id="save-btn">Save</button></div>
+      <p class="tiny dim" style="margin:8px 0 0">Drafts in progress are also kept for three days, so you can close the tab and come back.</p>
     {% else %}
-      <p class="muted" style="margin:0"><a href="/login?next=/mock-draft">Sign in</a> to save this draft.</p>
+      <p class="muted" style="margin:0"><a href="/login?next=/mock-draft">Sign in</a> to save this draft. Drafts in progress are kept on this device for three days.</p>
     {% endif %}
   </section>
 </div>

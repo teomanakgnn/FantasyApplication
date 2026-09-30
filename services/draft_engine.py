@@ -395,9 +395,11 @@ def _snake_pick(state, player):
     state["log"].append({
         "overall": state["pick_number"],
         "round": current_round(state),
+        "pick_in_round": pick_in_round(state),
         "team": team["name"],
         "slot": team["slot"],
         "player": player["name"],
+        "player_id": player["id"],
         "pos": player["pos"],
         "nba_team": player["team"],
         "adp": player["adp"],
@@ -439,16 +441,22 @@ def _auction_purchase(state, player, price, buyer_slot=None):
     })
     team["spent"] += price
     state["drafted_ids"].append(player["id"])
+    nom = state.get("current_nomination") or {}
+    nominator = _team_by_slot(state, nom.get("nominator_slot")) if nom else None
     state["log"].append({
         "overall": state["pick_number"],
         "round": len(team["picks"]),
         "team": team["name"],
         "slot": team["slot"],
         "player": player["name"],
+        "player_id": player["id"],
         "pos": player["pos"],
         "nba_team": player["team"],
         "adp": player["adp"],
         "price": price,
+        # Ekranda artirmayi yeniden oynatabilmek icin
+        "nominator": nominator["name"] if nominator else None,
+        "bids": list(nom.get("history") or [])[-6:],
     })
 
     state["pick_number"] += 1
@@ -619,6 +627,20 @@ def _run_ai_bidding(state):
         if top_ceiling > nom["high_bid"]:
             new_bid = min(top_ceiling, max(runner_up, nom["high_bid"]) + 1)
             if new_bid > nom["high_bid"]:
+                # Sonuc tek adimda belli ama ekranda gercek bir artirma gibi
+                # gorunsun: mevcut teklifi gecebilen takimlar sirayla (en
+                # dusuk tavandan en yuksege) bir oncekinin tavaninin ustune
+                # cikar. Son teklif yine 'ikinci en yuksek tavan + 1'.
+                ladder = [(c, slot) for c, slot in reversed(ceilings[1:4])
+                          if c > nom["high_bid"] and slot != nom["high_slot"]]
+                bid = nom["high_bid"]
+                for idx, (ceiling, slot) in enumerate(ladder):
+                    step = max(bid + 1, ceiling // 2) if idx == 0 else ladder[idx - 1][0] + 1
+                    step = min(step, ceiling)
+                    if step > bid:
+                        bid = step
+                        nom["history"].append({"slot": slot, "team": _team_by_slot(state, slot)["name"],
+                                               "bid": bid})
                 nom["high_bid"] = new_bid
                 nom["high_slot"] = top_slot
                 nom["history"].append({
@@ -646,7 +668,7 @@ def user_bid(state, amount):
     if user is None:
         return False, "You do not have a team in this draft."
     if is_roster_full(state, user):
-        return False, "Kadron dolu."
+        return False, "Your roster is full."
 
     amount = int(amount)
     if amount <= nom["high_bid"]:

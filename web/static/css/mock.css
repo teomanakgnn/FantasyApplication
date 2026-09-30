@@ -1,42 +1,144 @@
-/* Mock draft ekrani */
-.clock { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; padding: 11px 14px; position: sticky; top: 0; z-index: 5; }
-@media (max-width: 960px) { .clock { top: var(--topbar); } }
-.clock.on { border-color: rgba(52, 211, 153, .6); background: linear-gradient(90deg, rgba(52, 211, 153, .16), var(--surface)); }
-.clock-pill { font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--muted); }
-.clock.on .clock-pill { background: rgba(52, 211, 153, .22); color: var(--good); animation: pulse 1.8s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .55; } }
-.clock-main { font-weight: 800; }
-.clock-sub { color: var(--muted); font-size: .86rem; }
+/* ==================== Mock draft ==================== */
+.md-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.md-speed button { min-height: 34px; padding: 4px 12px; font-size: .8rem; }
 
+/* ---------- Sahne: o an ne oluyor ---------- */
+.stage {
+  position: sticky; top: 0; z-index: 6;
+  background: linear-gradient(135deg, #161C29, #111620);
+  border: 1px solid var(--line-strong); border-radius: 16px;
+  padding: 14px 16px; min-height: 108px; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+/* Telefonda sahne sayfayla birlikte akar: sabit kalinca ekranin yarisini
+   kapliyordu ve listenin ustune biniyordu. */
+@media (max-width: 960px) { .stage { position: static; } }
+/* Arka plan tamamen opak: yari saydam renk alttaki listeyi gosteriyordu */
+.stage.is-user { border-color: rgba(52, 211, 153, .65); background-color: #111620; background-image: linear-gradient(135deg, rgba(52, 211, 153, .14), rgba(17, 22, 32, 0) 60%); }
+.stage.is-bid { border-color: rgba(242, 201, 76, .6); background-color: #111620; background-image: linear-gradient(135deg, rgba(242, 201, 76, .12), rgba(17, 22, 32, 0) 60%); }
+.stage-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.stage-pill { font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--muted); }
+.stage.is-user .stage-pill { background: rgba(52, 211, 153, .2); color: var(--good); animation: md-pulse 1.6s ease-in-out infinite; }
+.stage.is-bid .stage-pill { background: rgba(242, 201, 76, .18); color: var(--gold); }
+.stage-title { font-weight: 800; font-size: 1.05rem; }
+.stage-sub { color: var(--muted); font-size: .86rem; }
+.stage-skip { margin-left: auto; }
+@keyframes md-pulse { 50% { opacity: .55; } }
+
+/* Secim duyurusu */
+.announce { display: flex; align-items: center; gap: 14px; animation: md-pop .35s cubic-bezier(.2, .9, .3, 1.2) both; }
+.announce img { width: 84px; height: 62px; object-fit: cover; object-position: top; border-radius: 12px; background: #0C1119; flex: 0 0 auto; }
+.announce-team { font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.announce-name { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.announce-meta { font-size: .84rem; color: var(--muted); margin-top: 2px; }
+.announce-price { margin-left: auto; font-size: 1.8rem; font-weight: 800; color: var(--gold); white-space: nowrap; }
+@keyframes md-pop { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+.thinking { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; }
+.thinking i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: md-dot 1s infinite; }
+.thinking i:nth-child(2) { animation-delay: .15s; } .thinking i:nth-child(3) { animation-delay: .3s; }
+@keyframes md-dot { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+
+/* Teklif merdiveni */
+.ladder { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ladder span { font-size: .8rem; padding: 4px 9px; border-radius: 8px; background: var(--surface-2); color: var(--muted); animation: md-pop .3s both; }
+.ladder span b { color: var(--text); }
+.ladder span.lead { background: rgba(242, 201, 76, .16); color: var(--gold); }
+.ladder span.mine { background: rgba(52, 211, 153, .16); color: var(--good); }
+.sold { display: inline-block; margin-top: 8px; font-weight: 800; letter-spacing: .08em; color: #0B0F17; background: var(--gold); padding: 4px 10px; border-radius: 8px; animation: md-pop .3s both; }
+
+/* Teklif paneli */
+.bid-box { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; }
+.bid-box img { width: 96px; height: 70px; object-fit: cover; object-position: top; border-radius: 12px; background: #0C1119; }
+.bid-high { text-align: right; }
+.bid-high b { display: block; font-size: 2rem; color: var(--gold); line-height: 1; }
+.bid-high span { font-size: .78rem; color: var(--muted); }
+.bid-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.bid-actions .btn { min-height: 44px; }
+.bid-actions input { max-width: 110px; }
+@media (max-width: 640px) {
+  .bid-box { grid-template-columns: auto 1fr; }
+  .bid-high { grid-column: 1 / -1; text-align: left; display: flex; align-items: baseline; gap: 8px; }
+  .bid-high b { display: inline; font-size: 1.6rem; }
+  .announce-name { font-size: 1.2rem; }
+  .announce img { width: 64px; height: 48px; }
+  .announce-price { font-size: 1.3rem; }
+}
+
+/* Sira sende: oneriler */
+.suggest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .suggest { grid-template-columns: minmax(0, 1fr); } }
+.suggest-card { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.suggest-card img { width: 48px; height: 36px; object-fit: cover; object-position: top; border-radius: 8px; background: #0C1119; }
+.suggest-card .btn { margin-left: auto; min-height: 38px; padding: 6px 12px; }
+
+.md-progress { display: flex; align-items: center; gap: 10px; margin: 10px 0 12px; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.md-progress .bar { flex: 1; }
+.md-progress i { background: linear-gradient(90deg, #ff8c00, #ff4b4b) !important; transition: width .4s ease; }
+
+/* ---------- Canli akis ---------- */
 .feed { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; scrollbar-width: thin; }
-.feed-card { flex: 0 0 150px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; }
+.feed-card { flex: 0 0 158px; display: flex; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: 10px; padding: 7px 9px; }
+.feed-card img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; object-position: top; background: #0C1119; flex: 0 0 auto; }
 .feed-card.mine { border-left-color: var(--gold); background: linear-gradient(135deg, rgba(242, 201, 76, .12), var(--surface)); }
-.feed-card.fresh { animation: drop-in .35s ease both; border-left-color: var(--good); }
-@keyframes drop-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
-.feed-no { font-size: .7rem; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.feed-name { font-weight: 700; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0; }
-.feed-meta { font-size: .74rem; color: var(--muted); }
+.feed-card.fresh { animation: md-slide .35s ease both; border-left-color: var(--good); }
+@keyframes md-slide { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+.feed-no { font-size: .66rem; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-name { font-weight: 700; font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-body { min-width: 0; }
 
-.draft-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 16px; margin-top: 12px; align-items: start; }
+/* ---------- Yerlesim ---------- */
+.draft-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; margin-top: 12px; align-items: start; }
 @media (max-width: 1100px) { .draft-layout { grid-template-columns: minmax(0, 1fr); } }
+.md-side { position: sticky; top: 150px; }
+@media (max-width: 1100px) { .md-side { position: static; } }
+
+/* ---------- Oyuncu havuzu ---------- */
 .pool-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-.pool-tools .input[type=search] { flex: 1 1 180px; }
-.pool-table td, .pool-table th { padding: 7px 8px; }
-.pool-table tr.is-need td:first-child { box-shadow: inset 3px 0 0 var(--good); }
-.pool-table .draft-btn { min-height: 34px; padding: 4px 12px; font-size: .8rem; }
+.pool-tools .input[type=search] { flex: 1 1 200px; }
+.pool-tools select { max-width: 190px; }
+.pool-tools .check { min-height: 0; }
+.pool-list { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-height: 620px; overflow-y: auto; }
+.prow { display: grid; grid-template-columns: 44px minmax(0, 1fr) repeat(4, 54px) 104px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.prow:last-child { border-bottom: 0; }
+.prow.head { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 9px; padding-bottom: 9px; }
+.prow.is-need { box-shadow: inset 3px 0 0 var(--good); }
+.prow img { width: 44px; height: 32px; object-fit: cover; object-position: top; border-radius: 7px; background: #0C1119; }
+.prow .num { text-align: right; font-variant-numeric: tabular-nums; font-size: .86rem; }
+.prow .num b { color: var(--text); }
+.prow .pname { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow .psub { font-size: .74rem; color: var(--dim); }
+.prow .btn { min-height: 36px; padding: 5px 10px; font-size: .82rem; width: 100%; }
+.prow .mlabel { display: none; }
+@media (max-width: 640px) {
+  .prow { grid-template-columns: 44px minmax(0, 1fr) 86px; row-gap: 4px; }
+  .prow.head { display: none; }
+  .prow .num { grid-row: 2; text-align: left; font-size: .76rem; color: var(--muted); }
+  .prow .num.n1 { grid-column: 2; }
+  .prow .stats-m { grid-column: 2 / 4; grid-row: 2; }
+  .prow .num { display: none; }
+  .prow .mlabel { display: block; grid-column: 2 / 4; font-size: .76rem; color: var(--muted); }
+  .prow .btn { grid-column: 3; grid-row: 1; }
+}
 .pos { font-size: .7rem; font-weight: 800; }
 .pos-PG { color: #4da6ff; } .pos-SG { color: #22d3ee; } .pos-SF { color: #4ade80; } .pos-PF { color: #fbbf24; } .pos-C { color: #f87171; }
-.inj { font-size: .66rem; font-weight: 800; border: 1px solid; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.inj { font-size: .64rem; font-weight: 800; border: 1px solid; border-radius: 4px; padding: 0 4px; margin-left: 5px; vertical-align: 1px; }
 .inj-OUT, .inj-INJURY_RESERVE { color: var(--bad); } .inj-DAY_TO_DAY { color: var(--warn); } .inj-SUSPENSION { color: #f97316; }
 
-.pick-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; background: var(--surface); border-left: 3px solid var(--line-strong); margin-bottom: 4px; font-size: .88rem; }
+/* ---------- Kadro slotlari ---------- */
+.lineup { display: grid; gap: 4px; }
+.slot-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); font-size: .86rem; }
+.slot-row.empty { border-style: dashed; color: var(--dim); background: transparent; }
+.slot-row > span:nth-child(2) { text-align: left; }
+.slot-tag { font-size: .68rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); background: var(--surface-3); border-radius: 6px; padding: 2px 6px; text-align: center; }
+.slot-row .pname { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-row .meta { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+
+.pick-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; background: var(--surface); border-left: 3px solid var(--line-strong); margin-bottom: 4px; font-size: .86rem; }
 .pick-row.mine { border-left-color: var(--gold); }
 .pick-no { font-size: .74rem; color: var(--dim); min-width: 44px; }
 .pick-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-meta { margin-left: auto; font-size: .76rem; color: var(--muted); white-space: nowrap; }
-.slot-chip { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: .72rem; font-weight: 800; margin: 2px 3px 2px 0; background: var(--warn-soft); color: var(--warn); }
-.slot-chip.done { background: var(--good-soft); color: var(--good); }
 
+/* ---------- Draft tahtasi ---------- */
 .board-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 6px; }
 table.board { border-collapse: separate; border-spacing: 3px; font-size: .76rem; }
 table.board th { font-size: .68rem; text-transform: uppercase; color: var(--muted); padding: 5px 7px; background: var(--surface-3); border-radius: 6px; white-space: nowrap; text-align: left; }
@@ -45,9 +147,13 @@ table.board td { min-width: 116px; padding: 5px 7px; border-radius: 6px; backgro
 table.board td.mine { background: linear-gradient(135deg, rgba(242, 201, 76, .14), var(--surface-2)); }
 table.board td.empty { background: transparent; border: 1px dashed var(--line); }
 table.board td.rnd { min-width: 34px; text-align: center; font-weight: 800; color: var(--muted); background: var(--surface-3); }
+table.board td.p-PG { box-shadow: inset 0 -2px 0 #4da6ff; } table.board td.p-SG { box-shadow: inset 0 -2px 0 #22d3ee; }
+table.board td.p-SF { box-shadow: inset 0 -2px 0 #4ade80; } table.board td.p-PF { box-shadow: inset 0 -2px 0 #fbbf24; }
+table.board td.p-C { box-shadow: inset 0 -2px 0 #f87171; }
 .bd-name { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .bd-meta { color: var(--dim); font-size: .7rem; }
 
-.nom { background: linear-gradient(135deg, rgba(255, 140, 0, .14), var(--surface)); border: 1px solid rgba(255, 140, 0, .4); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
-.nom-bid { font-size: 1.8rem; font-weight: 800; color: var(--gold); }
-.mock-busy .draft-btn, .mock-busy #bid-form button { pointer-events: none; opacity: .55; }
+.mock-busy .prow .btn, .mock-busy .suggest-card .btn, .mock-busy .bid-actions .btn { pointer-events: none; opacity: .55; }
+
+/* Pasif dugmeler kirmizi degil gri: tiklanamayacagi belli olsun */
+.prow .btn:disabled, .suggest-card .btn:disabled { background: var(--surface-3); border-color: var(--line); color: var(--dim); opacity: 1; }
