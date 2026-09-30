@@ -75,7 +75,14 @@ for module in (home, auth, account, watchlist, over_under, draft, mock, games,
 
 @app.get("/healthz", include_in_schema=False)
 def healthz():
-    return {"ok": True}
+    """
+    Railway yeni surume trafigi ancak burasi 200 donunce verir. Isinma
+    bitene kadar (en fazla 100 sn) 503: boylece her yayindan sonraki ilk
+    ziyaretci ESPN verisinin cekilmesini beklemek zorunda kalmiyor.
+    """
+    if _WARM_DONE.is_set() or config.flag("SKIP_WARMUP") or time.time() - _STARTED > 100:
+        return {"ok": True}
+    return JSONResponse({"ok": False, "warming": True}, status_code=503)
 
 
 PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
@@ -133,42 +140,57 @@ async def server_error(request: Request, exc: Exception):
 
 # ==================== ISITMA ====================
 
+_STARTED = time.time()
+_WARM_DONE = threading.Event()
+
+
 def _warm():
     """
-    Pahali verileri acilista arka planda hazirla.
-
-    Ilk ziyaretci ESPN'den 16 MB'lik draft havuzunu ve sezon
-    istatistiklerini beklemek zorunda kalmasin. Streamlit'te "uygulama
-    uyaniyor" ekraninin bir sebebi buydu.
+    Pahali verileri acilista arka planda hazirla: sayfalarin gercekten
+    istedigi veriler (ana sayfa varsayilan olarak DUNUN maclarini acar;
+    eski isinma bugunu hazirliyordu ve ilk ziyaretci 8 sn bekliyordu).
     """
-    from datetime import date
+    from datetime import date, timedelta
 
-    steps = []
-    try:
-        from services.database import db
-        steps.append(("db", lambda: db.available))
-        from web import stats
-        steps.append(("games", lambda: stats.resolve_game_day(date.today())))
-        from services.espn_api import get_current_team_rosters, get_injuries
-        steps.append(("rosters", get_current_team_rosters))
-        steps.append(("injuries", get_injuries))
-        from services.draft_data import get_draft_board
-        steps.append(("draft board", get_draft_board))
-        from services.win_totals import get_team_identity
-        steps.append(("teams", get_team_identity))
-    except Exception as exc:
-        print(f"warm-up import failed: {exc}")
-    for name, step in steps:
+    def step(name, fn):
         started = time.time()
         try:
-            step()
+            fn()
             print(f"warm-up {name}: {time.time() - started:.1f}s")
         except Exception as exc:
             print(f"warm-up {name} failed: {exc}")
+
+    try:
+        from services.database import db
+        from services.draft_data import get_draft_board
+        from services.espn_api import get_current_team_rosters, get_injuries
+        from services.nba_season import get_current_season_year
+        from services.win_totals import get_team_identity
+        from utils.images import name_to_id_map
+        from web import stats
+        from web.routes.over_under import load_lines
+
+        step("db", lambda: db.available)
+        step("rosters", get_current_team_rosters)
+
+        def home():
+            day, _ = stats.resolve_game_day(date.today() - timedelta(days=1))
+            games = stats.scoreboard(day) if day else []
+            stats.today_table(games, stats.BASE_WEIGHTS)
+        step("home", home)
+        step("injuries", get_injuries)
+        step("teams", get_team_identity)
+        step("over/under lines", lambda: load_lines(get_current_season_year()))
+        step("draft board", get_draft_board)
+        step("season stats", lambda: stats.season_table(stats.BASE_WEIGHTS))
+        step("player photos", name_to_id_map)
+    finally:
+        _WARM_DONE.set()
 
 
 @app.on_event("startup")
 def start_warmup():
     if config.flag("SKIP_WARMUP"):
+        _WARM_DONE.set()
         return
     threading.Thread(target=_warm, daemon=True).start()
