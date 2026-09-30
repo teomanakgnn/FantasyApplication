@@ -125,7 +125,7 @@ def _projection_is_sane(row):
 
 
 RANK_COLUMNS = ["PLAYER", "ESPN_ID", "TEAM", "POS", "POSITIONS",
-                "RANK", "AUCTION", "OWNED", "INJURY"] + PROJECTION_COLUMNS
+                "RANK", "MARKET_ADP", "AUCTION", "OWNED", "INJURY"] + PROJECTION_COLUMNS
 
 # Draft siralamasi gunde bir kez bile degismiyor ama ESPN'in bu ucu
 # yogun zamanlarda baglantiyi resetliyor (olculdu: soguk istekte
@@ -137,8 +137,8 @@ _RANK_CACHE_MAX_AGE = 7 * 24 * 3600  # bayat da olsa hicbir seyden iyidir
 
 
 def _rank_cache_path(season):
-    # v2: projeksiyon sutunlari eklendi, eski kayitlar kullanilamaz.
-    return os.path.join(_RANK_CACHE_DIR, f"draft_ranks_v2_{season}.json")
+    # v2: projeksiyon sutunlari eklendi. v3: gercek ADP (MARKET_ADP) eklendi.
+    return os.path.join(_RANK_CACHE_DIR, f"draft_ranks_v3_{season}.json")
 
 
 def _save_rank_cache(season, rows):
@@ -250,10 +250,58 @@ def _rows_from_players(players, team_map, season):
             "RANK": int(ranks["rank"]),
             "AUCTION": int(ranks.get("auctionValue") or 0),
             "OWNED": round(float((player.get("ownership") or {}).get("percentOwned") or 0), 1),
+            # Gercek draftlardaki ortalama secim sirasi. RANK ESPN'in
+            # editoryal sirasi; ikisi ilk 40'ta bile 10 sira ayrisiyor.
+            "MARKET_ADP": float((player.get("ownership") or {}).get("averageDraftPosition") or 0),
             "INJURY": player.get("injuryStatus") or "ACTIVE",
             **_projection_row(player, season),
         })
     return rows
+
+
+# ESPN'in ortalama secim sirasi ~140'ta tavan yapiyor: hic secilmeyen
+# oyuncu o ligde ~141. secilmis sayiliyor. 120'nin altindaki ADP gercek
+# bir secim yeri; ustu "bazen seciliyor, cogu zaman secilmiyor" demek ve
+# oradaki 136 ile 140 arasindaki fark gurultu. Olculdu (Eylul 2026): 500
+# oyuncunun 314'u 140.0-140.5 arasinda.
+MARKET_RELIABLE_BELOW = 120
+
+
+def market_positions(df):
+    """
+    Her oyuncunun beklenen secim sirasi (ADP sutunu).
+
+    Guvenilir bolgede ESPN'in gercek ortalama secim sirasi aynen alinir.
+    Tavan bolgesinde siralama ADP'ye ve ESPN'in kendi sirasina birlikte
+    bakarak yapilir ve oyunculara guvenilir bolgenin devami olarak ardisik
+    sira verilir; 12 takimli bir ligde draft 156. secime kadar surdugu icin
+    bu kuyrugun da anlamli bir sirasi olmasi gerekiyor.
+
+    Gercek ADP henuz yoksa (sezon oncesi erken donem) ESPN sirasina duser.
+    """
+    rank = pd.to_numeric(df["RANK"], errors="coerce").fillna(9999)
+    by_rank = pd.Series(range(1, len(df) + 1),
+                        index=df.assign(_r=rank).sort_values(["_r"]).index,
+                        dtype="float64").reindex(df.index)
+
+    adp = pd.to_numeric(df.get("MARKET_ADP"), errors="coerce")
+    adp = adp.where(adp > 0)
+    if adp.notna().sum() < 50 or adp.nunique() < 30:
+        return by_rank
+
+    cap = float(adp.max())
+    limit = min(MARKET_RELIABLE_BELOW, cap - 15)
+    head = adp < limit
+    out = pd.Series(float("nan"), index=df.index)
+    out[head] = adp[head].round(1)
+
+    # Kuyruk: ADP once (136, 140'tan once gelir), ESPN sirasi ayni
+    # ADP'deki oyunculari ayirir. rank/50 ancak birkac siralik bir itki.
+    tail_key = adp.fillna(cap)[~head] + rank[~head] / 50.0
+    start = float(out[head].max()) if head.any() else 0.0
+    for offset, idx in enumerate(tail_key.sort_values().index, start=1):
+        out[idx] = round(start + offset, 1)
+    return out
 
 
 @st.cache_data(ttl=21600, show_spinner=False)
@@ -275,10 +323,9 @@ def fetch_draft_rankings(season_year=None):
     if not rows:
         return pd.DataFrame(columns=RANK_COLUMNS)
 
-    df = pd.DataFrame(rows).sort_values(["RANK", "AUCTION"], ascending=[True, False])
-    # ESPN aynı rank'i birden çok oyuncuya verebiliyor; sıralamayı benzersizleştir.
-    df = df.reset_index(drop=True)
-    df["ADP"] = df.index + 1
+    df = pd.DataFrame(rows)
+    df["ADP"] = market_positions(df)
+    df = (df.sort_values(["ADP", "RANK"]).reset_index(drop=True))
 
     # Projeksiyonu olmayan oyuncu (derin havuz isimleri) kalabilir; sütunların
     # kendisi her zaman bulunsun ki çağıran taraf varlık kontrolü yapmasın.
@@ -314,7 +361,7 @@ def _normalize(name):
 # SADECE fonksiyonun kendi kaynagindan uretiyor, cagirdiklarindan degil; bu
 # sabit govdede gecmezse calisan bir uygulama veri katmani degistikten sonra
 # da eski tabloyu servis etmeye devam eder.
-BOARD_VERSION = 2
+BOARD_VERSION = 3
 
 
 @st.cache_data(ttl=21600, show_spinner=False)

@@ -427,30 +427,88 @@ def _position_group(positions):
     return groups
 
 
-def available_at(scores, pick, reach=3):
+# ==================== KIM MASADA KALIR ====================
+
+# ADP bir ortalama; oyuncunun gercek secim yeri onun etrafinda dagiliyor
+# ve dagilim draft ilerledikce aciliyor (ilk turda iki-uc sira, onuncu
+# turda bir tur). Standart sapma = SPREAD_BASE + SPREAD_SLOPE * ADP.
+# ESPN dagilimi yayinlamiyor; katsayilar yaygin ADP raporlarindaki
+# min-max bantlarindan: ADP 3 -> ~1.5, ADP 30 -> ~6, ADP 100 -> ~18.
+SPREAD_BASE = 1.0
+SPREAD_SLOPE = 0.17
+
+# Bir oyuncu ancak secimde masada olma ihtimali bundan buyukse o secime
+# planlanir: "belki orada" olan biriyle kadro kurulmaz.
+PLAN_ODDS = 0.5
+
+# Sonraki secimde kimin kalacagi hesaplanirken havuzun en degerli kac
+# oyuncusuna bakilsin (gerisinin katkisi sifira yakin) ve bu secim icin
+# kac aday yarissin.
+LOOKAHEAD_POOL = 60
+CANDIDATES = 25
+
+
+def _normal_cdf(z):
+    z = np.asarray(z, dtype="float64")
+    return 0.5 * (1.0 + np.vectorize(math.erf, otypes=[float])(z / math.sqrt(2.0)))
+
+
+def survival(adp, pick):
     """
-    Bu secimde masada kalmasi beklenen oyuncular.
+    Oyuncunun genel 'pick' numarali secimde hala masada olma olasiligi.
 
-    ADP'si secim numarasindan kucuk olanlar gitmis sayilir; kucuk bir
-    reach payi birakilir. Bu, diger takimlarin seciminin yerine gecer.
+    Secim yeri ~ Normal(ADP, SPREAD_BASE + SPREAD_SLOPE * ADP). Masada
+    olmasi, secim yerinin bu secimden sonra gelmesi demek. ADP'si
+    olmayan (999) oyuncu pratikte hep masada.
     """
-    return scores[scores["ADP"] >= pick - reach]
+    adp = np.asarray(adp, dtype="float64")
+    spread = SPREAD_BASE + SPREAD_SLOPE * adp
+    return 1.0 - _normal_cdf((pick - 0.5 - adp) / spread)
 
 
-def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3,
+def available_at(scores, pick, odds=PLAN_ODDS):
+    """Bu secimde masada olma ihtimali 'odds'tan buyuk oyuncular."""
+    return scores[survival(scores["ADP"].values, pick) >= odds]
+
+
+def _best_left(fit, chance):
+    """
+    Her aday icin: o aday alinirsa, sonraki secimde eldeki en iyi
+    oyuncunun beklenen FIT degeri.
+
+    'fit' buyukten kucuge sirali. i. oyuncunun "kalan en iyi" olma
+    olasiligi = kendisinin kalmasi x kendisinden iyi herkesin gitmesi.
+    Aday bu hesaptan cikarilinca ondan sonra gelenlerin olasiligi
+    1 / (1 - adayin kalma olasiligi) kadar artar.
+    """
+    chance = np.clip(chance, 0.0, 0.999)
+    gone_before = np.concatenate([[1.0], np.cumprod(1.0 - chance)[:-1]])
+    terms = fit * chance * gone_before
+    prefix = np.concatenate([[0.0], np.cumsum(terms)[:-1]])
+    suffix = terms[::-1].cumsum()[::-1] - terms
+    # Hic kimse kalmazsa (bakilan havuzun hepsi gitmisse) eldeki oyuncu
+    # bakilan havuzun son oyuncusu seviyesinde sayilir.
+    nobody = np.prod(1.0 - chance) * fit[-1]
+    return prefix + (suffix + nobody) / (1.0 - chance)
+
+
+def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, odds=PLAN_ODDS,
                        risk_weight=1.0, pace=None):
     """
     Bir strateji icin tur tur hedef kadro.
 
-    Her secimde masada kalmasi beklenen oyuncular arasindan stratejinin
-    en degerlisi aliniyor; kadro dengesi icin eksik mevkiye kucuk bir
-    oncelik veriliyor.
+    Her secimde iki soru soruluyor:
+      1. Kim gercekten masada? ADP bir nokta degil dagilim; secimde
+         masada olma ihtimali PLAN_ODDS'un altindaki oyuncu plana girmez.
+      2. Kim beklemeyi kaldirmaz? Bir sonraki secimde buyuk ihtimalle
+         hala masada olacak oyuncuyu simdi almak secimi harcamak. Her
+         aday "simdi onu almak + sonraki secimde beklenen en iyi" toplamiyla
+         puanlaniyor; boylece degerli ama gec gidecek oyuncu erkenden
+         degil, kendi turunda aliniyor.
 
-    'scores' musaitlik agirlikli tablo oldugu icin eksik mac beklentisi
-    zaten degere girmis durumda. Buna ek olarak ortalamadan kirilgan her
-    aday ayrica geriye dusuyor (bkz. RISK_FRAGILITY_WEIGHT); bu, uretim
-    farki yeterince buyukse kirilgan yildizi yine de masada birakmaz -
-    tercihi zorlar, matematigi bozmaz.
+    Eksik mevkiye kucuk bir oncelik veriliyor; 'scores' musaitlik agirlikli
+    oldugu icin eksik mac beklentisi degerin icinde. Ortalamadan kirilgan
+    aday ayrica geriye dusuyor (bkz. RISK_FRAGILITY_WEIGHT).
     """
     value = total_value(scores, punts, cats)
     table = scores.assign(VALUE=value)
@@ -458,10 +516,14 @@ def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3,
         pace = 1.0 - baseline_availability(scores)
     taken, roster = set(), []
     counts = {"C": 0, "G": 0, "F": 0}
+    adp = table["ADP"].values
 
-    for rnd, pick in picks:
-        pool = available_at(table, pick, reach)
-        pool = pool[~pool["PLAYER"].isin(taken)]
+    for index, (rnd, pick) in enumerate(picks):
+        free = ~table["PLAYER"].isin(taken).values
+        pool = table[free & (survival(adp, pick) >= odds)]
+        if pool.empty:
+            # Havuz bitti: kalanlarin en az secileni.
+            pool = table[free].nlargest(1, "ADP")
         if pool.empty:
             continue
 
@@ -482,7 +544,22 @@ def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3,
             frailty = ((1.0 - scored["AVAIL"]) - pace).clip(lower=0.0)
             scored["FIT"] -= RISK_FRAGILITY_WEIGHT * risk_weight * frailty
 
-        best = scored.nlargest(1, "FIT").iloc[0]
+        scored = scored.sort_values("FIT", ascending=False).head(LOOKAHEAD_POOL)
+        scored["ODDS"] = survival(scored["ADP"].values, pick)
+
+        following = picks[index + 1][1] if index + 1 < len(picks) else None
+        if following is None:
+            scored["NEXT"] = np.nan
+            scored["PLAN"] = scored["FIT"]
+        else:
+            later = survival(scored["ADP"].values, following)
+            scored["NEXT"] = later
+            scored["PLAN"] = scored["FIT"].values + _best_left(
+                scored["FIT"].values, later)
+
+        choices = scored.head(CANDIDATES).sort_values("PLAN", ascending=False)
+        best = choices.iloc[0]
+
         taken.add(best["PLAYER"])
         for group in _position_group(best["POSITIONS"]):
             counts[group] += 1
@@ -493,7 +570,13 @@ def build_target_roster(scores, picks, punts=(), cats=NINE_CAT, reach=3,
             "player": best["PLAYER"],
             "team": best["TEAM"],
             "pos": best["POS"],
-            "adp": int(best["ADP"]) if best["ADP"] < 999 else None,
+            "adp": float(best["ADP"]) if best["ADP"] < 999 else None,
+            # Secimde masada olma ve bir sonraki secime kalma ihtimali:
+            # "neden simdi" sorusunun cevabi.
+            "odds": float(best["ODDS"]),
+            "next_odds": None if pd.isna(best["NEXT"]) else float(best["NEXT"]),
+            # Hedef gitmisse sirada bekleyenler.
+            "backups": list(choices["PLAYER"].iloc[1:3]),
             "value": float(best["VALUE"]),
             "auction": int(best["AUCTION"]),
             "injury": best["INJURY"],
@@ -636,7 +719,7 @@ def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
     return sum(chances.values()), chances
 
 
-def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
+def strategy_report(scores, picks, cats=NINE_CAT, odds=PLAN_ODDS,
                     teams=10, rounds=13, risk=DEFAULT_RISK):
     """
     Tum stratejileri ayni secimler icin kurup karsilastirir.
@@ -656,7 +739,7 @@ def strategy_report(scores, picks, cats=NINE_CAT, reach=3,
     reports = []
     for strategy in STRATEGIES:
         punts = strategy["punts"]
-        roster = build_target_roster(table, picks, punts, cats, reach,
+        roster = build_target_roster(table, picks, punts, cats, odds,
                                      risk_weight, pace)
         profile = roster_profile(table, roster, cats)
         wins, chances = expected_category_wins(table, roster, punts, cats,
@@ -828,7 +911,7 @@ INJURY_WORDS = {
 }
 
 
-def injury_notes(scores, picks, reach=3, limit=2):
+def injury_notes(scores, picks, odds=PLAN_ODDS, limit=2):
     """
     Kullanicinin ilk turlarina denk gelen sakatlik uyarilari.
 
@@ -842,7 +925,7 @@ def injury_notes(scores, picks, reach=3, limit=2):
     early = [(rnd, pick) for rnd, pick in picks][:3]
     seen = set()
     for rnd, pick in early:
-        pool = available_at(scores, pick, reach).nsmallest(4, "ADP")
+        pool = available_at(scores, pick, odds).nsmallest(4, "ADP")
         for _, row in pool.iterrows():
             status = row["INJURY"]
             name = row["PLAYER"]
@@ -860,7 +943,7 @@ def injury_notes(scores, picks, reach=3, limit=2):
             if len(notes) >= limit:
                 return notes
 
-    fragile = available_at(scores, early[0][1], reach).nsmallest(
+    fragile = available_at(scores, early[0][1], odds).nsmallest(
         max(4, len(early) * 4), "ADP") if early else scores.iloc[0:0]
     if not notes and not fragile.empty:
         count = int((fragile["AVAIL"] < FRAGILE_BELOW).sum())

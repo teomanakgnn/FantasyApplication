@@ -1,12 +1,13 @@
 """
 Sezonluk galibiyet baremleri (alt/ust tahmini icin).
 
-Bu sayilar BAHIS CIZGISI DEGIL. Las Vegas'in sezonluk galibiyet pazari
-ucretsiz bir uctan alinamiyor (ESPN'in futures ucu yalnizca sampiyon,
-konferans ve odul pazarlarini veriyor), o yuzden barem burada kendi
-modelimizle uretiliyor ve ekranda da oyle etiketleniyor.
+Baremler Las Vegas'in sezonluk galibiyet cizgileri (VEGAS_LINES). Bu
+pazar ucretsiz bir uctan alinamiyor (ESPN'in futures ucu yalnizca
+sampiyon, konferans ve odul pazarlarini veriyor), o yuzden cizgiler elle
+giriliyor.
 
-Model iki sinyali birlestiriyor:
+Uygulamanin kendi modeli de duruyor: cizgi degil, kartta "bizim tahminimiz"
+olarak Vegas'in yaninda gosteriliyor. Model iki sinyali birlestiriyor:
 
   1. Gecen sezonun galibiyet sayisi, ortalamaya dogru cekilerek. NBA'de
      takimlar yil bazinda ortalamaya doner; ham gecen sezon tek basina
@@ -29,6 +30,51 @@ from services.nba_season import espn_get, get_current_season_year
 
 STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/basketball/nba/standings"
 TEAMS_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"
+
+# Las Vegas sezonluk galibiyet baremleri ve iki tarafin oranlari
+# (Amerikan oran: -115 = 100 kazanmak icin 115 yatir). Anahtar ESPN'in
+# takim kisaltmasi. Kaynak: kullanicinin verdigi Vegas tablosu, 30 Eylul 2026.
+VEGAS_SEASON = 2027   # 2026-27 sezonu (ESPN sezon yili)
+VEGAS_LINES = {
+    "ATL": (43.5, -105, -115), "BOS": (51.5, -115, -105),
+    "BKN": (24.5, +100, -120), "CHA": (39.5, +100, -120),
+    "CHI": (29.5, -105, -115), "CLE": (47.5, -115, -105),
+    "DAL": (34.5, -110, -110), "DEN": (49.5, +105, -125),
+    "DET": (49.5, -105, -115), "GS": (40.5, +100, -130),
+    "HOU": (47.5, -110, -110), "IND": (44.5, -125, +105),
+    "LAC": (30.5, +100, -120), "LAL": (46.5, -105, -115),
+    "MEM": (29.5, -120, +100), "MIA": (46.5, +105, -125),
+    "MIL": (25.5, -115, -105), "MIN": (48.5, -110, -110),
+    "NO": (27.5, -115, -105), "NY": (52.5, +100, -120),
+    "OKC": (62.5, -105, -115), "ORL": (43.5, -130, +110),
+    "PHI": (50.5, +100, -120), "PHX": (40.5, -110, -110),
+    "POR": (42.5, +100, -120), "SA": (59.5, -115, -105),
+    "SAC": (21.5, -105, -115), "TOR": (45.5, -125, +105),
+    "UTAH": (37.5, -120, +100), "WSH": (34.5, -110, -110),
+}
+
+
+def vegas_lines(season):
+    """{takim: (barem, ust orani, alt orani)}; o sezon icin cizgi yoksa bos."""
+    return VEGAS_LINES if season == VEGAS_SEASON else {}
+
+
+def implied_over(over_odds, under_odds):
+    """
+    Oranlardan, bahis sirketinin payi (vig) cikarilmis 'ust' olasiligi.
+
+    -130 / +110 gibi bir cift piyasanin ust tarafa egildigini soyler;
+    iki tarafin ham olasiliklari toplami 1'i gectigi icin normalize edilir.
+    """
+    def raw(odds):
+        odds = float(odds)
+        return -odds / (-odds + 100) if odds < 0 else 100 / (odds + 100)
+    try:
+        over, under = raw(over_odds), raw(under_odds)
+    except (TypeError, ValueError):
+        return None
+    return over / (over + under) if over + under else None
+
 
 GAMES_IN_SEASON = 82
 AVERAGE_WINS = GAMES_IN_SEASON / 2
@@ -196,9 +242,16 @@ def project_win_totals(season_year=None):
     table["LINE"] = (projected.round(0) - 0.5).clip(lower=14.5, upper=67.5)
     table["CORRELATION"] = round(correlation, 3)
 
+    # Vegas cizgisi varsa barem odur; model yalnizca kiyas icin kalir.
+    vegas = vegas_lines(season_year or get_current_season_year())
+    table["OVER_ODDS"] = table["TEAM"].map(lambda t: vegas.get(t, (None,) * 3)[1])
+    table["UNDER_ODDS"] = table["TEAM"].map(lambda t: vegas.get(t, (None,) * 3)[2])
+    table["LINE"] = [vegas[t][0] if t in vegas else line
+                     for t, line in zip(table["TEAM"], table["LINE"])]
+
     table["LAST_WINS"] = table["WINS"]
     columns = ["TEAM", "NAME", "CONF", "LAST_WINS", "PROJECTED", "LINE",
-               "CORRELATION"]
+               "OVER_ODDS", "UNDER_ODDS", "CORRELATION"]
     return (table[columns]
             .sort_values("LINE", ascending=False)
             .reset_index(drop=True))

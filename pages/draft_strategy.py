@@ -187,6 +187,16 @@ def _status_text(item):
     return INJURY_WORDS.get(status, str(status).replace("_", " ").lower())
 
 
+def _why_now(item):
+    """Oyuncunun neden bu secimde alindigi, kisaca."""
+    later = item.get("next_odds")
+    if later is None:
+        return "last pick"
+    if later < 0.5:
+        return f"likely gone by your next pick ({later * 100:.0f}% he lasts)"
+    return "rated well above his ADP"
+
+
 def _roster_table(roster, auction=False):
     rows = []
     for item in roster:
@@ -213,7 +223,12 @@ def _roster_table(roster, auction=False):
                 "Player": _player_cell(item),
                 "Pos": item["pos"],
                 "Team": item["team"],
-                "ADP": item["adp"] if item["adp"] else "-",
+                "ADP": f"{item['adp']:.0f}" if item.get("adp") else "-",
+                # Hedefin o secimde masada olma ihtimali ve gitmisse sirada
+                # bekleyenler: plan tek bir isme bagli kalmasin.
+                "On board": f"{item['odds'] * 100:.0f}%" if item.get("odds") is not None else "-",
+                "Why now": _why_now(item),
+                "If gone": ", ".join(item.get("backups") or []) or "-",
                 **common,
             })
     st.dataframe(rows, hide_index=True, width="stretch")
@@ -225,7 +240,10 @@ def _roster_table(roster, auction=False):
         f"projected number played out of {FULL_SEASON_GAMES}; Status is the flag "
         "the player carries today. Injury cut is how much of the player's edge "
         "was handed back to a replacement for the games he is not expected to "
-        "play - it is what the setting above changes.")
+        "play - it is what the setting above changes." +
+        ("" if auction else
+         " On board is the chance he is still there at that pick; If gone "
+         "lists who the plan falls back to."))
 
 
 def _health_row(durability):
@@ -440,8 +458,19 @@ def _limits():
           your league actually drafts. Players without a projection fall back to
           last season's production. Percentages are weighted by volume, so a
           high percentage on two attempts does not outrank a good shooter on
-          eight. Who is left at each pick comes from current ESPN ADP: anyone
-          whose ADP is well before your pick is assumed gone.
+          eight.
+          <br><br>
+          <b>Who is left at each pick.</b> From ESPN's live average draft
+          position - where players are actually being taken in real drafts, not
+          ESPN's own rankings, which differ by ten picks or more even in the
+          first three rounds. An average is not a fixed spot: a player's draft
+          position is treated as spread around his ADP, tight early (two or
+          three picks) and a full round wide by the double digits. A player is
+          only planned at a pick he is more likely than not to reach, and each
+          pick weighs taking him now against what will still be there at your
+          next one, so a player who will very likely last is not spent early.
+          Beyond pick ~120, where ESPN's figure flattens out for players who
+          usually go undrafted, the order continues from ESPN's ranking.
           <br><br>
           <b>How injuries are priced.</b> Two separate signals. The projection
           carries an expected games total, which already absorbs known long-term

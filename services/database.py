@@ -715,6 +715,10 @@ class Database:
         self._run("ALTER TABLE season_win_lines ADD COLUMN IF NOT EXISTS conf TEXT")
         self._run("ALTER TABLE season_win_lines "
                   "ADD COLUMN IF NOT EXISTS last_wins NUMERIC(4,1)")
+        # Vegas oranlari (ust / alt). Model cizgisinden Vegas'a gecildiginde
+        # eklendi; model satirlarinda bos.
+        self._run("ALTER TABLE season_win_lines ADD COLUMN IF NOT EXISTS over_odds INTEGER")
+        self._run("ALTER TABLE season_win_lines ADD COLUMN IF NOT EXISTS under_odds INTEGER")
         self._win_tables_ready = bool(lines)
         picks = self._run(
             """CREATE TABLE IF NOT EXISTS season_win_picks (
@@ -747,12 +751,49 @@ class Database:
         for row in rows:
             self._run(
                 "INSERT INTO season_win_lines "
-                "(season, team, team_name, line, projected, conf, last_wins) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "(season, team, team_name, line, projected, conf, last_wins, "
+                " over_odds, under_odds) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (season, team) DO NOTHING",
                 (season, row["team"], row["team_name"], row["line"],
-                 row.get("projected"), row.get("conf"), row.get("last_wins")))
+                 row.get("projected"), row.get("conf"), row.get("last_wins"),
+                 row.get("over_odds"), row.get("under_odds")))
         return True
+
+    def replace_win_lines(self, season, lines):
+        """
+        Dondurulmus cizgileri yenileriyle degistirir (model -> Vegas).
+
+        lines: {team: (line, over_odds, under_odds)}
+
+        Mevcut tahminler korunabildigi kadar korunur. 45.5 ustu diyen biri
+        43.5 ustunu de zaten demis oluyor; o tahmin yeni cizgiye tasinir.
+        Yeni cizginin ima etmedigi tahmin (45.5 ustu -> 47.5) silinir:
+        kullanici adina bir karar uydurulmuyor, yeniden secmesi gerekiyor.
+
+        Returns:
+            Silinen tahmin sayisi, basarisizsa None.
+        """
+        self.ensure_win_pick_tables()
+        cleared = 0
+        for team, (line, over_odds, under_odds) in lines.items():
+            done = self._run(
+                "UPDATE season_win_lines SET line = %s, over_odds = %s, "
+                "under_odds = %s, frozen_at = CURRENT_TIMESTAMP "
+                "WHERE season = %s AND team = %s",
+                (line, over_odds, under_odds, season, team))
+            if not done:
+                return None
+            self._run(
+                "UPDATE season_win_picks SET line = %s, updated_at = CURRENT_TIMESTAMP "
+                "WHERE season = %s AND team = %s AND line <> %s AND "
+                "((pick = 'over' AND line >= %s) OR (pick = 'under' AND line <= %s))",
+                (line, season, team, line, line, line))
+            cleared += int(self._run(
+                "DELETE FROM season_win_picks "
+                "WHERE season = %s AND team = %s AND line <> %s",
+                (season, team, line), fetch="rowcount") or 0)
+        return cleared
 
     def backfill_win_line_details(self, season, rows):
         """
@@ -772,7 +813,8 @@ class Database:
     def get_win_lines(self, season):
         self.ensure_win_pick_tables()
         return self._run(
-            "SELECT team, team_name, line, projected, conf, last_wins, frozen_at "
+            "SELECT team, team_name, line, projected, conf, last_wins, "
+            "over_odds, under_odds, frozen_at "
             "FROM season_win_lines WHERE season = %s ORDER BY line DESC",
             (season,), fetch="all") or []
 

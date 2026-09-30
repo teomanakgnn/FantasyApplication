@@ -4,13 +4,13 @@ Alt/ust tahmini: her NBA takiminin sezonluk galibiyet baremi.
 Kullanici 30 takimin her biri icin "ust" mu "alt" mi der; tahminler
 20 Ekim aksami kapanir, sezon baslayinca da kapali kalir.
 
-Baremler bahis cizgisi degil, uygulamanin kendi modelinin sayilari
-(bkz. services/win_totals). Ekranda da oyle yaziyor - Vegas cizgisi
-gibi gosterilmiyor.
+Baremler Las Vegas'in sezonluk galibiyet cizgileri (bkz.
+services/win_totals.VEGAS_LINES). Uygulamanin kendi modeli cizgi degil,
+kartta Vegas'in yaninda "model" olarak duruyor.
 
-Barem yarismanin ilk acilisinda veritabaninda donduruluyor; model her
-gun yeniden hesaplansa erken tahmin eden ile gec tahmin eden farkli
-bareme oynamis olurdu.
+Baremler veritabaninda donduruluyor ki herkes ayni sayiya oynasin. Ilk
+surum modelin cizgilerini dondurmustu; Vegas cizgileri gelince bir kez
+degistirildi (bkz. _switch_to_vegas).
 
 Akicilik notu: Streamlit her tiklamada butun betigi bastan calistirir.
 Ilk surumde her tiklama Neon'a dort sorgu birden atiyordu (baremler,
@@ -27,7 +27,9 @@ import streamlit as st
 
 from services.database import db
 from services.nba_season import get_current_season_year, get_season_label
-from services.win_totals import get_team_identity, project_win_totals
+from services.win_totals import (get_team_identity, implied_over,
+                                 project_win_totals, vegas_lines)
+from utils.share_card import over_under_card
 from utils.text import esc
 
 # Tahminler bu ana kadar acik. Sezon 21 Ekim'de basliyor; bir gun once
@@ -93,6 +95,10 @@ def _css():
         .ou-line { font-size: 1.25rem; font-weight: 800; color: #E8ECF4;
                    line-height: 1; }
         .ou-lastwins { font-size: .67rem; color: #6B7893; }
+        .ou-odds { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 7px;
+                   font-size: .7rem; color: #6B7893; }
+        .ou-odds b { color: #A9B6CE; font-weight: 800; }
+        .ou-odds .lean { margin-left: auto; font-weight: 700; }
 
         /* Kalabalik: cubuk + yazi birlikte */
         .ou-crowd { margin-top: 8px; font-size: .68rem; color: #6B7893; }
@@ -146,9 +152,11 @@ def _load_lines(season):
                  "line": float(r["line"]),
                  "projected": float(r["projected"]) if r["projected"] is not None else None,
                  "conf": r["conf"] or "",
-                 "last_wins": None if r["last_wins"] is None else float(r["last_wins"])}
+                 "last_wins": None if r["last_wins"] is None else float(r["last_wins"]),
+                 "over_odds": r.get("over_odds"), "under_odds": r.get("under_odds")}
                 for r in db.get_win_lines(season)]
         frozen = True
+        _switch_to_vegas(season, rows)
 
     # Model yalnizca gerektiginde calisir. Cagrisi pahali: butun draft
     # tablosunu (16MB) cekiyor. Baremler donmus ve gosterim alanlari da
@@ -159,7 +167,10 @@ def _load_lines(season):
         if not table.empty:
             fresh = [{"team": r.TEAM, "team_name": r.NAME, "line": float(r.LINE),
                       "projected": float(r.PROJECTED), "conf": r.CONF,
-                      "last_wins": float(r.LAST_WINS)} for r in table.itertuples()]
+                      "last_wins": float(r.LAST_WINS),
+                      "over_odds": _odds_or_none(r.OVER_ODDS),
+                      "under_odds": _odds_or_none(r.UNDER_ODDS)}
+                     for r in table.itertuples()]
             if needs_backfill:
                 detail = {row["team"]: row for row in fresh}
                 for row in rows:
@@ -175,6 +186,45 @@ def _load_lines(season):
 
     st.session_state[key] = (rows, frozen)
     return rows, frozen
+
+
+def _odds_or_none(value):
+    try:
+        return None if value is None or value != value else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _switch_to_vegas(season, rows):
+    """
+    Donmus cizgiler Vegas'inkiyle ayni degilse bir kez degistirir.
+
+    Karsilastirma bellekte yapiliyor; cizgiler zaten Vegas'sa veritabanina
+    hic gidilmiyor. Tahminler korunabildigi kadar korunuyor (bkz.
+    db.replace_win_lines) ve kac tahminin sifirlandigi ekrana yaziliyor.
+    """
+    vegas = vegas_lines(season)
+    if not vegas:
+        return
+    stale = [row for row in rows
+             if row["team"] in vegas and (
+                 row["line"] != vegas[row["team"]][0]
+                 or row.get("over_odds") != vegas[row["team"]][1]
+                 or row.get("under_odds") != vegas[row["team"]][2])]
+    if not stale:
+        return
+    cleared = db.replace_win_lines(season, {row["team"]: vegas[row["team"]]
+                                            for row in stale})
+    if cleared is None:
+        return
+    for row in stale:
+        row["line"], row["over_odds"], row["under_odds"] = vegas[row["team"]]
+    # Tahminler degisti; oturumdaki kopyalar bayat.
+    st.session_state.pop(f"ou_picks_{season}", None)
+    st.session_state.pop(f"ou_crowd_{season}", None)
+    for row in stale:
+        st.session_state.pop(f"ou_pick_{season}_{row['team']}", None)
+    st.session_state["ou_switched"] = cleared
 
 
 def _load_picks(season, user_id):
@@ -228,8 +278,8 @@ def render_over_under_page():
     st.markdown(f"""
         <div class="ou-hero">
           <h1>Over / Under {get_season_label(season)}</h1>
-          <p>Call all 30 win totals before they lock. Pick over or under on each
-             line - tap a pick again to clear it.</p>
+          <p>Call all 30 Las Vegas win totals before they lock. Pick over or under
+             on each line - tap a pick again to clear it - then share your card.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -256,13 +306,19 @@ def render_over_under_page():
     crowd = _load_crowd(season)
     identity = get_team_identity()
 
+    switched = st.session_state.pop("ou_switched", None)
+    if switched is not None:
+        st.info("The lines are now the Las Vegas win totals. Picks the new line "
+                "still covers were kept (over 45.5 is also over 43.5)"
+                + (f"; {switched} that it did not were cleared - please call "
+                   "those again." if switched else "."))
     if st.session_state.pop("ou_error", None):
         st.error("That pick could not be saved - the database refused the write.")
 
     _summary(rows, picks, crowd, is_open, clock)
     visible = _controls(season, rows, picks)
     _grid(season, user_id, visible, picks, crowd, identity, is_open)
-    _export(season, rows, picks, crowd)
+    _export(season, rows, picks, crowd, identity, user)
     _method_note(frozen)
 
 
@@ -366,6 +422,22 @@ def _card(season, user_id, row, picks, crowd, identity, is_open):
     else:
         crowd_html = '<div class="ou-crowd">no picks yet</div>'
 
+    odds_html = ""
+    if row.get("over_odds") is not None and row.get("under_odds") is not None:
+        lean = implied_over(row["over_odds"], row["under_odds"])
+        lean_html = ""
+        if lean is not None and abs(lean - 0.5) >= 0.015:
+            side, share = ("over", lean) if lean > 0.5 else ("under", 1 - lean)
+            colour = "#8fbdf2" if side == "over" else "#f0a3a3"
+            lean_html = (f'<span class="lean" style="color:{colour}">Vegas leans '
+                         f'{side} {share * 100:.0f}%</span>')
+        odds_html = (f'<div class="ou-odds"><span>O <b>{_american(row["over_odds"])}</b></span>'
+                     f'<span>U <b>{_american(row["under_odds"])}</b></span>'
+                     f'{lean_html}</div>')
+    model_html = ""
+    if row.get("projected") is not None:
+        model_html = f' &middot; model {row["projected"]:.0f}'
+
     logo = look.get("logo") or ""
     logo_html = (f'<img class="ou-logo" src="{esc(logo)}" alt="">' if logo else "")
 
@@ -380,9 +452,10 @@ def _card(season, user_id, row, picks, crowd, identity, is_open):
             </span>
             <span class="ou-num">
               <div class="ou-line">{row['line']:.1f}</div>
-              <div class="ou-lastwins">{esc(last)}</div>
+              <div class="ou-lastwins">{esc(last)}{model_html}</div>
             </span>
           </div>
+          {odds_html}
           {crowd_html}
         </div>
     """, unsafe_allow_html=True)
@@ -403,23 +476,66 @@ def _card(season, user_id, row, picks, crowd, identity, is_open):
             unsafe_allow_html=True)
 
 
-def _export(season, rows, picks, crowd):
-    """
-    Tahminleri CSV olarak indir.
+def _american(odds):
+    odds = int(odds)
+    return f"+{odds}" if odds > 0 else str(odds)
 
-    Tarayici indirmesi sunucuya gitmiyor; dosya burada bellekte uretilip
-    dogrudan veriliyor, yani buton her turda hazir.
+
+def _share(season, rows, picks, identity, user):
     """
+    Paylasim karti (PNG). WhatsApp'a atilacak sey bu.
+
+    Kart her turda cizilmiyor: logolari cekip resmi cizmek bir-iki saniye
+    suruyor ve sayfanin tiklama hizini geri goturur. Istenince ciziliyor,
+    tahminler degisince eskisi atiliyor.
+    """
+    key = f"ou_card_{season}"
+    signature = tuple(sorted(picks.items()))
+    cached = st.session_state.get(key)
+    if cached and cached[0] != signature:
+        st.session_state.pop(key, None)
+        cached = None
+
+    if not cached:
+        if st.button("Create share image", type="primary", width="stretch",
+                     disabled=not picks,
+                     help="A picture of all your picks to post on WhatsApp, "
+                          "Instagram or anywhere else."):
+            with st.spinner("Drawing your card..."):
+                png = over_under_card(get_season_label(season), rows, picks,
+                                      identity, owner=user.get("username"))
+            st.session_state[key] = (signature, png)
+            cached = st.session_state[key]
+    if cached:
+        st.image(cached[1], width=480)
+        st.download_button(
+            "Download image (PNG)", cached[1],
+            file_name=f"over-under-{get_season_label(season)}.png",
+            mime="image/png", type="primary", width="stretch")
+
+
+def _export(season, rows, picks, crowd, identity, user):
+    """
+    Paylasim karti (PNG) ve tahminlerin CSV hali.
+
+    CSV tarayici indirmesi; dosya burada bellekte uretilip dogrudan
+    veriliyor, yani buton her turda hazir.
+    """
+    st.subheader("Share your picks")
+    _share(season, rows, picks, identity, user)
+
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["team", "team_name", "conference", "line",
-                     "last_season_wins", "my_pick", "crowd_over_pct"])
+    writer.writerow(["team", "team_name", "conference", "line", "over_odds",
+                     "under_odds", "last_season_wins", "my_pick", "crowd_over_pct"])
     for row in sorted(rows, key=lambda r: -r["line"]):
         counts = crowd.get(row["team"], {})
         votes = counts.get(OVER, 0) + counts.get(UNDER, 0)
         writer.writerow([
             row["team"], row["team_name"], row.get("conf") or "",
             f'{row["line"]:.1f}',
+            "" if row.get("over_odds") is None else _american(row["over_odds"]),
+            "" if row.get("under_odds") is None else _american(row["under_odds"]),
             "" if row.get("last_wins") is None else f'{row["last_wins"]:.0f}',
             picks.get(row["team"], ""),
             "" if not votes else round(100 * counts.get(OVER, 0) / votes),
@@ -438,29 +554,26 @@ def _export(season, rows, picks, crowd):
 
 
 def _method_note(frozen):
-    frozen_text = ("The lines were frozen when this page first opened, so everyone "
-                   "plays the same numbers no matter when they pick."
+    frozen_text = ("The lines are frozen, so everyone plays the same numbers no "
+                   "matter when they pick."
                    if frozen else
-                   "The lines are being generated live and will be frozen the first "
-                   "time this page opens with the database reachable.")
+                   "The lines will be frozen the first time this page opens with "
+                   "the database reachable.")
     st.markdown(f"""
         <div class="ou-note">
-          <b>These are not betting lines.</b> A sportsbook's season win-total market
-          is not available from any feed this app can reach, so these numbers are
-          this app's own model, not Las Vegas. Do not read them as odds.
+          <b>Where the lines come from.</b> These are the Las Vegas season win
+          totals, with the price on each side (American odds: -115 means risking
+          115 to win 100). When the two prices differ, the book expects one side
+          more than the other; "Vegas leans" is that expectation with the
+          bookmaker's margin taken out. Every line ends in .5, so there are no
+          ties.
           <br><br>
-          <b>How each line is worked out.</b> Two signals. Last season's record,
-          pulled toward .500 - NBA teams regress year to year, so a raw 60-win season
-          overstates the next one. Then roster strength: each team's best eight
-          players by projected production multiplied by the games they are expected
-          to play, so an injured star counts for the time he is actually on the
-          floor. Roster strength is converted into wins using its measured
-          relationship with last season's results rather than a guessed weight, and
-          the 30 projections are shifted to add up to the 1,230 wins a season
-          actually contains. Every line ends in .5 so there are no ties.
+          <b>The model number.</b> Next to last season's record is this app's own
+          projection: last season's wins pulled toward .500, plus roster strength
+          from each team's best eight players by projected production and
+          expected games. Where it disagrees with Vegas is where a pick is worth
+          a second look - it is not a betting tip.
           <br><br>
-          <b>What it does not know.</b> Trades and signings after today, the
-          schedule, coaching changes, and injuries that have not happened yet.
           {frozen_text}
         </div>
     """, unsafe_allow_html=True)
