@@ -97,6 +97,7 @@ class Database:
         host = config.get("DB_HOST")
         if not host:
             self._unavailable_reason = "missing_secrets"
+            print("DB connection skipped: DB_HOST is not set")
             return None
         return {
             "host": host,
@@ -132,6 +133,7 @@ class Database:
             except Exception as exc:
                 self._unavailable_reason = str(exc)
                 self._last_failure = time.time()
+                print(f"DB connection failed: {exc.__class__.__name__}: {exc}")
                 return None
         self._ensure_schema()
         return self._pool
