@@ -61,6 +61,12 @@ YAHOO_CLIENT_SECRET = get("YAHOO_CLIENT_SECRET")
 ESPN_S2 = get("ESPN_S2") or get("espn_s2")
 ESPN_SWID = get("ESPN_SWID") or get("swid")
 
+# Cloudflare koprusu (app.hooplifenba.com -> Railway) her istege bu anahtari
+# ekler. Anahtar eslesirse koprunun ilettigi gercek alan adi ve ziyaretci IP'si
+# kullanilir; eslesmezse bu basliklar yok sayilir (sahte baslikla gelen
+# istek hicbir sey kazanmaz).
+PROXY_SECRET = get("PROXY_SECRET")
+
 # Hesap panelinde "Grant Pro" formunu gorebilen kullanici adlari.
 ADMIN_USERNAMES = {u.strip() for u in (get("ADMIN_USERNAMES", "admin") or "").split(",")
                    if u.strip()}

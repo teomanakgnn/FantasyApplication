@@ -23,7 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import config
 from utils.console import configure_console_encoding
-from web.core import WEB_DIR, render
+from web.core import WEB_DIR, public_host, render
 
 configure_console_encoding()
 
@@ -47,7 +47,7 @@ async def security(request: Request, call_next):
         origin = request.headers.get("origin") or request.headers.get("referer")
         if origin:
             host = urlparse(origin).netloc
-            if host and host != request.headers.get("host"):
+            if host and host != public_host(request):
                 return PlainTextResponse("Cross-site request blocked.", status_code=403)
 
     started = time.time()
