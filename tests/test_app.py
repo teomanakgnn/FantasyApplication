@@ -49,18 +49,6 @@ def test_same_site_post_is_allowed():
     assert res.status_code == 303
 
 
-def test_proxy_headers_need_the_secret(monkeypatch):
-    monkeypatch.setattr(config, "PROXY_SECRET", "s3cret")
-    spoof = client.post("/logout", headers={"Origin": "https://app.hooplifenba.com",
-                                             "X-HL-Host": "app.hooplifenba.com"})
-    assert spoof.status_code == 403
-    real = client.post("/logout", headers={"Origin": "https://app.hooplifenba.com",
-                                            "X-HL-Host": "app.hooplifenba.com",
-                                            "X-HL-Proxy-Secret": "s3cret"},
-                       follow_redirects=False)
-    assert real.status_code == 303
-
-
 def test_login_next_cannot_leave_the_site():
     from web.routes.auth import _safe_next
     assert _safe_next("https://evil.example/x") == "/"

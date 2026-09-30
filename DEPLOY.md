@@ -9,11 +9,8 @@ yayına alınır.
 - **Railway**: proje `hooplife-nba`, servis `web`, bölge EU West. `main`
   dalına her push otomatik yayına alınır. Railway adresi:
   `https://web-production-3cd60.up.railway.app`
-- **app.hooplifenba.com**: Cloudflare Worker `hooplife-app`
-  (`cloudflare/app-proxy/`) bu alan adına bağlı ve istekleri Railway'e
-  iletiyor. Railway ile Worker aynı `PROXY_SECRET`'ı taşır; uygulama gerçek
-  alan adını ve ziyaretçi IP'sini yalnızca bu anahtar eşleşirse kabul eder.
-  Worker'ı güncellemek: `cd cloudflare/app-proxy && npx wrangler deploy`
+- **app.hooplifenba.com**: Cloudflare DNS'te `CNAME app -> c33ci7og.up.railway.app`
+  (DNS only / gri bulut). Sertifikayı Railway (Let's Encrypt) veriyor.
 - **hooplifenba.com**: açılış sayfası Worker'ı `lively-voice-08bf`
   (`cloudflare/landing/`). `/app` yeni uygulamaya yönlendirir.
   Güncellemek: `cd cloudflare/landing && npx wrangler deploy`
@@ -36,7 +33,10 @@ uygulama kırpar.
 | `ESPN_S2`, `ESPN_SWID` | Opsiyonel: özel ESPN ligleri |
 | `ADMIN_USERNAMES` | Hesap sayfasında "Grant Pro" formunu görenler (virgülle) |
 | `PRODUCTION=1` | Çerezleri yalnızca HTTPS'te gönderir |
-| `PROXY_SECRET` | Cloudflare köprüsüyle paylaşılan anahtar |
+| `RESEND_API_KEY` | E-posta (Resend) |
+| `ALERT_EMAIL` | Sunucu hatalarının bildirileceği adres |
+| `PASSWORD_RESET_EMAIL=1` | Alan adı Resend'de doğrulanınca açılır |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Kayıt formunda bot koruması |
 
 ## Yerelde çalıştırma
 

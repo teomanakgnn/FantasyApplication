@@ -65,12 +65,6 @@ YAHOO_CLIENT_SECRET = get("YAHOO_CLIENT_SECRET")
 ESPN_S2 = get("ESPN_S2") or get("espn_s2")
 ESPN_SWID = get("ESPN_SWID") or get("swid")
 
-# Cloudflare koprusu (app.hooplifenba.com -> Railway) her istege bu anahtari
-# ekler. Anahtar eslesirse koprunun ilettigi gercek alan adi ve ziyaretci IP'si
-# kullanilir; eslesmezse bu basliklar yok sayilir (sahte baslikla gelen
-# istek hicbir sey kazanmaz).
-PROXY_SECRET = get("PROXY_SECRET")
-
 # E-posta (Resend). Anahtar yoksa sifre sifirlama ve hata bildirimi kapali.
 RESEND_API_KEY = get("RESEND_API_KEY")
 MAIL_FROM = get("MAIL_FROM", "HoopLife NBA <no-reply@hooplifenba.com>")

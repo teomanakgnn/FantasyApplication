@@ -15,7 +15,6 @@ Eski surumde oturum iki yoldan geri yukleniyordu ve ikisi de sorunluydu:
 Ikisi de kaldirildi; cerez bu isi tek basina ve guvenli yapiyor.
 """
 import json
-import secrets
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -107,23 +106,12 @@ def clear_session_cookie(response):
     response.delete_cookie(SESSION_COOKIE, path="/")
 
 
-def from_proxy(request: Request):
-    """Istek Cloudflare koprusunden mi geliyor (paylasilan anahtar eslesiyor mu)?"""
-    secret = config.PROXY_SECRET
-    return bool(secret) and secrets.compare_digest(
-        request.headers.get("x-hl-proxy-secret", ""), secret)
-
-
 def public_host(request: Request):
-    """Tarayicinin gordugu alan adi (kopru arkasinda Railway adresi degil)."""
-    if from_proxy(request):
-        return request.headers.get("x-hl-host") or request.headers.get("host")
+    """Tarayicinin gordugu alan adi."""
     return request.headers.get("host")
 
 
 def client_ip(request: Request):
-    if from_proxy(request) and request.headers.get("x-hl-client-ip"):
-        return request.headers["x-hl-client-ip"]
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
