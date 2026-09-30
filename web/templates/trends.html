@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Player Trends · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
 {% macro mover(r, up) -%}
 <div class="card tight">
   <div class="player-cell"><img class="avatar" src="{{ r.photo }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">

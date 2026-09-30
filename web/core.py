@@ -167,6 +167,7 @@ def render(request: Request, template, active=None, status_code=200, **context):
         "flash": pop_flash(request),
         "asset_version": ASSET_VERSION,
         "ga_id": config.GOOGLE_ANALYTICS_ID,
+        "site_url": config.SITE_URL.rstrip("/"),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)
     if getattr(request.state, "clear_flash", False):

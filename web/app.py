@@ -78,9 +78,31 @@ def healthz():
     return {"ok": True}
 
 
+PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
+                "/injuries", "/trade-analyzer", "/league", "/card-game", "/register"]
+
+
 @app.get("/robots.txt", include_in_schema=False)
 def robots():
-    return PlainTextResponse("User-agent: *\nAllow: /\n")
+    base = config.SITE_URL.rstrip("/")
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\n"
+        "Disallow: /api/\nDisallow: /account\nDisallow: /watchlist\n"
+        "Disallow: /reset-password\nDisallow: /card-game/play\n"
+        f"\nSitemap: {base}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap():
+    """Google'in tarayacagi herkese acik sayfalar."""
+    from datetime import date
+    from fastapi.responses import Response
+    base = config.SITE_URL.rstrip("/")
+    urls = "".join(f"<url><loc>{base}{path}</loc><lastmod>{date.today()}</lastmod></url>"
+                   for path in PUBLIC_PAGES)
+    body = ('<?xml version="1.0" encoding="UTF-8"?>'
+            f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
+    return Response(body, media_type="application/xml")
 
 
 # ==================== HATALAR ====================
