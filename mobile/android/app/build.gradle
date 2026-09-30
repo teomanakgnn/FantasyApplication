@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// Imza bilgileri depoda degil: mobile/android/keystore.properties (UTF-8,
+// .gitignore'da). Dosya yoksa release derlemesi imzasiz kalir.
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file("keystore.properties")
+if (keystoreFile.exists()) {
+    keystoreFile.withReader("UTF-8") { reader -> keystoreProps.load(reader) }
+}
+
 android {
     namespace "com.hooplifenba.app"
     compileSdk 35
@@ -16,8 +24,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreProps["storeFile"]) {
+                storeFile file(keystoreProps["storeFile"])
+                storePassword keystoreProps["storePassword"]
+                keyAlias keystoreProps["keyAlias"]
+                keyPassword keystoreProps["keyPassword"]
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystoreProps["storeFile"]) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

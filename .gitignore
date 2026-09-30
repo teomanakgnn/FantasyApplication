@@ -28,3 +28,8 @@ railway.env
 # Wrangler yerel onbellegi
 .wrangler/
 .pytest_cache/
+
+# Android imza bilgileri (sifre iceriyor) - depoya girmez
+mobile/android/keystore.properties
+*.jks
+*.keystore
