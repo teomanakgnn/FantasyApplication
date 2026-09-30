@@ -24,3 +24,6 @@ bot_chrome_profile/
 
 # Railway ortam degiskenleri (sirlar) - depoya girmez
 railway.env
+
+# Wrangler yerel onbellegi
+.wrangler/

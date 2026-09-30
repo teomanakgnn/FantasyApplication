@@ -4,22 +4,27 @@ Uygulama FastAPI ile yazılmış tek bir web sunucusu (`web/`). Railway depodaki
 `Dockerfile` ve `railway.json` ile kendiliğinden kurulur, her push'ta yeniden
 yayına alınır.
 
-## İlk kurulum
+## Nasıl kurulu
 
-1. https://railway.com → GitHub ile giriş → **Hobby** plan.
-2. **New Project → Deploy from GitHub repo** → `FantasyApplication` deposu.
-3. Servis → **Settings**:
-   - **Source → Branch**: `main` (geçiş sırasında `railway`)
-   - **Region**: `EU West (Amsterdam)` (veritabanı Londra'da; ~8 ms).
-4. Servis → **Variables → Raw Editor**: yereldeki `railway.env` dosyasının
-   içeriğini yapıştır → **Update Variables**. (Bu dosya depoya girmez.)
-5. Servis → **Settings → Networking → Custom Domain**: `app.hooplifenba.com`.
-   Railway bir CNAME hedefi verir.
-6. Cloudflare → `hooplifenba.com` → **DNS** → CNAME kaydı ekle:
-   ad `app`, hedef Railway'in verdiği adres, **Proxy: DNS only (gri bulut)**.
-7. Site `https://app.hooplifenba.com` adresinde açılınca Cloudflare Worker'ın
-   kodunu `cloudflare-worker.js` ile güncelle (açılış sayfasındaki "Open the app"
-   artık yeni adrese gidiyor).
+- **Railway**: proje `hooplife-nba`, servis `web`, bölge EU West. `main`
+  dalına her push otomatik yayına alınır. Railway adresi:
+  `https://web-production-3cd60.up.railway.app`
+- **app.hooplifenba.com**: Cloudflare Worker `hooplife-app`
+  (`cloudflare/app-proxy/`) bu alan adına bağlı ve istekleri Railway'e
+  iletiyor. Railway ile Worker aynı `PROXY_SECRET`'ı taşır; uygulama gerçek
+  alan adını ve ziyaretçi IP'sini yalnızca bu anahtar eşleşirse kabul eder.
+  Worker'ı güncellemek: `cd cloudflare/app-proxy && npx wrangler deploy`
+- **hooplifenba.com**: açılış sayfası Worker'ı `lively-voice-08bf`
+  (`cloudflare/landing/`). `/app` yeni uygulamaya yönlendirir.
+  Güncellemek: `cd cloudflare/landing && npx wrangler deploy`
+- **Streamlit Cloud** (`fantasyapplication.streamlit.app`): yalnızca "taşındı"
+  sayfası (`app.py`). İstenirse Streamlit panelinden tamamen silinebilir.
+
+## Değişkenleri değiştirmek
+
+`railway variables --service web --set "AD=değer"` ya da Railway paneli →
+servis → Variables. Değer yapıştırırken sonda boşluk/satır sonu kalırsa
+uygulama kırpar.
 
 ## Ortam değişkenleri
 
@@ -31,6 +36,7 @@ yayına alınır.
 | `ESPN_S2`, `ESPN_SWID` | Opsiyonel: özel ESPN ligleri |
 | `ADMIN_USERNAMES` | Hesap sayfasında "Grant Pro" formunu görenler (virgülle) |
 | `PRODUCTION=1` | Çerezleri yalnızca HTTPS'te gönderir |
+| `PROXY_SECRET` | Cloudflare köprüsüyle paylaşılan anahtar |
 
 ## Yerelde çalıştırma
 

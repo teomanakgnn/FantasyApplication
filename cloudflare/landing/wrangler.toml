@@ -1,0 +1,7 @@
+# hooplifenba.com acilis sayfasi (reklam trafigi, gizlilik, sartlar, /app yonlendirmesi).
+# Rotalar (hooplifenba.com/*) Cloudflare panelinde tanimli; burada degistirilmiyor.
+name = "lively-voice-08bf"
+main = "worker.js"
+compatibility_date = "2026-01-23"
+workers_dev = true
+preview_urls = false
