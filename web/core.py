@@ -111,19 +111,19 @@ def from_proxy(request: Request):
     """Istek Cloudflare koprusunden mi geliyor (paylasilan anahtar eslesiyor mu)?"""
     secret = config.PROXY_SECRET
     return bool(secret) and secrets.compare_digest(
-        request.headers.get("x-proxy-secret", ""), secret)
+        request.headers.get("x-hl-proxy-secret", ""), secret)
 
 
 def public_host(request: Request):
     """Tarayicinin gordugu alan adi (kopru arkasinda Railway adresi degil)."""
     if from_proxy(request):
-        return request.headers.get("x-forwarded-host") or request.headers.get("host")
+        return request.headers.get("x-hl-host") or request.headers.get("host")
     return request.headers.get("host")
 
 
 def client_ip(request: Request):
-    if from_proxy(request) and request.headers.get("x-client-ip"):
-        return request.headers["x-client-ip"]
+    if from_proxy(request) and request.headers.get("x-hl-client-ip"):
+        return request.headers["x-hl-client-ip"]
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()

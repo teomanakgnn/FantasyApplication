@@ -5,8 +5,8 @@
  * "custom domain" olarak app.hooplifenba.com'a bagli (Cloudflare DNS
  * kaydini kendisi olusturuyor) ve her istegi Railway'e iletiyor.
  *
- * Uygulama gercek alan adini ve ziyaretci IP'sini X-Forwarded-Host /
- * X-Client-IP basliklarindan okur, ama yalnizca X-Proxy-Secret
+ * Uygulama gercek alan adini ve ziyaretci IP'sini X-HL-Host /
+ * X-HL-Client-IP basliklarindan okur, ama yalnizca X-HL-Proxy-Secret
  * eslesirse (ayni anahtar Railway'de PROXY_SECRET). Boylece Railway
  * adresine dogrudan gelen sahte basliklar ise yaramaz.
  *
@@ -21,10 +21,10 @@ export default {
     const target = new URL(url.pathname + url.search, ORIGIN)
 
     const headers = new Headers(request.headers)
-    headers.set('X-Forwarded-Host', url.host)
+    headers.set('X-HL-Host', url.host)
     headers.set('X-Forwarded-Proto', 'https')
-    headers.set('X-Client-IP', request.headers.get('CF-Connecting-IP') || '')
-    headers.set('X-Proxy-Secret', env.PROXY_SECRET || '')
+    headers.set('X-HL-Client-IP', request.headers.get('CF-Connecting-IP') || '')
+    headers.set('X-HL-Proxy-Secret', env.PROXY_SECRET || '')
 
     const init = {
       method: request.method,
