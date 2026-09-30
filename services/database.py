@@ -534,6 +534,8 @@ class Database:
                       "season_win_picks"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
+        # Suren mock draftlar kullanici kimligine degil sahip anahtarina bagli
+        self._run("DELETE FROM live_drafts WHERE owner = %s", (f"u{user_id}",))
         affected = self._run("DELETE FROM users WHERE id = %s", (user_id,), fetch="rowcount")
         return bool(affected)
 
