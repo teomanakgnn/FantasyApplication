@@ -28,7 +28,7 @@
     <button class="is-on" data-show="all">All</button><button data-show="todo">To do</button><button data-show="done">Done</button>
   </div>
   <div class="seg" role="group" aria-label="Conference">
-    <button class="is-on" data-conf="">Both</button><button data-conf="East">East</button><button data-conf="West">West</button>
+    <button class="is-on" data-conf-filter="">Both</button><button data-conf-filter="East">East</button><button data-conf-filter="West">West</button>
   </div>
   <label class="field" style="max-width:220px"><span>Sort</span>
     <select class="input" id="ou-sort"><option value="line">Highest line</option><option value="low">Lowest line</option><option value="name">Team name</option></select></label>
@@ -132,8 +132,11 @@
   document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
     show = b.dataset.show; document.querySelectorAll("[data-show]").forEach((x) => x.classList.toggle("is-on", x === b)); apply();
   }));
-  document.querySelectorAll("[data-conf]").forEach((b) => b.addEventListener("click", () => {
-    conf = b.dataset.conf; document.querySelectorAll("[data-conf]").forEach((x) => x.classList.toggle("is-on", x === b)); apply();
+  // Filtre dugmeleri kartlardan ayri bir oznitelik kullaniyor: ikisi de
+  // data-conf tasiyinca karta dokunmak konferans filtresini degistiriyor ve
+  // diger konferansin takimlari kayboluyordu.
+  document.querySelectorAll("[data-conf-filter]").forEach((b) => b.addEventListener("click", () => {
+    conf = b.dataset.confFilter; document.querySelectorAll("[data-conf-filter]").forEach((x) => x.classList.toggle("is-on", x === b)); apply();
   }));
   document.getElementById("ou-sort").addEventListener("change", (e) => {
     const key = e.target.value;
