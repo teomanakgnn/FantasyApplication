@@ -9,10 +9,12 @@ olan sari, sayilarda ok cevabin yonunu gosterir.
 Cevap tarayiciya hic gonderilmiyor; karsilastirmayi sunucu yapiyor.
 Gunun oyuncusu ilk istekte secilip veritabanina yaziliyor (oyuncunun o
 anki bilgileriyle birlikte): gun icinde takas olsa bile herkes ayni
-ipuclariyla oynar. Gun degisimi UTC gece yarisi.
+ipuclariyla oynar. Gun degisimi Londra saatiyle gece yarisi (yaz/kis
+saati otomatik).
 """
 import random
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from services.cache import cache_data
 from services.database import db
@@ -46,8 +48,11 @@ DIV_SHORT = {"Atlantic": "ATL", "Central": "CEN", "Southeast": "SE",
              "Northwest": "NW", "Pacific": "PAC", "Southwest": "SW"}
 
 
+DAY_ZONE = ZoneInfo("Europe/London")
+
+
 def today():
-    return datetime.now(timezone.utc).date()
+    return datetime.now(DAY_ZONE).date()
 
 
 def puzzle_number(day=None):
@@ -55,8 +60,9 @@ def puzzle_number(day=None):
 
 
 def seconds_to_next():
-    now = datetime.now(timezone.utc)
-    return 86400 - (now.hour * 3600 + now.minute * 60 + now.second)
+    now = datetime.now(DAY_ZONE)
+    midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), DAY_ZONE)
+    return max(1, int((midnight - now).total_seconds()))
 
 
 def _int(value):
