@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Mock Draft · HoopLife NBA{% endblock %}
-{% block description %}Free fantasy basketball mock draft against AI opponents - snake or auction, on live ESPN average draft position.{% endblock %}
+{% block description %}Free fantasy basketball mock draft against AI opponents - snake or auction, no sign-up, on live average draft position.{% endblock %}
 {% block content %}
 <div id="setup-view">
   <div class="page-head">
     <div class="eyebrow">Practice</div>
     <h1>Mock Draft</h1>
-    <p>Run as many practice drafts as you like on the {{ season }} pool before the real thing. {{ pool_size }} ranked players, ordered by live ESPN average draft position.</p>
+    <p>Practice your draft against AI opponents as many times as you like - snake or auction, no account needed. {{ pool_size }} ranked {{ season }} players, ordered by live ESPN average draft position. Not sure which build fits your slot? <a href="/draft-strategy">Test your punt build first</a>.</p>
   </div>
 
   {% if not pool_ok %}

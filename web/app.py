@@ -23,7 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import config
 from utils.console import configure_console_encoding
-from web.core import WEB_DIR, public_host, render
+from web.core import WEB_DIR, public_host, remember_source, render
 
 configure_console_encoding()
 
@@ -55,8 +55,11 @@ async def security(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    if request.url.path.startswith("/static/"):
+    path = request.url.path
+    if path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif request.method == "GET" and not path.startswith(("/api/", "/healthz")):
+        remember_source(request, response)
     elapsed = time.time() - started
     if elapsed > 2:
         print(f"slow request {request.method} {request.url.path} {elapsed:.1f}s")
@@ -86,7 +89,7 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/card-game", "/register"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/register"]
 
 
 @app.get("/robots.txt", include_in_schema=False)
@@ -95,7 +98,7 @@ def robots():
     return PlainTextResponse(
         "User-agent: *\nAllow: /\n"
         "Disallow: /api/\nDisallow: /account\nDisallow: /watchlist\n"
-        "Disallow: /reset-password\nDisallow: /card-game/play\n"
+        "Disallow: /reset-password\n"
         f"\nSitemap: {base}/sitemap.xml\n")
 
 
@@ -184,6 +187,8 @@ def _warm():
         step("draft board", get_draft_board)
         step("season stats", lambda: stats.season_table(stats.BASE_WEIGHTS))
         step("player photos", name_to_id_map)
+        from services import daily_player
+        step("mystery player", daily_player.answer_for)
     finally:
         _WARM_DONE.set()
 

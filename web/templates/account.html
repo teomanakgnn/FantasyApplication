@@ -21,6 +21,10 @@
       {% for name, detail in features %}<li style="margin:4px 0"><b>{{ name }}</b> <span class="muted">— {{ detail }}</span></li>{% endfor %}
     </ul>
     {% if not pro %}<p class="small dim" style="margin-top:10px">{{ upgrade_note }}</p>{% endif %}
+    <form method="post" action="/account/redeem" class="row" style="margin-top:12px" data-loading>
+      <input class="input" name="code" placeholder="Invite code" aria-label="Invite code" autocomplete="off" autocapitalize="characters" maxlength="32" required style="flex:1;min-width:160px">
+      <button class="btn" type="submit">Redeem</button>
+    </form>
   </section>
 
   <section class="card">
@@ -79,6 +83,40 @@
       </div>
       <button class="btn btn-primary" type="submit">Apply</button>
     </form>
+  </section>
+
+  <section class="card">
+    <div class="card-title">Sign-ups <span class="chip">ADMIN</span></div>
+    <div class="grid grid-3" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value">{{ totals.total or 0 }}</div></div>
+      <div class="kpi"><div class="kpi-label">7 days</div><div class="kpi-value">{{ totals.week or 0 }}</div></div>
+      <div class="kpi"><div class="kpi-label">24 hours</div><div class="kpi-value">{{ totals.day or 0 }}</div></div>
+    </div>
+    <p class="small muted" style="margin:12px 0 6px">Where last 30 days of sign-ups came from (first visit: utm link, ?ref= or referring site)</p>
+    <table class="table small"><tbody>
+      {% for s in sources %}<tr><td style="text-align:left;white-space:normal;word-break:break-all">{{ s.source }}</td><td style="text-align:right"><b>{{ s.n }}</b></td></tr>
+      {% else %}<tr><td class="muted" style="text-align:left">No sign-ups yet.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+
+  <section class="card">
+    <div class="card-title">Pro codes <span class="chip">ADMIN</span></div>
+    <form method="post" action="/account/admin/codes" data-loading>
+      <div class="form-row">
+        <label class="field"><span>Code</span><input class="input" name="code" maxlength="32" placeholder="e.g. HOOPS30" required></label>
+        <label class="field"><span>Note</span><input class="input" name="note" maxlength="200" placeholder="Channel / campaign"></label>
+      </div>
+      <div class="form-row">
+        <label class="field"><span>Pro days</span><input class="input" type="number" name="days" min="1" max="3650" value="30"></label>
+        <label class="field"><span>Max uses</span><input class="input" type="number" name="uses" min="1" max="100000" value="100"></label>
+      </div>
+      <button class="btn btn-primary" type="submit">Create code</button>
+    </form>
+    <p class="small muted" style="margin:12px 0 6px">Share as <code>{{ site_url }}/register?code=CODE&amp;utm_source=channel</code></p>
+    <table class="table small"><tbody>
+      {% for c in codes %}<tr><td style="text-align:left;white-space:normal"><b>{{ c.code }}</b><div class="dim tiny">{{ c.note or '' }}</div></td><td>{{ c.pro_days }}d</td><td style="text-align:right">{{ c.uses }} / {{ c.max_uses }}</td></tr>
+      {% else %}<tr><td class="muted" style="text-align:left">No codes yet.</td></tr>{% endfor %}
+    </tbody></table>
   </section>
   {% endif %}
 

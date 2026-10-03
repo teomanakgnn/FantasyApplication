@@ -31,8 +31,18 @@
   <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
   {% block head %}{% endblock %}
   {% if ga_id %}
+  {# Consent Mode v2: izin verilene kadar analitik cerezi yazilmaz (gizlilik politikasi boyle diyor) #}
+  <script>
+    window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);}
+    (function () {
+      var ok = null; try { ok = localStorage.getItem("hl_consent"); } catch (e) {}
+      var granted = ok === "yes" ? "granted" : "denied";
+      gtag("consent", "default", { ad_storage: granted, ad_user_data: granted, ad_personalization: granted, analytics_storage: granted });
+      window.__hlConsent = ok;
+    })();
+    gtag("js", new Date()); gtag("config", "{{ ga_id }}", { linker: { domains: ["hooplifenba.com", "app.hooplifenba.com"] } });
+  </script>
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
-  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','{{ ga_id }}');</script>
   {% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -104,6 +114,26 @@
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  {% if ga_id %}
+  <div class="consent" id="consent" role="dialog" aria-label="Cookie choice" hidden>
+    <p>We use analytics cookies to see which pages work. Nothing is stored unless you accept. <a href="https://hooplifenba.com/privacy">Privacy</a></p>
+    <div class="consent-actions"><button class="btn btn-sm btn-primary" data-consent="yes">Accept</button><button class="btn btn-sm" data-consent="no">Decline</button></div>
+  </div>
+  <script>
+    (function () {
+      var box = document.getElementById("consent");
+      if (window.__hlConsent === "yes" || window.__hlConsent === "no") return;
+      box.hidden = false;
+      box.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-consent]"); if (!b) return;
+        var yes = b.dataset.consent === "yes";
+        try { localStorage.setItem("hl_consent", yes ? "yes" : "no"); } catch (err) {}
+        if (yes) gtag("consent", "update", { ad_storage: "granted", ad_user_data: "granted", ad_personalization: "granted", analytics_storage: "granted" });
+        box.hidden = true;
+      });
+    })();
+  </script>
+  {% endif %}
   <dialog class="modal" id="modal">
     <div class="modal-inner">
       <button class="icon-btn modal-close" data-close aria-label="Close">

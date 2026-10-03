@@ -515,10 +515,17 @@ def get_current_team_rosters():
                     p_id = ath.get('id')  # <--- ID BURADA ALINIYOR
                     
                     if p_name:
-                        # Sadece takım ismini değil, sözlük döndürüyoruz
+                        # Sadece takım ismini değil, sözlük döndürüyoruz.
+                        # Boy/yas/forma/pozisyon gunluk oyuncu tahmin
+                        # oyununun ipuclari (ayni cagridan, ek istek yok).
                         local_map[p_name] = {
                             'team': t_abbr,
-                            'id': p_id
+                            'id': p_id,
+                            'height': ath.get('height'),
+                            'age': ath.get('age'),
+                            'jersey': ath.get('jersey'),
+                            'pos': (ath.get('position') or {}).get('abbreviation'),
+                            'exp': (ath.get('experience') or {}).get('years'),
                         }
                 return local_map
         except Exception:

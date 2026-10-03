@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Draft Strategy · HoopLife NBA{% endblock %}
-{% block description %}See how each fantasy basketball draft strategy plays out from your draft slot, with injuries priced in.{% endblock %}
+{% block description %}Test every fantasy basketball punt build before your draft: who is likely there at each of your picks and how many categories each roster wins.{% endblock %}
 
 {% macro health(h) -%}
 <div class="ds-health">
@@ -43,7 +43,7 @@
 <div class="page-head">
   <div class="eyebrow">Draft prep</div>
   <h1>Draft Strategy</h1>
-  <p>Describe your league and see how each strategy plays out from your seat: who is likely there at your picks, what roster you end up with, and where that roster wins. Built on {{ season }} projections, with injuries priced in.</p>
+  <p>Test every punt build before your draft. Set your league size and draft slot and see, for a balanced build and five punt builds, who is likely still there at each of your picks, the roster you end up with and how many of the 9 categories it wins. Built on {{ season }} projections, with injuries priced in.</p>
 </div>
 
 <form class="card" method="get" action="/draft-strategy" data-loading="ds-loading">

@@ -253,17 +253,25 @@ const PRIVACY = `${HEADER}
 <main class="wrap prose">
   <section style="border-top:0;margin-top:8px">
     <h1 style="font-size:1.8rem">Privacy Policy</h1>
-    <p>Last updated 24 September 2026. HoopLife NBA is run by an individual, not a
+    <p>Last updated 3 October 2026. HoopLife NBA is run by an individual, not a
       company. This page explains what the site stores and why.</p>
 
     <h3>What we collect</h3>
     <ul>
       <li><b>Account details.</b> If you create an account we store your username,
         email address and a hashed password. The password itself is never stored.</li>
-      <li><b>Things you save.</b> Your watchlist, notes, saved mock drafts and
-        display preferences.</li>
+      <li><b>Things you save.</b> Your watchlist, notes, saved mock drafts,
+        over/under picks, trivia streak, display preferences and any invite code
+        you redeem.</li>
       <li><b>Sessions.</b> A random sign-in token so you stay logged in. It is
-        stored as a hash on our side and in your browser's local storage.</li>
+        stored as a hash on our side and in a secure, HttpOnly cookie in your browser.</li>
+      <li><b>Where you came from.</b> On your first visit to the app we keep a
+        cookie with the link or website that sent you (for example a campaign tag
+        or "reddit.com") for 60 days. If you sign up, that label is saved with your
+        account so we can see which channels bring people in. It never contains
+        anything about you personally.</li>
+      <li><b>Daily game.</b> Your Mystery Player guesses and stats stay in your
+        browser's local storage; we do not store them.</li>
       <li><b>Analytics.</b> If you accept analytics cookies, Google Analytics
         records anonymous usage: pages visited, device type, and which advert or
         link brought you here. If you decline, no analytics cookies are set.</li>
@@ -272,19 +280,21 @@ const PRIVACY = `${HEADER}
     <h3>What we do not do</h3>
     <ul>
       <li>We do not sell your data.</li>
-      <li>We do not send marketing email.</li>
+      <li>We do not send marketing email. The only emails are ones you ask for,
+        such as a password reset.</li>
       <li>We do not take payments, so no card details exist.</li>
     </ul>
 
     <h3>Third parties</h3>
     <p>Player statistics come from ESPN's public endpoints. The app is hosted on
-      Streamlit Community Cloud, the database on Neon, and this page on Cloudflare.
+      Railway, the database on Neon, this page on Cloudflare, and password-reset
+      email is sent through Resend.
       Analytics, when accepted, is Google Analytics 4.</p>
 
     <h3>Your choices</h3>
     <p>You can change or delete your account at any time from Account &rarr;
       Settings inside the app; deleting removes your account, watchlist, saved
-      drafts and sessions. You can withdraw analytics consent by clearing this
+      drafts, picks and sessions. You can withdraw analytics consent by clearing this
       site's data in your browser.</p>
 
     <h3>Contact</h3>
@@ -400,7 +410,13 @@ const SCRIPT = `<script>
     a.addEventListener('click',function(){
       try{ gtag('event','open_app',{placement:a.dataset.cta||'unknown'}); }catch(e){}
       var q=location.search;
-      if(q && q.length>1) a.href='/app'+q;
+      if(q && q.length>1){ a.href='/app'+q; return; }
+      // Parametresiz gelis: uygulama kaynagi gorebilsin diye yonlendiren
+      // siteyi (reddit.com vb.) ya da "landing" bilgisini tasi.
+      var r='';
+      try{ r=new URL(document.referrer).hostname; }catch(e){}
+      if(r.indexOf('www.')===0) r=r.slice(4);
+      a.href='/app?ref='+encodeURIComponent(r && r.indexOf('hooplifenba.com')<0 ? r : 'landing');
     });
   });
 

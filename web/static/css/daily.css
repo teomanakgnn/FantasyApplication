@@ -1,0 +1,66 @@
+/* Gunluk gizemli oyuncu */
+.dp-wrap { max-width: 680px; margin: 0 auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.dp-key { padding: 0 5px; border-radius: 5px; color: #fff; }
+.dp-key.hit { background: #1E9E5A; }
+.dp-key.near { background: #C89B1A; }
+
+.dp-search { position: relative; margin-bottom: 14px; }
+.dp-search .input { font-size: 1rem; min-height: 48px; }
+.dp-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: 52px; margin: 0; padding: 4px; list-style: none;
+  background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 12px;
+  box-shadow: var(--shadow); max-height: 320px; overflow-y: auto;
+}
+.dp-list button {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px;
+  border: 0; border-radius: 9px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.dp-list button:hover, .dp-list button.is-active { background: var(--surface-3); }
+.dp-list img { width: 26px; height: 26px; object-fit: contain; flex: none; }
+.dp-list .dp-team { margin-left: auto; color: var(--dim); font-size: .78rem; font-weight: 700; }
+.dp-list .dp-empty { padding: 10px; color: var(--muted); font-size: .9rem; }
+.dp-count { margin-top: 6px; }
+
+.dp-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.dp-head span { text-align: center; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: 4px; }
+.dp-row { margin-top: 10px; }
+.dp-name { font-weight: 700; font-size: .92rem; margin: 0 0 5px 2px; display: flex; gap: 8px; align-items: center; }
+.dp-name .chip { font-size: .6rem; }
+.dp-tile {
+  height: 50px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--surface-3); border: 1px solid var(--line); font-weight: 800; font-size: .88rem; line-height: 1.1;
+  color: var(--text); text-align: center; min-width: 0; overflow: hidden;
+}
+.dp-tile img { width: 26px; height: 26px; object-fit: contain; }
+.dp-tile small { font-size: .62rem; font-weight: 700; opacity: .85; }
+.dp-tile .dp-arrow { font-size: .8rem; line-height: 1; }
+.dp-tile.hit { background: #1E9E5A; border-color: #27B868; color: #fff; }
+.dp-tile.near { background: #C89B1A; border-color: #DDB12A; color: #fff; }
+.dp-row.is-new .dp-tile { animation: dp-flip .4s both; animation-delay: calc(var(--i) * 90ms); }
+@keyframes dp-flip { from { transform: rotateX(90deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dp-row.is-new .dp-tile { animation: none; } }
+
+.dp-result { margin-top: 18px; text-align: center; }
+.dp-answer { display: flex; align-items: center; gap: 14px; justify-content: center; text-align: left; margin-bottom: 14px; }
+.dp-answer img { width: 96px; height: 70px; object-fit: cover; object-position: top; border-radius: 10px; background: var(--surface-2); }
+.dp-answer h2 { margin: 0; font-size: 1.3rem; }
+.dp-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
+.dp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0; }
+.dp-stats b { display: block; font-size: 1.35rem; }
+.dp-stats span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.dp-dist { display: grid; gap: 4px; text-align: left; max-width: 360px; margin: 0 auto; }
+.dp-dist div { display: flex; align-items: center; gap: 8px; font-size: .78rem; font-weight: 700; }
+.dp-dist i { display: block; height: 18px; min-width: 22px; border-radius: 5px; background: var(--surface-3); color: var(--text); font-style: normal; text-align: right; padding: 0 6px; line-height: 18px; }
+.dp-dist i.is-today { background: #1E9E5A; }
+.dp-next { font-variant-numeric: tabular-nums; }
+.dp-help { margin-top: 18px; }
+.dp-help summary { cursor: pointer; font-weight: 700; }
+.dp-help ul { padding-left: 18px; margin: 8px 0 0; }
+
+@media (max-width: 520px) {
+  .dp-cells { gap: 4px; }
+  .dp-tile { height: 46px; font-size: .8rem; border-radius: 8px; }
+  .dp-tile img { width: 22px; height: 22px; }
+  .dp-answer img { width: 80px; height: 58px; }
+}

@@ -281,6 +281,29 @@ class Database:
                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                )""",
             "CREATE INDEX IF NOT EXISTS idx_live_drafts_updated ON live_drafts (updated_at)",
+            # Gunluk gizemli oyuncu: gunun cevabi ilk istekte secilip yaziliyor;
+            # kadro gun icinde degisse de herkes ayni oyuncuyu tahmin eder.
+            """CREATE TABLE IF NOT EXISTS daily_player (
+                   game_date DATE PRIMARY KEY,
+                   player_id TEXT NOT NULL,
+                   data JSONB NOT NULL
+               )""",
+            # Kayit kaynagi (utm/ref) ve Pro kodlari
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT",
+            """CREATE TABLE IF NOT EXISTS promo_codes (
+                   code TEXT PRIMARY KEY,
+                   pro_days INTEGER NOT NULL DEFAULT 30,
+                   max_uses INTEGER NOT NULL DEFAULT 100,
+                   uses INTEGER NOT NULL DEFAULT 0,
+                   note TEXT,
+                   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+               )""",
+            """CREATE TABLE IF NOT EXISTS promo_redemptions (
+                   code TEXT NOT NULL,
+                   user_id INTEGER NOT NULL,
+                   redeemed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   PRIMARY KEY (code, user_id)
+               )""",
             # Kayitli mock draftlar (eskiden ilk kayitta tembel olusturuluyordu)
             """CREATE TABLE IF NOT EXISTS mock_drafts (
                    id SERIAL PRIMARY KEY,
@@ -531,7 +554,7 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks"):
+                      "season_win_picks", "promo_redemptions"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
         # Suren mock draftlar kullanici kimligine degil sahip anahtarina bagli
@@ -791,6 +814,94 @@ class Database:
                 "ON CONFLICT (user_id) DO UPDATE SET streak = 0, last_played = CURRENT_DATE",
                 (user_id,))
         return True
+
+    # ==================== GUNLUK GIZEMLI OYUNCU ====================
+
+    def get_daily_player(self, day):
+        row = self._run("SELECT player_id, data FROM daily_player WHERE game_date = %s",
+                        (day,), fetch="one")
+        return row
+
+    def set_daily_player(self, day, player_id, data):
+        """Ilk yazan kazanir; ayni gun icin ikinci secim yok sayilir."""
+        self._run("INSERT INTO daily_player (game_date, player_id, data) VALUES (%s, %s, %s) "
+                  "ON CONFLICT (game_date) DO NOTHING",
+                  (day, str(player_id), json.dumps(data)))
+        return self.get_daily_player(day)
+
+    def recent_daily_player_ids(self, day, days=120):
+        rows = self._run("SELECT player_id FROM daily_player "
+                         "WHERE game_date < %s AND game_date >= %s - %s::int",
+                         (day, day, days), fetch="all")
+        return {r["player_id"] for r in rows or []}
+
+    # ==================== KAYNAK / PRO KODLARI ====================
+
+    def set_signup_source(self, user_id, source):
+        return bool(self._run("UPDATE users SET signup_source = %s "
+                              "WHERE id = %s AND signup_source IS NULL",
+                              ((source or "")[:120], user_id)))
+
+    def signup_sources(self, days=30):
+        """Son N gunde kaynak basina kayit sayisi (yonetici paneli)."""
+        return self._run(
+            "SELECT COALESCE(NULLIF(signup_source, ''), 'direct') AS source, COUNT(*) AS n "
+            "FROM users WHERE created_at >= NOW() - %s * INTERVAL '1 day' "
+            "GROUP BY 1 ORDER BY n DESC", (days,), fetch="all") or []
+
+    def signup_totals(self):
+        return self._run(
+            "SELECT COUNT(*) AS total, "
+            "COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') AS day, "
+            "COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 day') AS week "
+            "FROM users", fetch="one") or {}
+
+    def create_promo_code(self, code, pro_days, max_uses, note=""):
+        try:
+            return bool(self._run(
+                "INSERT INTO promo_codes (code, pro_days, max_uses, note) VALUES (%s, %s, %s, %s)",
+                (code.upper(), int(pro_days), int(max_uses), note[:200])))
+        except pg_errors.UniqueViolation:
+            return False
+
+    def list_promo_codes(self):
+        return self._run("SELECT code, pro_days, max_uses, uses, note, created_at "
+                         "FROM promo_codes ORDER BY created_at DESC LIMIT 50", fetch="all") or []
+
+    def redeem_promo_code(self, user_id, code):
+        """
+        Kodu kullanir ve Pro'yu acar. (ok, mesaj) doner.
+        Kullanim sayaci tek bir kosullu UPDATE ile artiyor: ayni anda iki
+        kisi son hakki kullanmaya calissa da sinir asilmiyor.
+        """
+        code = (code or "").strip().upper()
+        if not code:
+            return False, "Enter a code."
+        row = self._run("SELECT pro_days FROM promo_codes WHERE code = %s", (code,), fetch="one")
+        if not row:
+            return False, "That code does not exist."
+        try:
+            added = self._run("INSERT INTO promo_redemptions (code, user_id) VALUES (%s, %s)",
+                              (code, user_id))
+        except pg_errors.UniqueViolation:
+            return False, "You have already used this code."
+        if not added:
+            return False, "Could not use the code right now. Try again."
+        taken = self._run("UPDATE promo_codes SET uses = uses + 1 "
+                          "WHERE code = %s AND uses < max_uses", (code,), fetch="rowcount")
+        if not taken:
+            self._run("DELETE FROM promo_redemptions WHERE code = %s AND user_id = %s",
+                      (code, user_id))
+            return False, "This code has been used up."
+        days = int(row["pro_days"])
+        # Zaten Pro olana sure eklenir, kisaltilmaz
+        plan, expires = self.get_plan(user_id)
+        if plan == PLAN_PRO and expires is None:
+            return True, "You already have Pro with no end date."
+        start = expires if (plan == PLAN_PRO and expires and expires > datetime.now()) else datetime.now()
+        self._run("UPDATE users SET plan = %s, plan_expires_at = %s WHERE id = %s",
+                  (PLAN_PRO, start + timedelta(days=days), user_id))
+        return True, f"Pro unlocked for {days} days."
 
     # ==================== KAYITLI MOCK DRAFTLAR ====================
 

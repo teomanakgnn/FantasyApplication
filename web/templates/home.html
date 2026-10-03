@@ -216,7 +216,23 @@
           <div class="flash ${res.correct ? "flash-ok" : "flash-error"}">${res.correct ? "Correct." : `Not quite - the answer was ${res.answer}) ${escapeHtml(res.answer_text)}.`}</div>
           ${res.explanation ? `<p class="muted">${escapeHtml(res.explanation)}</p>` : ""}
           ${res.streak !== null && res.streak !== undefined ? `<p><b>Streak:</b> ${res.streak} day${res.streak === 1 ? "" : "s"}</p>` : ""}
-          <button class="btn btn-block" data-trivia-close>Close</button>`;
+          <div class="row" style="gap:8px;margin-bottom:8px">
+            <button class="btn btn-primary" id="trivia-share" type="button" style="flex:1">Share result</button>
+            <a class="btn" href="/daily" style="flex:1">Play Mystery Player</a>
+          </div>
+          <button class="btn btn-block btn-ghost" data-trivia-close>Close</button>`;
+        // Spoiler'siz paylasim: soru ve cevap yok, yalnizca sonuc ve seri
+        document.getElementById("trivia-share").addEventListener("click", async () => {
+          const day = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const streakTxt = res.streak ? ` - ${res.streak} day streak 🔥` : "";
+          const text = `HoopLife Daily Trivia (${day}) ${res.correct ? "✅" : "❌"}${streakTxt}\n${location.origin}/?ref=trivia-share`;
+          if (window.gtag) gtag("event", "trivia_share");
+          if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+            try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
+          }
+          try { await navigator.clipboard.writeText(text); toast("Result copied - paste it anywhere."); }
+          catch (err) { window.prompt("Copy your result:", text); }
+        });
       } catch (err) { toast(err.message, true); }
     });
   }

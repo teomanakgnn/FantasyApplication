@@ -238,6 +238,9 @@ def league(request: Request):
                 matchups = get_league_matchups(int(league_id), matchup_period=week or None)
                 context.update(standings=standings.to_dict("records") if not standings.empty else [],
                                matchups=matchups)
+                # Herkese acik ESPN ligi: link ligdeki herkes icin calisiyor
+                context["share_url"] = (f"{config.SITE_URL.rstrip('/')}/league?platform=espn"
+                                        f"&league_id={league_id}&ref=league-share")
             except LeagueError as exc:
                 context["error"] = str(exc)
             except Exception as exc:

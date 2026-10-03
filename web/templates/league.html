@@ -61,6 +61,14 @@
 
 {% if error %}<div class="flash flash-error" style="margin-top:14px">{{ error }}</div>{% endif %}
 
+{% if share_url %}
+<div class="card row-between" style="margin-top:14px;gap:12px;flex-wrap:wrap">
+  <div style="flex:1 1 240px"><b>Send this to your league</b>
+    <div class="small muted">Anyone with the link sees the power rankings and roto table - no account needed.</div></div>
+  <button class="btn btn-primary" id="league-share" type="button" data-url="{{ share_url }}">Share with league</button>
+</div>
+{% endif %}
+
 {% if standings is not none or matchups %}
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
   <button class="tab" data-tab="standings">Standings</button>
@@ -153,5 +161,22 @@
   {% endif %}
 </div>
 {% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if share_url %}
+<script>
+document.getElementById("league-share").addEventListener("click", async (e) => {
+  const url = e.currentTarget.dataset.url;
+  const text = "Our league's power rankings and roto table:";
+  if (window.gtag) gtag("event", "league_share");
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+    try { await navigator.share({ title: "League power rankings", text, url }); return; }
+    catch (err) { if (err.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); HL.toast("Link copied - paste it in your league chat."); }
+  catch (err) { window.prompt("Copy the league link:", url); }
+});
+</script>
 {% endif %}
 {% endblock %}

@@ -127,3 +127,43 @@ def test_fantasy_score_and_insight():
            "blk": 1, "to": 3, "fgm": 11, "fga": 20, "ftm": 6, "fta": 7, "tpm": 2, "tpa": 5, "pm": 12}
     info = stats.player_insight(row)
     assert info["outlook"]["title"] and info["notes"]
+
+
+# ==================== GIZEMLI OYUNCU / KAYNAK ====================
+
+def test_old_card_game_redirects_to_daily():
+    res = client.get("/card-game", follow_redirects=False)
+    assert res.status_code == 301 and res.headers["location"] == "/daily"
+
+
+def test_daily_compare_marks_hits_near_and_direction():
+    from services.daily_player import compare
+    answer = {"id": "1", "team": "PHX", "pos": "G", "height": 77, "age": 29, "jersey": 1}
+    guess = {"id": "2", "team": "LAL", "pos": "G", "height": 80, "age": 27, "jersey": 1}
+    cells = {c["key"]: c for c in compare(guess, answer)}
+    assert cells["team"]["status"] == "miss"
+    assert cells["conf"]["status"] == "hit" and cells["div"]["status"] == "hit"
+    assert cells["pos"]["status"] == "hit"
+    assert cells["height"]["status"] == "miss" and cells["height"]["dir"] == "down"
+    assert cells["age"]["status"] == "near" and cells["age"]["dir"] == "up"
+    assert cells["jersey"]["status"] == "hit"
+
+
+def test_daily_guess_rejects_stale_puzzle():
+    res = client.post("/api/daily/guess", json={"puzzle": 0, "player_id": "1"},
+                      headers={"Origin": "http://testserver"})
+    assert res.status_code == 409
+
+
+def test_first_visit_source_is_remembered():
+    fresh = TestClient(app)
+    res = fresh.get("/login?utm_source=Reddit&utm_medium=social")
+    assert "reddit/social" in res.headers.get("set-cookie", "")
+    res = fresh.get("/login", headers={"Referer": "https://www.google.com/"})
+    assert "hl_src" not in res.headers.get("set-cookie", "")   # ilk gelis kazanir
+
+
+def test_invite_code_link_prefills_register():
+    fresh = TestClient(app)
+    res = fresh.get("/register?code=hoops30")
+    assert 'value="hoops30"' in res.text or 'value="HOOPS30"' in res.text

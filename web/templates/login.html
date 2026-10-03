@@ -36,6 +36,8 @@
           <input class="input" type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
       </div>
       <p class="tiny dim">At least 8 characters.</p>
+      <label class="field"><span>Invite code <span class="dim">(optional)</span></span>
+        <input class="input" name="code" autocomplete="off" autocapitalize="characters" maxlength="32" value="{{ form.code or '' }}"></label>
       <label class="check"><input type="checkbox" name="terms" value="1" required> I agree to the <a href="https://hooplifenba.com/terms" target="_blank" rel="noopener">Terms of Service</a></label>
       {% if turnstile %}
       <div class="cf-turnstile" data-sitekey="{{ turnstile }}" data-theme="dark" data-size="flexible" style="margin:8px 0 12px"></div>
@@ -45,7 +47,7 @@
     </form>
     <div class="grid grid-2" style="margin-top:16px">
       <div class="note"><b>Free</b><br>Scores, stats, mock drafts, over/under picks, a {{ 10 }}-player watchlist.</div>
-      <div class="note"><b>Pro</b> <span class="chip chip-pro">INVITE</span><br>Player trends, unlimited watchlist and saved drafts.</div>
+      <div class="note"><b>Pro</b> <span class="chip chip-pro">INVITE</span><br>Player trends, extra punt builds, unlimited watchlist and saved drafts. Got an invite code? Add it above.</div>
     </div>
     {% endif %}
   </div>

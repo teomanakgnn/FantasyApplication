@@ -1,9 +1,9 @@
 """
-Oyunlar: Card Connections (kart oyunu) ve playoff tahmin agaci.
+Oyunlar: gunluk gizemli oyuncu (Wordle tipi) ve playoff tahmin agaci.
 
-Kart oyunu kendi basina calisan bir HTML+JS uygulamasi
-(components/card_game.html); burada yalnizca oyuncu havuzu icine
-yerlestirilip sunuluyor.
+Gizemli oyuncu: cevap tarayiciya gitmez, her tahmini sunucu
+karsilastirir (services/daily_player.py). Eski Card Connections oyunu
+kaldirildi; eski adresler yeni oyuna yonleniyor.
 
 Playoff agaci eskiden paylasim linkindeki ?bracket= degerini hic
 temizlemeden JavaScript koduna yaziyordu: hazirlanmis bir link, acan
@@ -12,13 +12,11 @@ linke hic dokunmuyor; tarayici degeri JSON olarak okuyup yalnizca
 bilinen takim adlarini kabul ediyor ve ekrana metin olarak basiyor.
 """
 import json
-from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
-from services.cache import cache_data
-from services.nba_players_data import get_all_players
+from services import daily_player as daily
 from services.nba_season import get_current_season_year, get_season_label
 from services.win_totals import get_team_identity
 from web.core import render
@@ -26,44 +24,74 @@ from web.routes.over_under import load_lines
 
 router = APIRouter()
 
-_GAME_HTML = Path(__file__).resolve().parents[1] / "games" / "card_game.html"
 
-TEAM_COLORS = {
-    "Los Angeles Lakers": ("#552583", "#FDB927"), "Boston Celtics": ("#007A33", "#BA9653"),
-    "Golden State Warriors": ("#1D428A", "#FFC72C"), "Milwaukee Bucks": ("#00471B", "#EEE1C6"),
-    "Denver Nuggets": ("#0E2240", "#FEC524"), "Phoenix Suns": ("#1D1160", "#E56020"),
-    "Dallas Mavericks": ("#00538C", "#B8C4CA"), "Philadelphia 76ers": ("#006BB6", "#ED174C"),
-    "Miami Heat": ("#98002E", "#F9A01B"), "Oklahoma City Thunder": ("#007AC1", "#EF6100"),
-    "Minnesota Timberwolves": ("#0C2340", "#236192"), "New York Knicks": ("#006BB6", "#F58426"),
-    "Cleveland Cavaliers": ("#860038", "#FDBB30"), "Sacramento Kings": ("#5A2D81", "#63727A"),
-    "Indiana Pacers": ("#002D62", "#FDBB30"), "Los Angeles Clippers": ("#C8102E", "#1D428A"),
-    "Toronto Raptors": ("#CE1141", "#000000"), "Chicago Bulls": ("#CE1141", "#000000"),
-    "Atlanta Hawks": ("#E03A3E", "#C1D32F"), "Memphis Grizzlies": ("#5D76A9", "#12173F"),
-    "New Orleans Pelicans": ("#0C2340", "#C8102E"), "San Antonio Spurs": ("#C4CED4", "#000000"),
-    "Houston Rockets": ("#CE1141", "#000000"), "Brooklyn Nets": ("#000000", "#FFFFFF"),
-    "Charlotte Hornets": ("#1D1160", "#00788C"), "Portland Trail Blazers": ("#E03A3E", "#000000"),
-    "Utah Jazz": ("#002B5C", "#F9A01B"), "Washington Wizards": ("#002B5C", "#E31837"),
-    "Detroit Pistons": ("#C8102E", "#1D42BA"), "Orlando Magic": ("#0077C0", "#000000"),
-}
+# ==================== GIZEMLI OYUNCU ====================
 
-
-@cache_data(ttl=3600, show_spinner=False, copy_result=False)
-def _game_document():
+@router.get("/daily")
+def daily_page(request: Request):
+    players = daily.search_list()
     payload = json.dumps({
-        "players": get_all_players(),
-        "team_colors": {t: [c[0], c[1]] for t, c in TEAM_COLORS.items()},
+        "puzzle": daily.puzzle_number(),
+        "max": daily.MAX_GUESSES,
+        "next_in": daily.seconds_to_next(),
+        "players": players,
     }, ensure_ascii=False).replace("</", "<\\/")
-    return _GAME_HTML.read_text(encoding="utf-8").replace("__GAME_DATA__", payload)
+    return render(request, "daily.html", active="daily", payload=payload,
+                  ready=bool(players), puzzle=daily.puzzle_number())
+
+
+def _bad(message, status=400):
+    return JSONResponse({"error": message}, status_code=status)
+
+
+def _check_puzzle(body):
+    if int(body.get("puzzle") or 0) != daily.puzzle_number():
+        return _bad("A new player is up. Reload the page to play today's puzzle.", 409)
+    return None
+
+
+@router.post("/api/daily/guess")
+async def daily_guess(request: Request):
+    body = await request.json()
+    stale = _check_puzzle(body)
+    if stale:
+        return stale
+    answer = daily.answer_for()
+    if not answer:
+        return _bad("Today's player is not ready yet. Try again in a minute.", 503)
+    guess = daily.player_pool().get(str(body.get("player_id") or ""))
+    if not guess:
+        return _bad("Pick a player from the list.")
+    correct = guess["id"] == answer["id"]
+    out = {"player": {"id": guess["id"], "name": guess["name"]},
+           "cells": daily.compare(guess, answer), "correct": correct}
+    if correct:
+        out["answer"] = daily.public_answer(answer)
+    return out
+
+
+@router.post("/api/daily/reveal")
+async def daily_reveal(request: Request):
+    """Haklar bitince cevabi gosterir: 8 farkli, yanlis tahmin gonderilmeli."""
+    body = await request.json()
+    stale = _check_puzzle(body)
+    if stale:
+        return stale
+    answer = daily.answer_for()
+    if not answer:
+        return _bad("Today's player is not ready yet.", 503)
+    guesses = {str(g) for g in (body.get("guesses") or [])}
+    pool = daily.player_pool()
+    if len(guesses) < daily.MAX_GUESSES or answer["id"] in guesses or \
+            any(g not in pool for g in guesses):
+        return _bad("Use all your guesses first.", 403)
+    return {"answer": daily.public_answer(answer)}
 
 
 @router.get("/card-game")
-def card_game(request: Request):
-    return render(request, "card_game.html", active="cards")
-
-
-@router.get("/card-game/play", response_class=HTMLResponse)
-def card_game_frame():
-    return HTMLResponse(_game_document())
+@router.get("/card-game/play")
+def old_card_game():
+    return RedirectResponse("/daily", status_code=301)
 
 
 @router.get("/bracket")

@@ -15,9 +15,10 @@ Eski surumde oturum iki yoldan geri yukleniyordu ve ikisi de sorunluydu:
 Ikisi de kaldirildi; cerez bu isi tek basina ve guvenli yapiyor.
 """
 import json
+import re
 import time
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -31,6 +32,8 @@ templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 SESSION_COOKIE = "hl_session"
 FLASH_COOKIE = "hl_flash"
+SOURCE_COOKIE = "hl_src"      # ilk gelis kaynagi (utm / ref / yonlendiren site)
+CODE_COOKIE = "hl_code"       # linkle gelen Pro davet kodu
 SESSION_MAX_AGE = 30 * 24 * 3600
 
 # Statik dosyalarin onbellek kirici surumu: her acilista degisir.
@@ -41,7 +44,7 @@ NAV = [
     ("mock", "/mock-draft", "Mock Draft"),
     ("strategy", "/draft-strategy", "Draft Strategy"),
     ("ou", "/over-under", "Over / Under"),
-    ("cards", "/card-game", "Card Connections"),
+    ("daily", "/daily", "Mystery Player"),
     ("bracket", "/bracket", "Playoff Bracket"),
     None,
     ("injuries", "/injuries", "Injury Report"),
@@ -116,6 +119,43 @@ def client_ip(request: Request):
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+# ==================== KAYNAK ====================
+
+def _clean(value, size=40):
+    return re.sub(r"[^A-Za-z0-9._-]", "", str(value or ""))[:size].lower()
+
+
+def remember_source(request: Request, response):
+    """
+    Ziyaretcinin siteye ilk nereden geldigini 60 gunluk cerezde saklar;
+    kayit olursa hesaba yazilir. Boylece "hangi kanal kayit getirdi"
+    sorusu GA'ya bagli kalmadan cevaplanabiliyor.
+
+    Oncelik: ?utm_source=... / ?ref=... , yoksa yonlendiren site
+    (reddit.com, google.com...). Ilk gelis kazanir, sonra degismez.
+    ?code=XYZ ile gelen davet kodu da kayit formuna tasinir.
+    """
+    q = request.query_params
+    code = re.sub(r"[^A-Za-z0-9_-]", "", q.get("code") or "")[:32]
+    if code:
+        response.set_cookie(CODE_COOKIE, code.upper(), max_age=30 * 86400, httponly=True,
+                            secure=config.PRODUCTION, samesite="lax", path="/")
+    if request.cookies.get(SOURCE_COOKIE):
+        return
+    source = None
+    if q.get("utm_source") or q.get("ref"):
+        parts = [q.get("utm_source") or q.get("ref"), q.get("utm_medium"), q.get("utm_campaign")]
+        source = "/".join(_clean(x) for x in parts if _clean(x))
+    else:
+        referer = request.headers.get("referer") or ""
+        host = urlparse(referer).netloc.lower()
+        if host and host != (public_host(request) or "").lower():
+            source = "ref:" + _clean(host.removeprefix("www."), 60)
+    if source:
+        response.set_cookie(SOURCE_COOKIE, source[:120], max_age=60 * 86400, httponly=True,
+                            secure=config.PRODUCTION, samesite="lax", path="/")
 
 
 # ==================== FLASH ====================

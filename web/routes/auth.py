@@ -9,8 +9,8 @@ from fastapi import APIRouter, Form, Request
 import config
 from services import mailer
 from services.database import LOGIN_WINDOW_MINUTES, db
-from web.core import (clear_session_cookie, client_ip, current_user,
-                      forget_user_cache, redirect, render, set_session_cookie)
+from web.core import (CODE_COOKIE, SOURCE_COOKIE, clear_session_cookie, client_ip,
+                      current_user, forget_user_cache, redirect, render, set_session_cookie)
 
 router = APIRouter()
 
@@ -89,15 +89,17 @@ def _turnstile_ok(request, token):
 def register_page(request: Request):
     if current_user(request):
         return redirect("/")
-    return render(request, "login.html", mode="register", next="/", form={},
+    code = request.query_params.get("code") or request.cookies.get(CODE_COOKIE) or ""
+    return render(request, "login.html", mode="register", next="/", form={"code": code[:32]},
                   turnstile=config.TURNSTILE_SITE_KEY)
 
 
 @router.post("/register")
 def register(request: Request, username: str = Form(""), email: str = Form(""),
              password: str = Form(""), password2: str = Form(""), terms: str = Form(None),
+             code: str = Form(""),
              turnstile_token: str = Form("", alias="cf-turnstile-response")):
-    form = {"username": username, "email": email}
+    form = {"username": username, "email": email, "code": code}
 
     def fail(message, code=400):
         return render(request, "login.html", mode="register", next="/", form=form,
@@ -128,7 +130,16 @@ def register(request: Request, username: str = Form(""), email: str = Form(""),
         return redirect("/login", "Account created. Sign in to continue.")
     session = db.create_session(user["id"], browser_id="web", ip_address=client_ip(request),
                                 user_agent=request.headers.get("user-agent", "")[:300])
-    response = redirect("/", f"Welcome to HoopLife, {user['username']}.")
+    source = request.cookies.get(SOURCE_COOKIE)
+    if source:
+        db.set_signup_source(user["id"], source)
+    message = f"Welcome to HoopLife, {user['username']}."
+    code = (code or request.cookies.get(CODE_COOKIE) or "").strip()
+    if code:
+        redeemed, note = db.redeem_promo_code(user["id"], code)
+        message += " " + (note if redeemed else f"The invite code did not work: {note}")
+    response = redirect("/", message)
+    response.delete_cookie(CODE_COOKIE, path="/")
     if session:
         set_session_cookie(response, session["token"], remember=True)
     return response

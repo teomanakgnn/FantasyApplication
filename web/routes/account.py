@@ -1,4 +1,5 @@
 """Hesap ayarlari: profil, plan, parola, eposta, cihazlar, gorunum, silme."""
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Form, Request
@@ -38,6 +39,7 @@ def account(request: Request):
     sessions = db.list_sessions(user["id"])
     for s in sessions:
         s["device"] = _device(s.get("user_agent"))
+    is_admin = user.get("username") in config.ADMIN_USERNAMES
     return render(
         request, "account.html", active="account",
         features=PRO_FEATURES, upgrade_note=UPGRADE_NOTE,
@@ -45,8 +47,11 @@ def account(request: Request):
         draft_count=db.saved_draft_count(user["id"]),
         watch_limit=FREE_WATCHLIST_LIMIT, draft_limit=FREE_SAVED_DRAFT_LIMIT,
         sessions=sessions, display=db.get_score_display_preference(user["id"]),
-        is_admin=user.get("username") in config.ADMIN_USERNAMES,
-        plans=(PLAN_PRO, PLAN_FREE), now=datetime.now())
+        is_admin=is_admin,
+        plans=(PLAN_PRO, PLAN_FREE), now=datetime.now(),
+        codes=db.list_promo_codes() if is_admin else [],
+        sources=db.signup_sources(30) if is_admin else [],
+        totals=db.signup_totals() if is_admin else {})
 
 
 @router.post("/account/password")
@@ -112,6 +117,32 @@ def grant(request: Request, username: str = Form(""), days: int = Form(365),
         forget_user_cache()
         return redirect("/account#admin", f"{username} is now on the {plan} plan.")
     return redirect("/account#admin", "Could not update that account.", "error")
+
+
+@router.post("/account/redeem")
+def redeem(request: Request, code: str = Form("")):
+    user = current_user(request)
+    if not user:
+        return redirect("/login")
+    ok, message = db.redeem_promo_code(user["id"], code)
+    if ok:
+        forget_user_cache()
+    return redirect("/account", message, "ok" if ok else "error")
+
+
+@router.post("/account/admin/codes")
+def create_code(request: Request, code: str = Form(""), days: int = Form(30),
+                uses: int = Form(100), note: str = Form("")):
+    """Yonetici: sponsorluk/kampanya icin Pro kodu."""
+    user = current_user(request)
+    if not user or user.get("username") not in config.ADMIN_USERNAMES:
+        return redirect("/account", "Admins only.", "error")
+    code = re.sub(r"[^A-Za-z0-9_-]", "", code)[:32]
+    if len(code) < 3:
+        return redirect("/account#admin", "Codes need at least 3 letters or digits.", "error")
+    if not db.create_promo_code(code, max(1, min(days, 3650)), max(1, min(uses, 100000)), note):
+        return redirect("/account#admin", "That code already exists.", "error")
+    return redirect("/account#admin", f"Code {code.upper()} created.")
 
 
 @router.post("/account/delete")

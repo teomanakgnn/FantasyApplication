@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Mystery Player #{{ puzzle }} · HoopLife NBA{% endblock %}
+{% block description %}Guess today's mystery NBA player in 8 tries. A new player every day - share your result without spoilers.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="dp-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Daily game</div>
+    <h1>Mystery Player <span class="dim">#{{ puzzle }}</span></h1>
+    <p>Guess today's NBA player in 8 tries. Every guess shows how close you are: <b class="dp-key hit">green</b> is a match, <b class="dp-key near">yellow</b> is within 2, arrows point toward the answer.</p>
+  </div>
+
+  {% if not ready %}
+    <div class="note note-info">Today's rosters are still loading. Refresh in a minute.</div>
+  {% else %}
+    <div class="dp-search" id="dp-search">
+      <label class="sr-only" for="dp-input">Guess a player</label>
+      <input class="input" id="dp-input" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Type a player name..." role="combobox" aria-expanded="false" aria-controls="dp-list" aria-autocomplete="list">
+      <ul class="dp-list" id="dp-list" role="listbox" hidden></ul>
+      <div class="dp-count small muted" id="dp-count"></div>
+    </div>
+
+    <div class="dp-board" id="dp-board" aria-live="polite">
+      <div class="dp-cells dp-head" aria-hidden="true">
+        <span>Team</span><span>Conf</span><span>Div</span><span>Pos</span><span>Ht</span><span>Age</span><span>#</span>
+      </div>
+      <div id="dp-rows"></div>
+    </div>
+
+    <div id="dp-result"></div>
+
+    <details class="card dp-help">
+      <summary>How it works</summary>
+      <p class="small muted">The mystery player is someone well known from this season's rosters, picked fresh every day at midnight UTC - everyone gets the same player. You can guess any player currently on an NBA roster.</p>
+      <ul class="small muted">
+        <li><b>Team, Conf, Div, Pos</b> turn green when they match.</li>
+        <li><b>Height, Age, Jersey</b> turn green on an exact match and yellow when within 2. The arrow shows if the answer is higher or lower.</li>
+        <li>Your stats and streak are kept on this device.</li>
+      </ul>
+    </details>
+    <script id="dp-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/daily.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
