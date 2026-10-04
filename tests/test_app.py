@@ -167,3 +167,9 @@ def test_invite_code_link_prefills_register():
     fresh = TestClient(app)
     res = fresh.get("/register?code=hoops30")
     assert 'value="hoops30"' in res.text or 'value="HOOPS30"' in res.text
+
+
+def test_legal_pages_open():
+    for path in ("/privacy", "/terms"):
+        res = client.get(path)
+        assert res.status_code == 200 and "teomanakgn84@gmail.com" in res.text

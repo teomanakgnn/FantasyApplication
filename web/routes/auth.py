@@ -9,7 +9,7 @@ from fastapi import APIRouter, Form, Request
 import config
 from services import mailer
 from services.database import LOGIN_WINDOW_MINUTES, db
-from web.core import (CODE_COOKIE, SOURCE_COOKIE, clear_session_cookie, client_ip,
+from web.core import (CODE_COOKIE, SIGNUP_COOKIE, SOURCE_COOKIE, clear_session_cookie, client_ip,
                       current_user, forget_user_cache, redirect, render, set_session_cookie)
 
 router = APIRouter()
@@ -140,6 +140,8 @@ def register(request: Request, username: str = Form(""), email: str = Form(""),
         message += " " + (note if redeemed else f"The invite code did not work: {note}")
     response = redirect("/", message)
     response.delete_cookie(CODE_COOKIE, path="/")
+    response.set_cookie(SIGNUP_COOKIE, "1", max_age=600, httponly=True,
+                        secure=config.PRODUCTION, samesite="lax", path="/")
     if session:
         set_session_cookie(response, session["token"], remember=True)
     return response

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head row-between">
   <div>
-    <div class="eyebrow">Daily fantasy</div>
+    <div class="eyebrow">Fantasy basketball</div>
     <h1>NBA Player Stats &amp; Analysis</h1>
     <p>Box score based performance, scored the way your league scores it.</p>
   </div>
@@ -191,6 +191,9 @@
   });
 
   async function loadTrivia() {
+    // Ilk ziyarette acilir pencere yok: reklamdan gelen yeni ziyaretci
+    // once siteyi gorsun. Trivia ikinci ziyaretten itibaren cikiyor.
+    if (!read("hl_visited")) { store("hl_visited", "1"); return; }
     let data;
     try { data = await api("/api/trivia"); } catch (e) { return; }
     if (!data.question || data.played || read(seenKey)) return;

@@ -34,6 +34,7 @@ SESSION_COOKIE = "hl_session"
 FLASH_COOKIE = "hl_flash"
 SOURCE_COOKIE = "hl_src"      # ilk gelis kaynagi (utm / ref / yonlendiren site)
 CODE_COOKIE = "hl_code"       # linkle gelen Pro davet kodu
+SIGNUP_COOKIE = "hl_signup"   # yeni kayit: analitik/reklam donusumu icin tek seferlik
 SESSION_MAX_AGE = 30 * 24 * 3600
 
 # Statik dosyalarin onbellek kirici surumu: her acilista degisir.
@@ -207,11 +208,17 @@ def render(request: Request, template, active=None, status_code=200, **context):
         "flash": pop_flash(request),
         "asset_version": ASSET_VERSION,
         "ga_id": config.GOOGLE_ANALYTICS_ID,
+        "ads_id": config.GOOGLE_ADS_ID,
+        "ads_signup_label": config.GOOGLE_ADS_SIGNUP_LABEL,
+        # Kayittan sonraki ilk sayfa: donusum olayi bir kez gonderilir
+        "signup_event": bool(request.cookies.get(SIGNUP_COOKIE)),
         "site_url": config.SITE_URL.rstrip("/"),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)
     if getattr(request.state, "clear_flash", False):
         response.delete_cookie(FLASH_COOKIE, path="/")
+    if context["signup_event"]:
+        response.delete_cookie(SIGNUP_COOKIE, path="/")
     return response
 
 

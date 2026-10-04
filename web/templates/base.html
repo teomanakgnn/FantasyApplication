@@ -40,7 +40,10 @@
       gtag("consent", "default", { ad_storage: granted, ad_user_data: granted, ad_personalization: granted, analytics_storage: granted });
       window.__hlConsent = ok;
     })();
-    gtag("js", new Date()); gtag("config", "{{ ga_id }}", { linker: { domains: ["hooplifenba.com", "app.hooplifenba.com"] } });
+    gtag("js", new Date()); gtag("config", "{{ ga_id }}");
+    {% if ads_id %}gtag("config", "{{ ads_id }}");{% endif %}
+    {% if signup_event %}gtag("event", "sign_up", { method: "site" });
+    {% if ads_id and ads_signup_label %}gtag("event", "conversion", { send_to: "{{ ads_id }}/{{ ads_signup_label }}" });{% endif %}{% endif %}
   </script>
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
   {% endif %}
@@ -108,15 +111,16 @@
     {% block content %}{% endblock %}
     <footer class="footer">
       <span>© HoopLife NBA</span>
-      <a href="https://hooplifenba.com/privacy">Privacy</a>
-      <a href="https://hooplifenba.com/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <span class="dim">Not affiliated with the NBA or ESPN.</span>
     </footer>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   {% if ga_id %}
   <div class="consent" id="consent" role="dialog" aria-label="Cookie choice" hidden>
-    <p>We use analytics cookies to see which pages work. Nothing is stored unless you accept. <a href="https://hooplifenba.com/privacy">Privacy</a></p>
+    <p>We use analytics cookies to see which pages work. Nothing is stored unless you accept. <a href="/privacy">Privacy</a></p>
     <div class="consent-actions"><button class="btn btn-sm btn-primary" data-consent="yes">Accept</button><button class="btn btn-sm" data-consent="no">Decline</button></div>
   </div>
   <script>

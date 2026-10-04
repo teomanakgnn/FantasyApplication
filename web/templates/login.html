@@ -38,7 +38,7 @@
       <p class="tiny dim">At least 8 characters.</p>
       <label class="field"><span>Invite code <span class="dim">(optional)</span></span>
         <input class="input" name="code" autocomplete="off" autocapitalize="characters" maxlength="32" value="{{ form.code or '' }}"></label>
-      <label class="check"><input type="checkbox" name="terms" value="1" required> I agree to the <a href="https://hooplifenba.com/terms" target="_blank" rel="noopener">Terms of Service</a></label>
+      <label class="check"><input type="checkbox" name="terms" value="1" required> I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a></label>
       {% if turnstile %}
       <div class="cf-turnstile" data-sitekey="{{ turnstile }}" data-theme="dark" data-size="flexible" style="margin:8px 0 12px"></div>
       <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

@@ -89,7 +89,17 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/daily", "/register"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/register", "/privacy", "/terms"]
+
+
+@app.get("/privacy", include_in_schema=False)
+def privacy(request: Request):
+    return render(request, "legal.html", page="privacy")
+
+
+@app.get("/terms", include_in_schema=False)
+def terms(request: Request):
+    return render(request, "legal.html", page="terms")
 
 
 @app.get("/robots.txt", include_in_schema=False)

@@ -58,6 +58,10 @@ PRODUCTION = flag("PRODUCTION", default=bool(os.environ.get("RAILWAY_ENVIRONMENT
 
 SITE_URL = get("SITE_URL", "https://app.hooplifenba.com")
 GOOGLE_ANALYTICS_ID = get("GOOGLE_ANALYTICS_ID")
+# Google Ads: etiket (AW-...) ve istege bagli kayit donusumu etiketi
+# (Ads > Donusumler > etiket kurulumu > "send_to" degerinin / sonrasi).
+GOOGLE_ADS_ID = get("GOOGLE_ADS_ID")
+GOOGLE_ADS_SIGNUP_LABEL = get("GOOGLE_ADS_SIGNUP_LABEL")
 
 YAHOO_CLIENT_ID = get("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = get("YAHOO_CLIENT_SECRET")

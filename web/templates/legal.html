@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Privacy Policy' if page == 'privacy' else 'Terms of Use' }} · HoopLife NBA{% endblock %}
+{% block description %}{{ 'How HoopLife NBA handles your data.' if page == 'privacy' else 'Terms of use for HoopLife NBA.' }}{% endblock %}
+{% block content %}
+<article class="legal">
+{% if page == 'privacy' %}
+  <h1>Privacy Policy</h1>
+  <p class="muted">Last updated 4 October 2026. HoopLife NBA is run by an individual, not a company. This page explains what the site stores and why.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><b>Account details.</b> If you create an account we store your username, email address and a hashed password. The password itself is never stored.</li>
+    <li><b>Things you save.</b> Your watchlist, notes, saved mock drafts, over/under picks, trivia streak, display preferences and any invite code you redeem.</li>
+    <li><b>Sessions.</b> A random sign-in token so you stay logged in. It is stored as a hash on our side and in a secure, HttpOnly cookie in your browser.</li>
+    <li><b>Where you came from.</b> On your first visit we keep a cookie with the link or website that sent you (for example a campaign tag or "reddit.com") for 60 days. If you sign up, that label is saved with your account so we can see which channels bring people in. It never contains anything about you personally.</li>
+    <li><b>Daily game.</b> Your Mystery Player guesses and stats stay in your browser's local storage; we do not store them.</li>
+    <li><b>Analytics and advertising measurement.</b> If you accept cookies, Google Analytics and Google Ads record anonymous usage: pages visited, device type, which advert or link brought you here and whether you created an account. If you decline, no analytics or advertising cookies are set.</li>
+  </ul>
+
+  <h2>What we do not do</h2>
+  <ul>
+    <li>We do not sell your data.</li>
+    <li>We do not send marketing email. The only emails are ones you ask for, such as a password reset.</li>
+    <li>We do not take payments, so no card details exist.</li>
+  </ul>
+
+  <h2>Third parties</h2>
+  <p>Player statistics come from ESPN's public endpoints. The app is hosted on Railway and the database on Neon. Cloudflare provides the domain and the sign-up bot check (Turnstile), and password-reset email is sent through Resend. Analytics and advertising measurement, when accepted, are Google Analytics 4 and Google Ads.</p>
+
+  <h2>Your choices</h2>
+  <p>You can change or delete your account at any time from <a href="/account">Account</a>; deleting removes your account, watchlist, saved drafts, picks and sessions. You can change your cookie choice by clearing this site's data in your browser.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about your data: <a href="mailto:teomanakgn84@gmail.com">teomanakgn84@gmail.com</a>.</p>
+{% else %}
+  <h1>Terms of Use</h1>
+  <p class="muted">Last updated 4 October 2026.</p>
+
+  <h2>What this is</h2>
+  <p>HoopLife NBA is a free hobby project that shows publicly available basketball statistics and fantasy tools. It is not affiliated with, endorsed by or connected to the NBA, ESPN, Yahoo or any team.</p>
+
+  <h2>No guarantees</h2>
+  <p>Statistics, rankings and projections come from third-party sources and may be wrong, late or missing. Nothing here is betting advice or a prediction of any outcome. Use it to prepare for your fantasy league, not to make financial decisions.</p>
+
+  <h2>Your account</h2>
+  <p>Keep your password to yourself. You are responsible for what happens under your account. We may remove accounts that abuse the service.</p>
+
+  <h2>Availability</h2>
+  <p>The site is provided as-is and may be offline, slow or changed at any time.</p>
+
+  <h2>Contact</h2>
+  <p><a href="mailto:teomanakgn84@gmail.com">teomanakgn84@gmail.com</a></p>
+{% endif %}
+</article>
+<style>
+  .legal { max-width: 720px; }
+  .legal h2 { font-size: 1.1rem; margin: 22px 0 8px; }
+  .legal li { margin: 6px 0; }
+  .legal p, .legal li { line-height: 1.6; }
+</style>
+{% endblock %}
