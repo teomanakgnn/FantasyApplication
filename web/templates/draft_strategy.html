@@ -153,3 +153,6 @@
   @media (max-width: 960px) { .ds-detail { grid-template-columns: minmax(0, 1fr); } }
 </style>
 {% endblock %}
+{% block scripts %}
+{% if request.query_params.get('teams') %}<script>if (window.gtag) gtag("event", "strategy_run", { type: "{{ request.query_params.get('type', 'snake')|e }}" });</script>{% endif %}
+{% endblock %}

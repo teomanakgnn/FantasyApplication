@@ -83,7 +83,11 @@
     if (data.user_slot === "random") data.user_slot = 1 + Math.floor(Math.random() * +data.team_count);
     const btn = form.querySelector("[type=submit]");
     btn.classList.add("is-loading");
-    try { await start(await api("/api/mock", { method: "POST", body: data })); }
+    try {
+      await start(await api("/api/mock", { method: "POST", body: data }));
+      // Reklam olcumu: kayittan once gelen "gercekten kullandi" sinyali
+      if (window.gtag) gtag("event", "mock_start", { format: data.format || "snake", teams: +data.team_count || 0 });
+    }
     catch (err) { toast(err.message, true); }
     finally { btn.classList.remove("is-loading"); }
   });

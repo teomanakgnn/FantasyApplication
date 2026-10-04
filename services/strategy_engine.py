@@ -690,6 +690,18 @@ def category_spread(scores, teams, rounds, cats=NINE_CAT):
     return spread
 
 
+# Bir oyuncunun haftalik katkisinin kendi ortalamasindan sapmasi (varyans,
+# mac basi z-skoru biriminde). Olculdu: 2025-26 sezonu, 5 Ocak - 15 Subat
+# 2026 arasi 297 mac, mac basi 24+ dakika oynayan 133 oyuncu; haftalik
+# toplam, oynadigi mac sayisi kadar ortalamayla karsilastirildi.
+# Eskiden bu sapma hic yoktu: kategori sansi yalnizca sezonluk takim
+# farkindan hesaplaniyordu, olasiliklar %0/%100'e yapisiyordu ve punt
+# kadrolari "5 kategoriyi kesin kazanir, 4'u kesin kaybeder" diye tam 5.0'da
+# takiliyordu. Gercek haftada STL ve yuzdeler cok oynak, PTS/REB/AST sakin.
+WEEKLY_NOISE = {"PTS": 0.65, "REB": 0.51, "AST": 0.43, "STL": 2.01, "BLK": 0.93,
+                "TO": 0.99, "3Pts": 0.67, "FG%": 1.95, "FT%": 1.31}
+
+
 def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
                            baseline=None, spread=None):
     """
@@ -714,8 +726,10 @@ def expected_category_wins(scores, roster, punts=(), cats=NINE_CAT,
             continue
         mine = float(rows[cat].sum())
         rival = (baseline or {}).get(cat, 0.0)
-        sigma = (spread or {}).get(cat, fallback)
-        chances[cat] = _phi((mine - rival) / sigma)
+        season = (spread or {}).get(cat, fallback)
+        # Iki takimin haftalik sapmasi da farka eklenir
+        weekly = 2.0 * len(rows) * WEEKLY_NOISE.get(cat, 1.0)
+        chances[cat] = _phi((mine - rival) / math.sqrt(season ** 2 + weekly))
     return sum(chances.values()), chances
 
 
