@@ -270,11 +270,18 @@ input[type=range] { width: 100%; accent-color: var(--brand); }
 .games { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .game { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .game-top { display: flex; justify-content: space-between; align-items: center; font-size: .78rem; color: var(--muted); font-weight: 600; }
-.game-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.game-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
 .team { display: flex; align-items: center; gap: 8px; font-weight: 800; }
 .team img { width: 34px; height: 34px; object-fit: contain; }
 .team.home { justify-content: flex-end; }
 .game-score { font-size: 1.3rem; font-weight: 800; white-space: nowrap; text-align: center; min-width: 88px; }
+/* Masaustunde kartlar dar (260px): logo + kisaltma + skor yan yana sigmiyor,
+   skor kisaltmalarin ustune biniyordu. Logo kisaltmanin ustune alinir. */
+@media (min-width: 641px) {
+  .game-row .team { flex-direction: column; gap: 4px; font-size: .86rem; }
+  .game-row .team.home { flex-direction: column-reverse; }
+  .game-row .team img { width: 30px; height: 30px; }
+}
 .game-score.hidden-score { filter: blur(8px); cursor: pointer; user-select: none; transition: filter .25s; }
 .excite { font-size: .72rem; font-weight: 800; padding: 3px 8px; border-radius: 8px; color: #0B0F17; }
 .leaders { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); margin-bottom: 14px; }
