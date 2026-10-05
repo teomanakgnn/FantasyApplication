@@ -43,6 +43,34 @@ def send(to, subject, html, text=None, sender=None):
         return False
 
 
+def send_batch(messages):
+    """
+    Tek istekte en fazla 100 e-posta (Resend batch). Her mesaj ayri bir
+    kisiye gider (To'da tek adres; kimse digerlerinin adresini gormez).
+    (ok, hata metni) doner.
+    """
+    if not enabled():
+        return False, "RESEND_API_KEY is not set."
+    if not messages:
+        return True, ""
+    try:
+        resp = requests.post(API + "/batch", timeout=30, headers={
+            "Authorization": f"Bearer {config.RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        }, json=messages[:100])
+        if resp.status_code >= 300:
+            try:
+                message = resp.json().get("message") or resp.text
+            except Exception:
+                message = resp.text
+            print(f"batch email failed {resp.status_code}: {message[:300]}")
+            return False, message[:300]
+        return True, ""
+    except Exception as exc:
+        print(f"batch email failed: {exc}")
+        return False, str(exc)[:300]
+
+
 # ==================== HATA BILDIRIMI ====================
 
 _last_alert = {}

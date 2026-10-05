@@ -80,6 +80,14 @@ PASSWORD_RESET_EMAIL = flag("PASSWORD_RESET_EMAIL")
 ALERT_EMAIL = get("ALERT_EMAIL")
 ALERT_FROM = get("ALERT_FROM", "HoopLife alerts <onboarding@resend.dev>")
 
+# Davet e-postalari (yonetici paneli /admin/outreach). Gonderen adres Resend'de
+# dogrulanmis alan adinda olmali; cevaplar REPLY_TO'ya gider.
+OUTREACH_FROM = get("OUTREACH_FROM", "Teoman from HoopLife <hello@hooplifenba.com>")
+OUTREACH_REPLY_TO = get("OUTREACH_REPLY_TO", "hello@hooplifenba.com")
+OUTREACH_DAILY_LIMIT = int(get("OUTREACH_DAILY_LIMIT", "90") or 90)   # Resend ucretsiz: 100/gun
+# Abonelikten cikma linklerini imzalamak icin (tanimli degilse DB parolasindan turetilir)
+SECRET_KEY = get("SECRET_KEY") or ("hl-" + (get("DB_PASSWORD") or "dev"))
+
 # Kayit formunda bot korumasi (Cloudflare Turnstile). Anahtarlar yoksa kapali.
 TURNSTILE_SITE_KEY = get("TURNSTILE_SITE_KEY")
 TURNSTILE_SECRET_KEY = get("TURNSTILE_SECRET_KEY")

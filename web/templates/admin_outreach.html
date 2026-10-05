@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Invite emails · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Admin</div>
+  <h1>Invite emails</h1>
+  <p>Each person gets their own email, addressed by name, with an unsubscribe link. People who unsubscribed are never emailed again, and nobody gets a second email unless you tick "send again".</p>
+</div>
+
+{% if not mail_ready %}<div class="flash flash-error">RESEND_API_KEY is not set, nothing can be sent.</div>{% endif %}
+{% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
+{% if notice %}<div class="flash flash-ok" role="status">{{ notice }}</div>{% endif %}
+
+<div class="grid grid-2" style="align-items:start">
+  <form class="card" method="post" action="/admin/outreach" data-loading>
+    <label class="field"><span>People - one per line: <code>Name, email</code> or just <code>email</code></span>
+      <textarea class="input" name="recipients" rows="8" placeholder="Jordan Smith, jordan@example.com&#10;alex@example.com" spellcheck="false">{{ recipients }}</textarea></label>
+    <label class="field"><span>Subject</span><input class="input" name="subject" maxlength="150" value="{{ subject }}"></label>
+    <label class="field"><span>Message - <code>{name}</code> becomes their first name, <code>{link}</code> the sign-up link</span>
+      <textarea class="input" name="body" rows="16">{{ body }}</textarea></label>
+    <div class="form-row">
+      <label class="field"><span>Pro invite code in the link</span><input class="input" name="code" maxlength="32" value="{{ code }}"></label>
+      <label class="check" style="align-self:end"><input type="checkbox" name="resend" value="1" {{ 'checked' if resend }}> Send again to people already emailed</label>
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <button class="btn" type="submit" name="action" value="preview">Preview</button>
+      <button class="btn" type="submit" name="action" value="test">Send a test to me</button>
+      <button class="btn btn-primary" type="submit" name="action" value="send" data-confirm="Send these emails now?">Send</button>
+    </div>
+    <p class="tiny dim" style="margin:10px 0 0">From <b>{{ sender }}</b> · replies go to <b>{{ reply_to }}</b> · up to {{ max_per_send }} per send · {{ sent_today }} / {{ daily_limit }} sent today</p>
+  </form>
+
+  <div>
+    {% if preview %}
+    <section class="card">
+      <div class="card-title">Preview <span class="chip">{{ to_send|length }} will get it</span></div>
+      <p class="small"><b>Subject:</b> {{ preview.subject }}</p>
+      <div class="note" style="background:#fff;color:#1a1a1a;max-height:420px;overflow:auto">{{ preview.html|safe }}</div>
+      {% if to_send %}<p class="small muted" style="margin:10px 0 0">To: {% for p in to_send %}{{ p.name or '' }} &lt;{{ p.email }}&gt;{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+    </section>
+    {% endif %}
+    {% if skipped %}
+    <section class="card">
+      <div class="card-title">Skipped</div>
+      <ul class="small" style="margin:0;padding-left:18px">{% for p, why in skipped %}<li>{{ p.email }} - {{ why }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    {% if bad %}
+    <section class="card">
+      <div class="card-title bad">Lines without an email address</div>
+      <ul class="small" style="margin:0;padding-left:18px">{% for line in bad %}<li>{{ line }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    <section class="card">
+      <div class="card-title">History <span class="chip">{{ email_signups }} sign-ups from email</span></div>
+      <div class="table-wrap" style="max-height:420px">
+      <table class="table small"><tbody>
+        {% for h in history %}<tr>
+          <td style="text-align:left;white-space:normal;word-break:break-all">{{ h.name or '' }}<div class="dim tiny">{{ h.email }}</div></td>
+          <td><span class="chip {{ 'chip-accent' if h.status == 'sent' else 'chip-bad' if h.status in ('failed', 'unsubscribed') else '' }}">{{ h.status|upper }}</span>{% if h.last_error %}<div class="tiny bad" style="white-space:normal">{{ h.last_error }}</div>{% endif %}</td>
+          <td class="dim">{{ h.sent_at.strftime('%d %b %H:%M') if h.sent_at else '' }}</td>
+        </tr>{% else %}<tr><td class="muted" style="text-align:left">Nobody emailed yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+  </div>
+</div>
+{% endblock %}

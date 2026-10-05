@@ -173,3 +173,35 @@ def test_legal_pages_open():
     for path in ("/privacy", "/terms"):
         res = client.get(path)
         assert res.status_code == 200 and "teomanakgn84@gmail.com" in res.text
+
+
+# ==================== DAVET E-POSTALARI ====================
+
+def test_outreach_recipient_parsing():
+    from services.outreach import parse_recipients
+    people, bad = parse_recipients("Jordan Smith, Jordan@Example.com\nalex@example.com\n"
+                                   "Sam <sam@example.org>\njordan@example.com\nno email here")
+    assert [p["email"] for p in people] == ["jordan@example.com", "alex@example.com", "sam@example.org"]
+    assert people[0]["name"] == "Jordan Smith" and people[1]["name"] == "" and people[2]["name"] == "Sam"
+    assert bad == ["no email here"]
+
+
+def test_outreach_unsubscribe_link_is_signed():
+    from urllib.parse import parse_qs, urlparse
+    from services.outreach import unsubscribe_url, verify_unsubscribe
+    q = parse_qs(urlparse(unsubscribe_url("a@b.com")).query)
+    assert verify_unsubscribe(q["e"][0], q["t"][0]) == "a@b.com"
+    assert verify_unsubscribe(q["e"][0], "0" * 32) is None
+
+
+def test_outreach_message_is_personal():
+    from services.outreach import DEFAULT_BODY, DEFAULT_SUBJECT, message
+    m = message({"email": "a@b.com", "name": "Jordan Smith"}, DEFAULT_SUBJECT, DEFAULT_BODY, "HOOPFRIENDS")
+    assert m["to"] == ["a@b.com"] and "Hi Jordan," in m["text"]
+    assert "code=HOOPFRIENDS" in m["html"] and "unsubscribe" in m["html"]
+    assert m["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+
+
+def test_outreach_panel_needs_login():
+    res = client.get("/admin/outreach", follow_redirects=False)
+    assert res.status_code == 303 and res.headers["location"].startswith("/login")

@@ -69,10 +69,10 @@ async def security(request: Request, call_next):
 # ==================== SAYFALAR ====================
 
 from web.routes import (account, auth, draft, games, home, injuries, league,  # noqa: E402
-                        mock, over_under, trade, trends, watchlist)
+                        mock, outreach, over_under, trade, trends, watchlist)
 
 for module in (home, auth, account, watchlist, over_under, draft, mock, games,
-               injuries, trade, league, trends):
+               injuries, trade, league, trends, outreach):
     app.include_router(module.router)
 
 
@@ -108,7 +108,7 @@ def robots():
     return PlainTextResponse(
         "User-agent: *\nAllow: /\n"
         "Disallow: /api/\nDisallow: /account\nDisallow: /watchlist\n"
-        "Disallow: /reset-password\n"
+        "Disallow: /reset-password\nDisallow: /admin/\nDisallow: /unsubscribe\n"
         f"\nSitemap: {base}/sitemap.xml\n")
 
 

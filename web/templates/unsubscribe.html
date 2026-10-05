@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Unsubscribe · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;margin:24px auto;text-align:center">
+  {% if not email %}
+    <h1 style="font-size:1.3rem">This link does not work</h1>
+    <p class="muted">It may have been cut off. Reply to the email and we will remove you by hand.</p>
+  {% elif done %}
+    <h1 style="font-size:1.3rem">You're unsubscribed</h1>
+    <p class="muted">{{ email }} will not get any more emails from HoopLife NBA.</p>
+  {% else %}
+    <h1 style="font-size:1.3rem">Unsubscribe</h1>
+    <p class="muted">Stop emails from HoopLife NBA to <b>{{ email }}</b>?</p>
+    <form method="post" action="/unsubscribe?e={{ e|urlencode }}&t={{ t|urlencode }}">
+      <button class="btn btn-primary" type="submit">Unsubscribe</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -140,8 +140,11 @@
     $$("form[data-loading]", root).forEach((form) => {
       if (form.dataset.ready) return;
       form.dataset.ready = "1";
-      form.addEventListener("submit", () => {
-        const btn = form.querySelector("[type=submit]");
+      form.addEventListener("submit", (e) => {
+        // Butonun kendi onay sorusu (birden cok gonder butonu olan formlar)
+        const ask = e.submitter && e.submitter.dataset.confirm;
+        if (ask && !confirm(ask)) { e.preventDefault(); return; }
+        const btn = e.submitter || form.querySelector("[type=submit]");
         if (btn) { btn.classList.add("is-loading"); btn.setAttribute("aria-busy", "true"); }
         const target = form.dataset.loading && document.getElementById(form.dataset.loading);
         if (target) target.hidden = false;

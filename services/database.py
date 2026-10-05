@@ -288,6 +288,17 @@ class Database:
                    player_id TEXT NOT NULL,
                    data JSONB NOT NULL
                )""",
+            # Davet e-postalari: kime ne zaman gitti, kim abonelikten cikti
+            """CREATE TABLE IF NOT EXISTS outreach_contacts (
+                   email TEXT PRIMARY KEY,
+                   name TEXT,
+                   status TEXT NOT NULL DEFAULT 'pending',
+                   send_count INTEGER NOT NULL DEFAULT 0,
+                   last_error TEXT,
+                   added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                   sent_at TIMESTAMP,
+                   unsubscribed_at TIMESTAMP
+               )""",
             # Kayit kaynagi (utm/ref) ve Pro kodlari
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT",
             """CREATE TABLE IF NOT EXISTS promo_codes (
@@ -834,6 +845,52 @@ class Database:
                          "WHERE game_date < %s AND game_date >= %s - %s::int",
                          (day, day, days), fetch="all")
         return {r["player_id"] for r in rows or []}
+
+    # ==================== DAVET E-POSTALARI ====================
+
+    def outreach_status(self, emails):
+        """{email: satir} - verilen adreslerin gecmisi."""
+        if not emails:
+            return {}
+        rows = self._run("SELECT email, name, status, send_count, sent_at FROM outreach_contacts "
+                         "WHERE email = ANY(%s)", (list(emails),), fetch="all") or []
+        return {r["email"]: r for r in rows}
+
+    def outreach_record(self, email, name, ok, error=None):
+        if ok:
+            self._run(
+                "INSERT INTO outreach_contacts (email, name, status, send_count, sent_at) "
+                "VALUES (%s, %s, 'sent', 1, NOW()) ON CONFLICT (email) DO UPDATE SET "
+                "name = COALESCE(EXCLUDED.name, outreach_contacts.name), status = 'sent', "
+                "send_count = outreach_contacts.send_count + 1, sent_at = NOW(), last_error = NULL",
+                (email, name or None))
+        else:
+            self._run(
+                "INSERT INTO outreach_contacts (email, name, status, last_error) "
+                "VALUES (%s, %s, 'failed', %s) ON CONFLICT (email) DO UPDATE SET "
+                "status = CASE WHEN outreach_contacts.status = 'unsubscribed' THEN 'unsubscribed' "
+                "ELSE 'failed' END, last_error = EXCLUDED.last_error",
+                (email, name or None, (error or "")[:300]))
+
+    def outreach_unsubscribe(self, email):
+        return bool(self._run(
+            "INSERT INTO outreach_contacts (email, status, unsubscribed_at) "
+            "VALUES (%s, 'unsubscribed', NOW()) ON CONFLICT (email) DO UPDATE SET "
+            "status = 'unsubscribed', unsubscribed_at = NOW()", (email,)))
+
+    def outreach_sent_today(self):
+        return int(self._run("SELECT COUNT(*) FROM outreach_contacts "
+                             "WHERE sent_at >= date_trunc('day', NOW())", fetch="value") or 0)
+
+    def outreach_recent(self, limit=100):
+        return self._run("SELECT email, name, status, send_count, sent_at, last_error "
+                         "FROM outreach_contacts ORDER BY COALESCE(sent_at, added_at) DESC "
+                         "LIMIT %s", (limit,), fetch="all") or []
+
+    def outreach_signups(self):
+        """E-posta linkinden gelen kayit sayisi."""
+        return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
+                             fetch="value") or 0)
 
     # ==================== KAYNAK / PRO KODLARI ====================
 
