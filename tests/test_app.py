@@ -196,8 +196,12 @@ def test_outreach_unsubscribe_link_is_signed():
 
 def test_outreach_message_is_personal():
     from services.outreach import DEFAULT_BODY, DEFAULT_SUBJECT, message
-    m = message({"email": "a@b.com", "name": "Jordan Smith"}, DEFAULT_SUBJECT, DEFAULT_BODY, "HOOPFRIENDS")
+    m = message({"email": "a@b.com", "name": "Jordan"}, DEFAULT_SUBJECT, DEFAULT_BODY, "HOOPFRIENDS")
     assert m["to"] == ["a@b.com"] and "Hi Jordan," in m["text"]
+    tr = message({"email": "a@b.com", "name": "Socrates Dergi ekibi"}, "Konu", "Merhaba {name},\n\nŞöyle: {link}", "X")
+    assert "Merhaba Socrates Dergi ekibi," in tr["text"] and "abonelikten çık" in tr["html"]
+    blank = message({"email": "a@b.com", "name": ""}, "Konu", "Merhaba {name},\n\nŞöyle", "X")
+    assert blank["text"].startswith("Merhaba,")
     assert "code=HOOPFRIENDS" in m["html"] and "unsubscribe" in m["html"]
     assert m["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
 

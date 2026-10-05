@@ -91,19 +91,32 @@ def signup_link(code):
     return f"{base}/register?{code_part}utm_source=email&utm_medium=outreach"
 
 
-def _first_name(name):
-    first = (name or "").split(" ")[0].strip()
-    return first if first and not EMAIL_RE.search(first) else "there"
+def _greeting_name(name, turkish):
+    """Listede nasil yazildiysa oyle hitap edilir ("Levent", "Socrates Dergi ekibi")."""
+    name = (name or "").strip()
+    if name and not EMAIL_RE.search(name):
+        return name
+    return "" if turkish else "there"
+
+
+def _is_turkish(text):
+    return any(ch in text for ch in "ğışçöüĞİŞÇÖÜ")
 
 
 def render(person, subject, body, code):
     """Bir kisiye gidecek konu, duz metin ve HTML."""
     link = signup_link(code)
-    name = _first_name(person.get("name"))
-    text = body.replace("{name}", name).replace("{link}", link)
+    turkish = _is_turkish(body)
+    name = _greeting_name(person.get("name"), turkish)
+    text = body.replace(" {name},", f" {name}," if name else ",").replace("{name}", name)
+    text = text.replace("{link}", link)
     unsub = unsubscribe_url(person["email"])
-    footer = ("You're getting this one-off email because I thought you might find the app useful. "
-              "If you'd rather not hear from me again: ")
+    if turkish:
+        footer = ("Bu e-postayı bir kez, uygulamanın ilginizi çekebileceğini düşündüğüm için gönderdim. "
+                  "Bir daha e-posta almak istemezseniz: ")
+    else:
+        footer = ("You're getting this one-off email because I thought you might find the app useful. "
+                  "If you'd rather not hear from me again: ")
     text_full = f"{text}\n\n--\n{footer}{unsub}"
 
     paragraphs = []
@@ -115,7 +128,7 @@ def render(person, subject, body, code):
         "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:560px\">"
         + "".join(paragraphs)
         + f"<p style=\"margin:24px 0 0;font-size:12px;color:#777\">{html.escape(footer)}"
-          f"<a href=\"{html.escape(unsub)}\" style=\"color:#777\">unsubscribe</a>.</p></div>")
+          f"<a href=\"{html.escape(unsub)}\" style=\"color:#777\">{'abonelikten çık' if turkish else 'unsubscribe'}</a>.</p></div>")
     return {"subject": subject.replace("{name}", name), "text": text_full, "html": html_body,
             "unsubscribe": unsub}
 
