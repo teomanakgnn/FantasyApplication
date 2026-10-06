@@ -209,3 +209,18 @@ def test_outreach_message_is_personal():
 def test_outreach_panel_needs_login():
     res = client.get("/admin/outreach", follow_redirects=False)
     assert res.status_code == 303 and res.headers["location"].startswith("/login")
+
+
+# ==================== ZIYARETCILER ====================
+
+def test_visitor_bots_are_skipped():
+    from services.visits import is_bot
+    assert is_bot("Mozilla/5.0 (compatible; Googlebot/2.1)")
+    assert is_bot("AdsBot-Google (+http://www.google.com/adsbot.html)")
+    assert is_bot("")
+    assert not is_bot("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1")
+
+
+def test_visitors_panel_needs_login():
+    res = client.get("/admin/visitors", follow_redirects=False)
+    assert res.status_code == 303 and res.headers["location"].startswith("/login")

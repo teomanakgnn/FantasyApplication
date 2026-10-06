@@ -23,7 +23,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import config
 from utils.console import configure_console_encoding
-from web.core import WEB_DIR, public_host, remember_source, render
+from services import visits
+from web.core import (SESSION_COOKIE, WEB_DIR, _cached_user, client_ip, public_host,
+                      remember_source, render)
+
+ME_COOKIE = "hl_me"     # yonetici tarayicisi: ziyaretci sayimina girmez
 
 configure_console_encoding()
 
@@ -60,10 +64,32 @@ async def security(request: Request, call_next):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif request.method == "GET" and not path.startswith(("/api/", "/healthz")):
         remember_source(request, response)
+        _count_visit(request, response)
     elapsed = time.time() - started
     if elapsed > 2:
         print(f"slow request {request.method} {request.url.path} {elapsed:.1f}s")
     return response
+
+
+def _count_visit(request, response):
+    """
+    Ziyaretci paneli icin sayfa gorunumu (services/visits.py). Yonetici
+    sayilmaz: giris yapmis yonetici tarayicisina kalici bir isaret cerezi
+    alir; cikis yapsa da o tarayici sayim disi kalir.
+    """
+    if response.status_code != 200 or "text/html" not in response.headers.get("content-type", ""):
+        return
+    if request.url.path.startswith(("/admin/", "/account", "/unsubscribe")):
+        return
+    if request.cookies.get(ME_COOKIE):
+        return
+    token = request.cookies.get(SESSION_COOKIE)
+    user = _cached_user(token) if token else None
+    if user and user.get("username") in config.ADMIN_USERNAMES:
+        response.set_cookie(ME_COOKIE, "1", max_age=5 * 365 * 86400, httponly=True,
+                            secure=config.PRODUCTION, samesite="lax", path="/")
+        return
+    visits.record(request, client_ip(request))
 
 
 # ==================== SAYFALAR ====================

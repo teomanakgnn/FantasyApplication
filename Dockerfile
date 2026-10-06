@@ -14,6 +14,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+# Ziyaretci paneli icin IP -> ulke veritabani (indirilemezse ulkesiz calisir)
+RUN python scripts/fetch_geoip.py
+
 # Tek surec: mock draft durumu ve onbellekler bellekte tutuluyor. Istekler
 # bu surecin is parcacigi havuzunda paralel isleniyor.
 CMD ["sh", "-c", "uvicorn web.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*' --timeout-keep-alive 30"]

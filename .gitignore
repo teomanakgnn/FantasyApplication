@@ -33,3 +33,6 @@ railway.env
 mobile/android/keystore.properties
 *.jks
 *.keystore
+
+# IP -> ulke veritabani (kurulumda indirilir)
+data/

@@ -101,6 +101,32 @@ def outreach_send(request: Request, action: str = Form("preview"), recipients: s
                  + (f" Skipped {len(skipped)}." if skipped else ""), skipped=skipped, bad=bad, **form)
 
 
+# ==================== ZIYARETCILER ====================
+
+def _flag(iso):
+    iso = (iso or "").upper()
+    if len(iso) != 2 or not iso.isalpha():
+        return "🌐"
+    return "".join(chr(0x1F1E6 + ord(c) - 65) for c in iso)
+
+
+@router.get("/admin/visitors")
+def visitors_page(request: Request, days: int = 7):
+    gate = login_required(request)
+    if gate:
+        return gate
+    if not _admin(request):
+        return redirect("/account", "Admins only.", "error")
+    days = days if days in (1, 7, 30, 90) else 7
+    report = db.visitor_report(days)
+    for row in report["countries"]:
+        row["flag"] = _flag(row.get("iso"))
+    total = sum(r["visitors"] for r in report["countries"]) or 1
+    for row in report["countries"]:
+        row["share"] = round(100 * row["visitors"] / total)
+    return render(request, "admin_visitors.html", active="account", days=days, r=report)
+
+
 # ==================== ABONELIKTEN CIKMA ====================
 
 @router.get("/unsubscribe")

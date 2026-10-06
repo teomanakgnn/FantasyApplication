@@ -288,6 +288,18 @@ class Database:
                    player_id TEXT NOT NULL,
                    data JSONB NOT NULL
                )""",
+            # Ziyaretci sayaci (services/visits.py): IP yok, gunluk ozet var
+            """CREATE TABLE IF NOT EXISTS page_views (
+                   id BIGSERIAL PRIMARY KEY,
+                   ts TIMESTAMP NOT NULL DEFAULT NOW(),
+                   visitor TEXT NOT NULL,
+                   country TEXT,
+                   country_name TEXT,
+                   path TEXT,
+                   source TEXT,
+                   device TEXT
+               )""",
+            "CREATE INDEX IF NOT EXISTS idx_page_views_ts ON page_views (ts)",
             # Davet e-postalari: kime ne zaman gitti, kim abonelikten cikti
             """CREATE TABLE IF NOT EXISTS outreach_contacts (
                    email TEXT PRIMARY KEY,
@@ -845,6 +857,59 @@ class Database:
                          "WHERE game_date < %s AND game_date >= %s - %s::int",
                          (day, day, days), fetch="all")
         return {r["player_id"] for r in rows or []}
+
+    # ==================== ZIYARETCILER ====================
+
+    def record_page_views(self, rows):
+        pool = self._ensure_pool()
+        if pool is None or not rows:
+            return False
+        conn = pool.getconn()
+        try:
+            from psycopg2.extras import execute_values
+            with conn.cursor() as cur:
+                execute_values(cur, "INSERT INTO page_views (visitor, country, country_name, path, source, device) "
+                                    "VALUES %s", rows)
+                # 90 gunden eski kayitlar saatte bir temizlenir
+                if time.time() - getattr(self, "_views_purged", 0) > 3600:
+                    cur.execute("DELETE FROM page_views WHERE ts < NOW() - INTERVAL '90 days'")
+                    self._views_purged = time.time()
+            conn.commit()
+            return True
+        except Exception as exc:
+            conn.rollback()
+            print(f"page_views insert failed: {exc}")
+            return False
+        finally:
+            pool.putconn(conn)
+
+    def visitor_report(self, days):
+        """Yonetici paneli: son N gunun ozeti."""
+        where = "ts >= NOW() - %s * INTERVAL '1 day'"
+        p = (days,)
+        totals = self._run(f"SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors "
+                           f"FROM page_views WHERE {where}", p, fetch="one") or {}
+        countries = self._run(
+            f"SELECT COALESCE(NULLIF(country_name, ''), 'Unknown') AS name, MAX(country) AS iso, "
+            f"COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM page_views WHERE {where} "
+            f"GROUP BY 1 ORDER BY visitors DESC, views DESC LIMIT 40", p, fetch="all") or []
+        pages = self._run(
+            f"SELECT path, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM page_views "
+            f"WHERE {where} GROUP BY 1 ORDER BY visitors DESC LIMIT 25", p, fetch="all") or []
+        sources = self._run(
+            f"SELECT COALESCE(NULLIF(source, ''), 'direct') AS source, COUNT(DISTINCT visitor) AS visitors "
+            f"FROM page_views WHERE {where} GROUP BY 1 ORDER BY visitors DESC LIMIT 25", p, fetch="all") or []
+        devices = self._run(
+            f"SELECT device, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE {where} "
+            f"GROUP BY 1 ORDER BY visitors DESC", p, fetch="all") or []
+        daily = self._run(
+            f"SELECT DATE(ts) AS day, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views "
+            f"FROM page_views WHERE {where} GROUP BY 1 ORDER BY 1 DESC", p, fetch="all") or []
+        recent = self._run(
+            "SELECT ts, country_name, path, source, device FROM page_views ORDER BY ts DESC LIMIT 60",
+            fetch="all") or []
+        return {"totals": totals, "countries": countries, "pages": pages, "sources": sources,
+                "devices": devices, "daily": daily, "recent": recent}
 
     # ==================== DAVET E-POSTALARI ====================
 
