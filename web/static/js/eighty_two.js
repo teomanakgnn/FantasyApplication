@@ -70,13 +70,12 @@
       <div class="ez-grid">
         <div>${courtHtml()}</div>
         <section class="card ez-spin">
-          <div class="ez-team ${animating ? "spinning" : ""}" id="ez-team">
-            ${sp.logo ? `<img src="${sp.logo}" alt="" width="54" height="54">` : `<span class="ez-nologo">${h(sp.abbr)}</span>`}
-            <div><span class="eyebrow" style="margin:0">${h(sp.label)}</span><b>${h(sp.name)}</b></div>
-            ${st.rerolls > 0 ? `<button class="btn btn-sm btn-ghost" id="ez-reroll" type="button" title="Spin a different team">Re-spin (${st.rerolls})</button>` : ""}
+          <div class="ez-team ${animating ? "spinning" : revealing ? "landed" : ""}" id="ez-team">
+            ${animating ? reelHtml(sp) : `${teamFace(sp)}`}
+            ${st.rerolls > 0 ? `<button class="btn btn-sm btn-ghost" id="ez-reroll" ${animating ? "disabled" : ""} type="button" title="Spin a different team">Re-spin (${st.rerolls})</button>` : ""}
           </div>
           <p class="tiny dim" style="margin:6px 0 8px">${selected ? `Now tap a spot on the court for <b>${h(selected.name)}</b>.` : "Pick one player from this team."}</p>
-          <div class="ez-roster ${animating ? "is-spinning" : revealing ? "is-revealing" : ""}" id="ez-roster">${animating ? spinRows(sp.players.length) : sp.players.map((p, i) => {
+          <div class="ez-roster ${animating ? "is-spinning" : revealing ? "is-revealing" : ""}" id="ez-roster">${animating ? skeleton(sp.players.length) : sp.players.map((p, i) => {
             const dup = used.has(p.id);
             return `<button type="button" class="ez-p ${selected && selected.id === p.id ? "is-sel" : ""}" data-pid="${p.id}" ${dup ? "disabled" : ""} style="--i:${i}">
               <img src="${photo(p.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -99,34 +98,42 @@
     spinAnim();
   }
 
-  // Cark donerken kadro da doner: takim adi, logo, sezon ve oyuncu
-  // satirlari birlikte rastgele akar, yavaslar; durunca gercek kadro
-  // satir satir acilir. Boylece takim adi bitmeden kadro gorunmez.
-  const pool = () => data.spins.concat(spins).flatMap((t) => t.players);
-  function rowHtml(p) {
-    return `<div class="ez-p ez-ghost"><img src="${photo(p.id)}" alt="" onerror="this.style.visibility='hidden'"><span class="ez-pn"><b>${h(p.name)}</b><small>${h(p.pos)} · ${p.pts.toFixed(1)} pts</small></span><i class="ez-ovr ${ovrClass(p.ovr)}">${p.ovr}</i></div>`;
+  // ---------------- cark ----------------
+  // Slot makinesi: takimlar dikey bir seritte kayar, yavaslayip gelen
+  // takimda durur (tek bir CSS gecisi, akici). Kadro alani bu sirada
+  // iskelet satirlar; takim oturunca oyuncular sirayla acilir.
+  const REEL_ITEMS = 18, REEL_MS = 1900;
+  function teamFace(t) {
+    return `${t.logo ? `<img class="ez-tlogo" src="${t.logo}" alt="" width="54" height="54" onerror="this.style.visibility='hidden'">` : `<span class="ez-nologo">${h(t.abbr)}</span>`}
+      <div class="ez-tname"><span class="eyebrow" style="margin:0">${h(t.label)}</span><b>${h(t.name)}</b></div>`;
   }
-  function spinRows(n) { const all = pool(); return Array.from({ length: n }, () => rowHtml(all[Math.floor(Math.random() * all.length)])).join(""); }
+  function reelHtml(target) {
+    const fr = C.franchises;
+    const items = [];
+    for (let k = 0; k < REEL_ITEMS - 1; k++) {
+      const f = fr[Math.floor(Math.random() * fr.length)];
+      const y = 1986 + Math.floor(Math.random() * 41);
+      items.push({ logo: f.logo, abbr: f.abbr, name: f.name, label: `${y - 1}-${String(y).slice(2)}` });
+    }
+    items.push(target);
+    return `<div class="ez-reel"><div class="ez-strip" id="ez-strip">${items.map((t) => `<div class="ez-reel-item">${teamFace(t)}</div>`).join("")}</div></div>`;
+  }
+  function skeleton(n) {
+    return Array.from({ length: n }, (_, i) => `<div class="ez-skel" style="--i:${i}"><i></i><span><b></b><small></small></span><em></em></div>`).join("");
+  }
 
   function spinAnim() {
     animating = true; render();
-    const teams = data.spins.concat(spins);
-    const head = $("#ez-team"), roster = $("#ez-roster");
-    const n = current().players.length;
-    const delays = [60, 60, 60, 70, 70, 80, 90, 110, 130, 160, 200, 250];
-    let k = 0;
-    const tick = () => {
-      if (k >= delays.length) { animating = false; revealing = true; render(); revealing = false; return; }
-      const r = teams[Math.floor(Math.random() * teams.length)];
-      if (head) {
-        head.querySelector("b").textContent = r.name;
-        head.querySelector(".eyebrow").textContent = r.label;
-        const img = head.querySelector("img"); if (img && r.logo) img.src = r.logo;
-      }
-      if (roster) roster.innerHTML = spinRows(n);
-      setTimeout(tick, delays[k++]);
-    };
-    tick();
+    const strip = $("#ez-strip");
+    const finish = () => { if (!animating) return; animating = false; revealing = true; render(); revealing = false; };
+    if (!strip) return finish();
+    const item = strip.firstElementChild.getBoundingClientRect().height;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      strip.style.transition = `transform ${REEL_MS}ms cubic-bezier(.12,.72,.18,1)`;
+      strip.style.transform = `translateY(${-(REEL_ITEMS - 1) * item}px)`;
+    }));
+    strip.addEventListener("transitionend", finish, { once: true });
+    setTimeout(finish, REEL_MS + 300);
   }
 
   root.addEventListener("click", async (e) => {

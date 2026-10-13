@@ -203,6 +203,40 @@
 .share-preview img { width: 100%; max-width: 380px; border-radius: 14px; box-shadow: var(--shadow); }
 .share-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
 
+/* 82-0 cark (slot makinesi) */
+.ez-team { position: relative; min-height: 70px; border-radius: 12px; margin: -6px -6px 0; padding: 6px 6px 8px; }
+.ez-tname { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ez-team > .ez-tname b, .ez-reel-item b { font-size: 1.12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ez-reel { position: relative; flex: 1; height: 62px; overflow: hidden; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(255,255,255,.03) 50%, rgba(0,0,0,.35));
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent); }
+.ez-strip { will-change: transform; }
+.ez-reel-item { height: 62px; display: flex; align-items: center; gap: 12px; padding: 0 10px; }
+.ez-reel-item img { width: 46px; height: 46px; flex: none; }
+.ez-team.landed { animation: ez-land .9s ease-out; }
+.ez-team.landed .ez-tlogo { animation: ez-logo .55s cubic-bezier(.2,1.6,.4,1); }
+@keyframes ez-land { 0% { background: radial-gradient(120% 140% at 15% 50%, rgba(242,201,76,.28), transparent 60%); } 100% { background: transparent; } }
+@keyframes ez-logo { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+
+.ez-skel { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; background: var(--surface-2); }
+.ez-skel i { width: 46px; height: 34px; border-radius: 6px; flex: none; }
+.ez-skel span { flex: 1; display: grid; gap: 6px; }
+.ez-skel b { height: 12px; width: 60%; border-radius: 6px; }
+.ez-skel small { height: 9px; width: 40%; border-radius: 5px; }
+.ez-skel em { width: 30px; height: 24px; border-radius: 7px; }
+.ez-skel i, .ez-skel b, .ez-skel small, .ez-skel em {
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 0%, rgba(255,255,255,.13) 40%, rgba(255,255,255,.05) 80%); background-size: 300% 100%;
+  animation: ez-shimmer 1.1s linear infinite; animation-delay: calc(var(--i) * 60ms); }
+@keyframes ez-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.ez-roster.is-revealing .ez-p { animation: ez-in .4s cubic-bezier(.2,.9,.3,1) both; animation-delay: calc(var(--i) * 55ms); }
+@keyframes ez-in { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ez-strip { transition: none !important; } .ez-skel * { animation: none !important; } }
+
+/* Paylasim gorseli onizlemesi */
+.share-preview { text-align: center; }
+.share-preview img { width: 100%; max-width: 380px; border-radius: 14px; box-shadow: var(--shadow); }
+.share-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
+
 /* 82-0 cark animasyonu */
 .ez-roster.is-spinning .ez-p { filter: blur(2.5px); opacity: .55; pointer-events: none; animation: ez-roll .12s linear infinite; }
 .ez-roster.is-spinning { overflow: hidden; }

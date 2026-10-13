@@ -84,4 +84,8 @@ def record(avg_ovr):
 
 def config():
     return {"slots": SLOTS, "fits": {k: sorted(v) for k, v in FITS.items()}, "penalty": OFF_POSITION,
-            "mu": MU, "k": K, "spins": SPINS, "rerolls": REROLLS}
+            "mu": MU, "k": K, "spins": SPINS, "rerolls": REROLLS,
+            # Cark seridindeki sahte duraklar icin
+            "franchises": [{"abbr": a, "name": NAMES.get(a, a),
+                            "logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{a.lower()}.png"}
+                           for a in NAMES if a not in ("NJ", "SEA", "VAN")]}
