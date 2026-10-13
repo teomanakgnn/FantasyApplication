@@ -245,3 +245,17 @@ def test_stat_match_rounds_are_hard_pairs():
             assert left_line == fake[int(a["id"])]["stats"]
     finally:
         mg.board_players = orig
+
+
+def test_starting_five_hides_names_and_checks_guesses():
+    from services import starting_five as sf
+    gid = sf.daily_game_id()
+    view = sf.view(gid)
+    assert view["hidden"] == 6
+    hidden = [(ti, si) for ti, t in enumerate(view["teams"]) for si, s in enumerate(t["slots"]) if not s.get("given")]
+    assert len(hidden) == 6 and all("name" not in view["teams"][ti]["slots"][si] for ti, si in hidden)
+    full = sf.reveal(gid)
+    ti, si = hidden[0]
+    hit = sf.guess(gid, full[ti][si]["name"].upper())
+    assert hit and hit[0]["team"] == ti and hit[0]["slot"] == si
+    assert sf.guess(gid, "Nobody Atall") == []

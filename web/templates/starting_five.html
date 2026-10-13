@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Starting Five #{{ puzzle }} · HoopLife NBA{% endblock %}
+{% block description %}A real NBA playoff game, two starting lineups, six missing players. Name the starters - a new game every day.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="sf-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Daily game</div>
+    <h1>Starting Five <span class="dim">#{{ puzzle }}</span></h1>
+    <p>A real playoff game. Two starters on each side are shown - name the other six. Each empty spot shows the player's position and his line from that game.</p>
+  </div>
+  {% if not ready %}
+    <div class="note note-info">Today's game is not ready. Refresh in a minute.</div>
+  {% else %}
+    <div id="sf-game"></div>
+    <script id="sf-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/starting_five.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

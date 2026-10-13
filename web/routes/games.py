@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from services import daily_player as daily
 from services import minigames
+from services import starting_five as sf
 from services.nba_season import get_current_season_year, get_season_label
 from services.win_totals import get_team_identity
 from services.database import db
@@ -140,6 +141,40 @@ def tier_list(request: Request):
     players = minigames.tier_players(200)
     return render(request, "tier_list.html", active="tiers", payload=_json({"players": players}),
                   ready=bool(players))
+
+
+# ==================== STARTING FIVE ====================
+
+@router.get("/starting-five")
+def starting_five(request: Request):
+    game = sf.view(sf.daily_game_id())
+    payload = {"puzzle": sf.puzzle_number(), "game": game, "names": sf.names(),
+               "next_in": daily.seconds_to_next(), "signed_in": bool(current_user(request))}
+    return render(request, "starting_five.html", active="starting5", payload=_json(payload),
+                  puzzle=payload["puzzle"], ready=bool(game))
+
+
+@router.get("/api/starting-five/random")
+def starting_five_random():
+    return {"game": sf.view(sf.random_game_id())}
+
+
+@router.post("/api/starting-five/guess")
+async def starting_five_guess(request: Request):
+    body = await request.json()
+    hits = sf.guess(str(body.get("game") or ""), str(body.get("name") or "")[:80])
+    if hits is None:
+        return _bad("That game is not available.", 404)
+    return {"hits": hits}
+
+
+@router.post("/api/starting-five/reveal")
+async def starting_five_reveal(request: Request):
+    body = await request.json()
+    teams = sf.reveal(str(body.get("game") or ""))
+    if teams is None:
+        return _bad("That game is not available.", 404)
+    return {"teams": teams}
 
 
 @router.get("/card-game")
