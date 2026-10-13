@@ -20,19 +20,70 @@
   const foundCount = () => Object.keys(st.found).length;
   const persist = () => { if (mode === "daily") save(KEY, st); };
 
-  // ---------------- cizim ----------------
-  function slotHtml(team, ti, slot, si) {
+  // ---------------- kort ----------------
+  // Kort olculeri ayak cinsinden (94 x 50). Masaustunde yatay, telefonda
+  // dikey: dikeyde kortun uzunlugu ekranin boyuna gider.
+  const vertical = () => matchMedia("(max-width: 640px)").matches;
+  // Sol yari sahadaki yerler (pota x=5.25). Sag takim aynalanir.
+  const SPOTS = { G: [[31, 25], [24, 8.5]], F: [[24, 41.5], [13.5, 38]], C: [[11, 13]] };
+  // Dikey kort dar: kartlar uc sira halinde (pivot, forvetler, gardlar)
+  const SPOTS_V = { G: [[36, 33], [36, 17]], F: [[20, 43], [20, 7]], C: [[9, 25]] };
+  const ORDER = [["G", 0], ["G", 1], ["F", 0], ["F", 1], ["C", 0]];
+  const group = (pos) => (/C/.test(pos || "") ? "C" : /G/.test(pos || "") ? "G" : "F");
+
+  function spotsFor(slots) {
+    const free = ORDER.slice();
+    const take = (g) => { const k = free.findIndex(([x]) => x === g); return k >= 0 ? free.splice(k, 1)[0] : null; };
+    const picked = slots.map((s) => take(group(s.pos)));
+    const spots = vertical() ? SPOTS_V : SPOTS;
+    return picked.map((p) => p || free.shift()).map(([g, n]) => spots[g][n]);
+  }
+
+  function place(x, y, mirror) {
+    if (mirror) x = 94 - x;
+    return vertical() ? { left: (50 - y) / 50 * 100, top: x / 94 * 100 } : { left: x / 94 * 100, top: y / 50 * 100 };
+  }
+
+  function courtSvg() {
+    const half = `<rect x="0" y="17" width="19" height="16" class="paint"/>
+      <circle cx="19" cy="25" r="6" class="ln"/>
+      <path d="M0 3 L14 3 A23.75 23.75 0 0 1 14 47 L0 47" class="ln"/>
+      <path d="M4 25 m0 -4 l0 8" class="ln"/><circle cx="5.25" cy="25" r=".9" class="rim"/>
+      <path d="M9 21 A4 4 0 0 1 9 29" class="ln"/>`;
+    const body = `<rect x="0" y="0" width="94" height="50" class="floor"/>
+      <rect x=".3" y=".3" width="93.4" height="49.4" class="ln"/>
+      <line x1="47" y1="0" x2="47" y2="50" class="ln"/><circle cx="47" cy="25" r="6" class="ln"/><circle cx="47" cy="25" r="2" class="ln"/>
+      <g>${half}</g><g transform="translate(94 0) scale(-1 1)">${half}</g>`;
+    return vertical()
+      ? `<svg class="sf-court-svg" viewBox="0 0 50 94" preserveAspectRatio="none" aria-hidden="true"><g transform="translate(50 0) rotate(90)">${body}</g></svg>`
+      : `<svg class="sf-court-svg" viewBox="0 0 94 50" preserveAspectRatio="none" aria-hidden="true">${body}</svg>`;
+  }
+
+  function tokenHtml(team, ti, slot, si, spot) {
     const f = st.found[slotKey(ti, si)];
     const missed = st.done && !slot.given && !f && st.revealed;
     const who = slot.given ? slot : f || (missed ? st.revealed[ti][si] : null);
-    const line = `${slot.pts} PTS · ${slot.reb} REB · ${slot.ast} AST · ${slot.min} MIN`;
-    return `<div class="sf-slot ${slot.given ? "given" : f ? "found" : missed ? "missed" : "empty"}">
-      <div class="sf-ph">${who ? `<img src="${photo(who.id)}" alt="" loading="lazy" onerror="this.nextElementSibling.hidden=false;this.remove()"><span hidden>${h(slot.pos || "?")}</span>` : `<span>${h(slot.pos || "?")}</span>`}</div>
-      <div class="sf-info">
-        <b>${who ? h(who.name) : "???"}</b>
-        <span>${h(slot.pos || "")}${slot.jersey ? ` · #${h(slot.jersey)}` : ""}</span>
-        <small>${line}</small>
-      </div></div>`;
+    const state = (slot.given ? "given" : f ? "found" : missed ? "missed" : "empty") + (lastFound === slotKey(ti, si) ? " just" : "");
+    const at = place(spot[0], spot[1], ti === 1);
+    const last = who ? who.name.split(" ").slice(1).join(" ") || who.name : "???";
+    return `<button type="button" class="sf-tok ${state}" style="left:${at.left}%;top:${at.top}%;--team:${team.color}"
+        data-tip="${h((who ? who.name + " · " : "") + `${slot.pos || "?"}${slot.jersey ? " #" + slot.jersey : ""} · ${slot.pts} PTS, ${slot.reb} REB, ${slot.ast} AST in ${slot.min} min`)}">
+      <span class="sf-face">${who ? `<img src="${photo(who.id)}" alt="" loading="lazy" onerror="this.nextElementSibling.hidden=false;this.remove()"><em hidden>${h(slot.pos || "?")}</em>` : `<em>${h(slot.pos || "?")}</em>`}
+        ${slot.jersey ? `<i class="sf-num">${h(slot.jersey)}</i>` : ""}</span>
+      <span class="sf-name">${h(last)}</span>
+      <span class="sf-line">${slot.pts}p ${slot.reb}r ${slot.ast}a</span>
+    </button>`;
+  }
+
+  function courtHtml(g) {
+    const marks = g.teams.map((t, ti) => {
+      const at = place(23.5, 25, ti === 1);
+      return `<img class="sf-mark" src="${t.logo}" alt="" style="left:${at.left}%;top:${at.top}%">
+        <span class="sf-half-tag" style="${vertical() ? (ti ? "bottom:6px" : "top:6px") + ";left:8px" : (ti ? "right:8px" : "left:8px") + ";top:6px"}">${h(t.abbr)}</span>`;
+    }).join("");
+    const toks = g.teams.map((t, ti) => { const sp = spotsFor(t.slots); return t.slots.map((s, si) => tokenHtml(t, ti, s, si, sp[si])).join(""); }).join("");
+    return `<div class="sf-court ${vertical() ? "is-vertical" : ""}">${courtSvg()}${marks}${toks}</div>
+      <p class="tiny dim center" style="margin-top:6px">Tap a player for his full line from this game.</p>`;
   }
 
   function render() {
@@ -55,11 +106,7 @@
           <button class="btn btn-sm btn-ghost" id="sf-giveup" type="button">Give up</button></div>
         ${st.misses.length ? `<div class="sf-misses tiny dim">Not starters: ${st.misses.map(h).join(", ")}</div>` : ""}
       </div>`}
-      <div class="sf-teams">${g.teams.map((t, ti) => `
-        <section class="sf-col" style="--team:${t.color}">
-          <div class="sf-col-head"><img src="${t.logo}" alt="" width="26" height="26"> ${h(t.name)}</div>
-          ${t.slots.map((s, si) => slotHtml(t, ti, s, si)).join("")}
-        </section>`).join("")}</div>
+      ${courtHtml(g)}
       <div id="sf-result"></div>`;
     if (st.done) renderResult();
     else bindSearch();
@@ -91,7 +138,7 @@
     list.addEventListener("click", (e) => { const b = e.target.closest("[data-name]"); if (b) guess(b.dataset.name); });
   }
 
-  let busy = false;
+  let busy = false, lastFound = null;
   async function guess(name) {
     if (busy || st.done) return;
     busy = true;
@@ -99,8 +146,10 @@
       const res = await api("/api/starting-five/guess", { method: "POST", body: { game: game.id, name } });
       if (res.hits.length) {
         res.hits.forEach((x) => { st.found[slotKey(x.team, x.slot)] = { name: x.name, id: x.id }; });
+        lastFound = slotKey(res.hits[0].team, res.hits[0].slot);
         toast(`${res.hits[0].name} started!`);
       } else {
+        lastFound = null;
         st.misses.push(name);
       }
       if (foundCount() >= game.hidden || st.misses.length >= game.max_misses) await end();
@@ -156,6 +205,8 @@
   }
 
   root.addEventListener("click", async (e) => {
+    const tok = e.target.closest(".sf-tok");
+    if (tok) return toast(tok.dataset.tip);
     if (e.target.closest("#sf-share")) return share();
     if (e.target.closest("#sf-giveup")) {
       if (!confirm("Show the full lineups?")) return;
@@ -169,6 +220,16 @@
         render(); window.scrollTo({ top: 0, behavior: "smooth" });
       } catch (err) { toast(err.message, true); }
     }
+  });
+
+  // Telefon donunce kort yatay/dikey yeniden cizilir
+  let wasVertical = vertical();
+  addEventListener("resize", () => {
+    if (vertical() === wasVertical) return;
+    wasVertical = vertical();
+    const typed = $("#sf-input") ? $("#sf-input").value : "";
+    render();
+    if (typed && $("#sf-input")) $("#sf-input").value = typed;
   });
 
   render();
