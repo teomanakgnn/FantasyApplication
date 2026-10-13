@@ -1,0 +1,67 @@
+/* ==================== STAT MATCH ==================== */
+.sm-wrap { max-width: 720px; margin: 0 auto; }
+.sm-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; }
+.sm-dots { display: flex; gap: 5px; }
+.sm-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); }
+.sm-dots i.now { background: var(--text); }
+.sm-dots i.ok { background: var(--good); }
+.sm-dots i.no { background: var(--bad); }
+.sm-players { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.sm-player { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
+  padding: 14px 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.sm-player.left { border-color: rgba(57, 135, 229, .6); box-shadow: 0 0 0 1px rgba(57, 135, 229, .35) inset; }
+.sm-player img { width: 100%; max-width: 160px; aspect-ratio: 220 / 160; object-fit: cover; }
+.sm-player b { font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; }
+.sm-player span { color: var(--muted); font-size: .78rem; }
+.sm-target { position: absolute; top: 8px; left: 8px; font-style: normal; font-size: .62rem; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: #fff; background: var(--accent); padding: 2px 7px; border-radius: 999px; }
+.sm-vs { font-weight: 900; color: var(--dim); font-size: .9rem; }
+.sm-lines { display: grid; gap: 10px; margin-top: 14px; }
+.sm-line { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: var(--surface); border: 2px solid var(--line-strong); border-radius: var(--radius); padding: 10px 12px; transition: border-color .15s, transform .1s; }
+.sm-line:not(:disabled):hover { border-color: var(--accent); }
+.sm-line:not(:disabled):active { transform: scale(.99); }
+.sm-line:disabled { cursor: default; }
+.sm-line-tag { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.sm-line.is-left .sm-line-tag { color: #8DBBF2; }
+.sm-line.is-right-pick { border-color: var(--good); background: var(--good-soft); }
+.sm-line.is-wrong-pick { border-color: var(--bad); background: var(--bad-soft); }
+.sm-stats { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.sm-stats span { display: flex; flex-direction: column; align-items: center; }
+.sm-stats b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.sm-stats i { font-style: normal; font-size: .62rem; font-weight: 700; color: var(--dim); letter-spacing: .04em; }
+.sm-verdict { text-align: center; font-weight: 800; font-size: 1.05rem; }
+.sm-result { text-align: center; }
+.sm-result h2 { font-size: 2.4rem; margin: 4px 0; }
+.sm-grid { font-size: 1.4rem; letter-spacing: 2px; margin-bottom: 12px; }
+@media (max-width: 640px) {
+  .sm-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 8px; }
+  .sm-player { padding: 12px 6px 10px; }
+  .sm-player b { font-size: .9rem; }
+  .sm-vs { font-size: .75rem; }
+}
+
+/* ==================== TIER LIST ==================== */
+.tl-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.tl-title { flex: 1 1 260px; font-weight: 700; }
+.tl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tl-board { display: grid; gap: 6px; }
+.tl-row { display: flex; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-height: 76px; }
+.tl-label { flex: none; width: 58px; display: grid; place-items: center; font-weight: 900; font-size: 1.6rem; color: #0B0F17; cursor: pointer; }
+.tl-drop { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; align-content: flex-start; min-width: 0; cursor: pointer; }
+.tl-empty { color: var(--dim); font-size: .82rem; align-self: center; padding: 0 6px; }
+.tl-holding .tl-drop, .tl-holding #tl-pool { outline: 1px dashed rgba(57, 135, 229, .5); outline-offset: -3px; }
+.tl-chip { display: flex; flex-direction: column; align-items: center; width: 74px; padding: 4px 2px 5px; border-radius: 10px;
+  background: var(--surface-2); border: 2px solid transparent; color: var(--text); font: inherit; cursor: grab; touch-action: manipulation; }
+.tl-chip img { width: 64px; height: 47px; object-fit: cover; pointer-events: none; }
+.tl-chip span { font-size: .7rem; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.tl-chip.is-sel { border-color: var(--accent); background: var(--accent-soft); }
+.tl-pool-card { margin-top: 14px; }
+.tl-pool-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.tl-pool-head .input { flex: 1 1 180px; }
+.tl-pool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 60px; }
+@media (max-width: 640px) {
+  .tl-label { width: 42px; font-size: 1.2rem; }
+  .tl-chip { width: 62px; }
+  .tl-chip img { width: 54px; height: 40px; }
+}

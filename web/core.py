@@ -46,6 +46,8 @@ NAV = [
     ("strategy", "/draft-strategy", "Draft Strategy"),
     ("ou", "/over-under", "Over / Under"),
     ("daily", "/daily", "Mystery Player"),
+    ("statmatch", "/stat-match", "Stat Match"),
+    ("tiers", "/tier-list", "Tier List"),
     ("bracket", "/bracket", "Playoff Bracket"),
     None,
     ("injuries", "/injuries", "Injury Report"),

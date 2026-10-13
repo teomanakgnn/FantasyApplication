@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from services import daily_player as daily
+from services import minigames
 from services.nba_season import get_current_season_year, get_season_label
 from services.win_totals import get_team_identity
 from services.database import db
@@ -110,6 +111,35 @@ async def daily_stats(request: Request):
     stats["dist"] = dist + [0] * (daily.MAX_GUESSES - len(dist))
     db.save_daily_stats(user["id"], stats)
     return {"ok": True}
+
+
+# ==================== STAT MATCH / TIER LIST ====================
+
+def _json(data):
+    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+
+
+@router.get("/stat-match")
+def stat_match(request: Request):
+    day = daily.today()
+    rounds = minigames.stat_match_rounds(f"statmatch-{day.isoformat()}")
+    payload = {"puzzle": minigames.stat_match_number(day), "rounds": rounds,
+               "next_in": daily.seconds_to_next(), "signed_in": bool(current_user(request))}
+    return render(request, "stat_match.html", active="statmatch", payload=_json(payload),
+                  ready=len(rounds) >= 5, puzzle=payload["puzzle"])
+
+
+@router.get("/api/stat-match/practice")
+def stat_match_practice():
+    import secrets
+    return {"rounds": minigames.stat_match_rounds(secrets.token_hex(8))}
+
+
+@router.get("/tier-list")
+def tier_list(request: Request):
+    players = minigames.tier_players(200)
+    return render(request, "tier_list.html", active="tiers", payload=_json({"players": players}),
+                  ready=bool(players))
 
 
 @router.get("/card-game")

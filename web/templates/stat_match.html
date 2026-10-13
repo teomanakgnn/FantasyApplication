@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Stat Match #{{ puzzle }} · HoopLife NBA{% endblock %}
+{% block description %}Two NBA players, two stat lines - which one is whose? Ten rounds a day, share your score without spoilers.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="sm-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Daily game</div>
+    <h1>Stat Match <span class="dim">#{{ puzzle }}</span></h1>
+    <p>Two players, two stat lines from last season. Tap the line that belongs to the player on the <b>left</b>. Ten rounds, same for everyone today.</p>
+  </div>
+  {% if not ready %}
+    <div class="note note-info">Today's players are still loading. Refresh in a minute.</div>
+  {% else %}
+    <div id="sm-game" aria-live="polite"></div>
+    <script id="sm-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/stat_match.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

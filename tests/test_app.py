@@ -224,3 +224,24 @@ def test_visitor_bots_are_skipped():
 def test_visitors_panel_needs_login():
     res = client.get("/admin/visitors", follow_redirects=False)
     assert res.status_code == 303 and res.headers["location"].startswith("/login")
+
+
+def test_stat_match_rounds_are_hard_pairs():
+    import services.minigames as mg
+    fake = [{"id": str(i), "name": f"P{i}", "team": "T", "pos": "PG", "group": "G" if i % 2 else "F",
+             "gp": 60, "adp": i, "stats": {"PTS": 10 + i % 7, "REB": 3, "AST": 4, "STL": 1, "BLK": 0.5,
+                                            "3PM": 2, "FG%": 45, "FT%": 80}} for i in range(60)]
+    orig = mg.board_players
+    mg.board_players = lambda limit=220: fake
+    try:
+        rounds = mg.stat_match_rounds("seed")
+        assert len(rounds) == 10 and rounds == mg.stat_match_rounds("seed")
+        ids = [p["id"] for r in rounds for p in r["players"]]
+        assert len(ids) == len(set(ids))
+        for r in rounds:
+            a, b = r["players"]
+            assert r["answer"] in (0, 1)
+            left_line = r["lines"][r["answer"]]
+            assert left_line == fake[int(a["id"])]["stats"]
+    finally:
+        mg.board_players = orig

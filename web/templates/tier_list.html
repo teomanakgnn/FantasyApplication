@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Fantasy Basketball Tier List · HoopLife NBA{% endblock %}
+{% block description %}Build your 2026-27 fantasy basketball tier list - drag players into tiers, download it as an image or share a link.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Draft prep</div>
+  <h1>Tier List</h1>
+  <p>Rank this season's fantasy players into tiers. Drag them in on desktop, or tap a player and then tap a tier on your phone. Saved on this device; download it as an image or share it as a link.</p>
+</div>
+{% if not ready %}
+  <div class="note note-info">Players are still loading. Refresh in a minute.</div>
+{% else %}
+  <div class="note note-info tl-shared" id="tl-shared" hidden>You're looking at someone's shared tier list. Change anything to make it your own.</div>
+  <div class="tl-bar">
+    <input class="input tl-title" id="tl-title" maxlength="60" aria-label="Tier list title" value="My 2026-27 fantasy tiers">
+    <div class="tl-actions">
+      <button class="btn btn-primary btn-sm" id="tl-png" type="button">Download image</button>
+      <button class="btn btn-sm" id="tl-link" type="button">Share link</button>
+      <button class="btn btn-sm btn-ghost" id="tl-reset" type="button">Reset</button>
+    </div>
+  </div>
+  <div class="tl-board" id="tl-board"></div>
+  <p class="tiny dim" id="tl-hint">Tap a player to pick them up, then tap a tier. Tap a placed player and then the pool to send them back.</p>
+
+  <section class="card tl-pool-card">
+    <div class="tl-pool-head">
+      <div class="card-title" style="margin:0">Players <span class="dim small" id="tl-left"></span></div>
+      <div class="seg" role="group" aria-label="Position" id="tl-pos">
+        <button class="is-on" data-pos="">All</button><button data-pos="G">G</button><button data-pos="F">F</button><button data-pos="C">C</button>
+      </div>
+      <input class="input" id="tl-search" type="search" placeholder="Search players" aria-label="Search players">
+    </div>
+    <div class="tl-pool" id="tl-pool" data-tier=""></div>
+    <button class="btn btn-sm btn-ghost" id="tl-more" type="button" style="margin-top:10px">Show more players</button>
+  </section>
+  <script id="tl-data" type="application/json">{{ payload|safe }}</script>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/tier_list.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
