@@ -48,6 +48,7 @@ NAV = [
     ("daily", "/daily", "Mystery Player"),
     ("statmatch", "/stat-match", "Stat Match"),
     ("starting5", "/starting-five", "Starting Five"),
+    ("eightytwo", "/82-0", "82-0 Challenge"),
     ("tiers", "/tier-list", "Tier List"),
     ("bracket", "/bracket", "Playoff Bracket"),
     None,

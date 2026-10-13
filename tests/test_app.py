@@ -259,3 +259,12 @@ def test_starting_five_hides_names_and_checks_guesses():
     hit = sf.guess(gid, full[ti][si]["name"].upper())
     assert hit and hit[0]["team"] == ti and hit[0]["slot"] == si
     assert sf.guess(gid, "Nobody Atall") == []
+
+
+def test_eighty_two_spins_and_record():
+    from services import eighty_two as e82
+    spins = e82.spins("seed")
+    assert len(spins) == e82.SPINS + e82.REROLLS and spins == e82.spins("seed")
+    assert len({(s["abbr"], s["season"]) for s in spins}) == len(spins)
+    assert all(len(s["players"]) >= 7 and all(55 <= p["ovr"] <= 99 for p in s["players"]) for s in spins)
+    assert e82.record(87.5)[0] == 41 and e82.record(98.5)[0] == 82 and e82.record(80)[0] < 5

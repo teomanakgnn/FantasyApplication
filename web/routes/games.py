@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from services import daily_player as daily
 from services import minigames
+from services import eighty_two as e82
 from services import starting_five as sf
 from services.nba_season import get_current_season_year, get_season_label
 from services.win_totals import get_team_identity
@@ -141,6 +142,23 @@ def tier_list(request: Request):
     players = minigames.tier_players(200)
     return render(request, "tier_list.html", active="tiers", payload=_json({"players": players}),
                   ready=bool(players))
+
+
+# ==================== 82-0 ====================
+
+@router.get("/82-0")
+def eighty_two(request: Request):
+    day = daily.today()
+    payload = {"puzzle": e82.puzzle_number(day), "spins": e82.spins(f"82-0-{day.isoformat()}"),
+               "config": e82.config(), "signed_in": bool(current_user(request))}
+    return render(request, "eighty_two.html", active="eightytwo", payload=_json(payload),
+                  puzzle=payload["puzzle"], ready=True)
+
+
+@router.get("/api/82-0/practice")
+def eighty_two_practice():
+    import secrets
+    return {"spins": e82.spins(secrets.token_hex(8))}
 
 
 # ==================== STARTING FIVE ====================

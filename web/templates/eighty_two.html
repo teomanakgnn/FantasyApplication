@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}82-0 Challenge #{{ puzzle }} · HoopLife NBA{% endblock %}
+{% block description %}Spin a random NBA team from any season since 1986, take one player, fill all five spots - can your lineup go 82-0?{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="ez-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Daily game</div>
+    <h1>82-0 Challenge <span class="dim">#{{ puzzle }}</span></h1>
+    <p>Five spins, five random teams from any season since 1986. Take one player from each and put him in a spot - out of position costs him 6 OVR. Then we play the 82-game season.</p>
+  </div>
+  <div id="ez-game"></div>
+  <script id="ez-data" type="application/json">{{ payload|safe }}</script>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/eighty_two.js?v={{ asset_version }}"></script>{% endblock %}
