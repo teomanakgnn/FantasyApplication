@@ -58,6 +58,8 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     if not session:
         return render(request, "login.html", mode="login", next=target, form=form,
                       error="Could not start a session. Try again.", status_code=500)
+    from web.routes.mock import claim_guest_drafts
+    claim_guest_drafts(request, user["id"])
     response = redirect(target, f"Welcome back, {user['username']}.")
     set_session_cookie(response, session["token"], remember=bool(remember))
     return response
@@ -86,23 +88,24 @@ def _turnstile_ok(request, token):
 
 
 @router.get("/register")
-def register_page(request: Request):
+def register_page(request: Request, next: str = "/"):
     if current_user(request):
-        return redirect("/")
+        return redirect(_safe_next(next))
     code = request.query_params.get("code") or request.cookies.get(CODE_COOKIE) or ""
-    return render(request, "login.html", mode="register", next="/", form={"code": code[:32]},
+    return render(request, "login.html", mode="register", next=_safe_next(next), form={"code": code[:32]},
                   turnstile=config.TURNSTILE_SITE_KEY)
 
 
 @router.post("/register")
 def register(request: Request, username: str = Form(""), email: str = Form(""),
              password: str = Form(""), password2: str = Form(""), terms: str = Form(None),
-             code: str = Form(""),
+             code: str = Form(""), next: str = Form("/"),
              turnstile_token: str = Form("", alias="cf-turnstile-response")):
     form = {"username": username, "email": email, "code": code}
+    target = _safe_next(next)
 
     def fail(message, code=400):
-        return render(request, "login.html", mode="register", next="/", form=form,
+        return render(request, "login.html", mode="register", next=target, form=form,
                       error=message, status_code=code, turnstile=config.TURNSTILE_SITE_KEY)
 
     if not _turnstile_ok(request, turnstile_token):
@@ -138,7 +141,9 @@ def register(request: Request, username: str = Form(""), email: str = Form(""),
     if code:
         redeemed, note = db.redeem_promo_code(user["id"], code)
         message += " " + (note if redeemed else f"The invite code did not work: {note}")
-    response = redirect("/", message)
+    from web.routes.mock import claim_guest_drafts
+    claim_guest_drafts(request, user["id"])
+    response = redirect(target, message)
     response.delete_cookie(CODE_COOKIE, path="/")
     response.set_cookie(SIGNUP_COOKIE, "1", max_age=600, httponly=True,
                         secure=config.PRODUCTION, samesite="lax", path="/")

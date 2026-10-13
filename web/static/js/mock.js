@@ -106,7 +106,11 @@
   }
 
   const existing = store.get(STORE);
-  if (existing) {
+  // Kayit/giristen donus: draft kaldigi yerden kendiliginden acilir
+  if (existing && window.MOCK.signedIn && new URLSearchParams(location.search).get("resume") === "1") {
+    history.replaceState(null, "", "/mock-draft");
+    api("/api/mock/" + existing).then(start).catch(() => store.del(STORE));
+  } else if (existing) {
     $("resume-note").hidden = false;
     $("resume-btn").addEventListener("click", async () => {
       try { await start(await api("/api/mock/" + existing)); }
@@ -295,6 +299,23 @@
       const mine = me(); const g = mine ? view.grades[String(mine.slot)] || {} : {};
       setStage(stageHtml("", "Draft complete", mine ? `Your team graded ${h(g.grade || "-")}` : "All picks are in",
         mine ? `ranked ${g.rank || "-"} of ${view.teams.length}` : "", "", false));
+      // Kayit icin dogal an: draft bitti, not verildi. Misafir hesap acinca
+      // draft hesabina gecer (sunucu tasiyor) ve ?resume=1 ile geri acilir.
+      if (!window.MOCK.signedIn) {
+        const back = encodeURIComponent("/mock-draft?resume=1");
+        $("stage").insertAdjacentHTML("beforeend", `
+          <div class="signup-nudge">
+            <div><b>Keep this draft${mine && g.grade ? ` (${h(g.grade)})` : ""}</b>
+              <span>Free account: save your drafts, compare grades across mocks and keep a 10-player watchlist for the season.</span></div>
+            <a class="btn btn-primary" href="/register?next=${back}" data-nudge="register">Create free account</a>
+            <a class="nudge-login" href="/login?next=${back}">I already have one</a>
+          </div>`);
+        if (!renderStage.nudged) {
+          renderStage.nudged = true;
+          $("stage").scrollIntoView({ behavior: "smooth", block: "start" });
+          if (window.gtag) gtag("event", "signup_prompt", { place: "mock_complete" });
+        }
+      }
       return;
     }
     const n = view.nomination;

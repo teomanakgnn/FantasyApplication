@@ -64,3 +64,10 @@
   .dp-tile img { width: 22px; height: 22px; }
   .dp-answer img { width: 80px; height: 58px; }
 }
+
+/* Misafire seri koruma onerisi */
+.dp-keep { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft);
+  border: 1px solid rgba(57, 135, 229, .35); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; text-align: left; }
+.dp-keep > div { flex: 1 1 220px; }
+.dp-keep b { display: block; color: var(--text); }
+.dp-keep span { color: #C7DDF7; font-size: .84rem; }

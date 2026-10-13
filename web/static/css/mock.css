@@ -157,3 +157,11 @@ table.board td.p-C { box-shadow: inset 0 -2px 0 #f87171; }
 
 /* Pasif dugmeler kirmizi degil gri: tiklanamayacagi belli olsun */
 .prow .btn:disabled, .suggest-card .btn:disabled { background: var(--surface-3); border-color: var(--line); color: var(--dim); opacity: 1; }
+
+/* Draft bitince misafire kayit onerisi */
+.signup-nudge { margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--accent-soft);
+  border: 1px solid rgba(57, 135, 229, .35); display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; text-align: left; }
+.signup-nudge > div { flex: 1 1 260px; }
+.signup-nudge b { display: block; color: var(--text); margin-bottom: 2px; }
+.signup-nudge span { color: #C7DDF7; font-size: .86rem; }
+.signup-nudge .nudge-login { font-size: .84rem; }

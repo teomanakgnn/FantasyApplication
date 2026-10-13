@@ -54,6 +54,24 @@ def _owner(request):
     return f"g{guest}" if guest else None
 
 
+def claim_guest_drafts(request, user_id):
+    """
+    Kayit/giris aninda misafir draftlarini hesaba tasir: draft bitince
+    "kaydetmek icin hesap ac" diyen kisi geri donunce draftini bulur.
+    """
+    guest = request.cookies.get(GUEST_COOKIE)
+    if not guest:
+        return
+    old, new = f"g{guest}", f"u{user_id}"
+    for entry in list(_DRAFTS.values()):
+        if entry.get("owner") == old:
+            entry["owner"] = new
+    try:
+        db.claim_live_drafts(old, new)
+    except Exception as exc:
+        print(f"draft claim failed: {exc}")
+
+
 _last_purge = [0.0]
 
 

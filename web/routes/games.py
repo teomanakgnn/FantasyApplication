@@ -19,7 +19,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from services import daily_player as daily
 from services.nba_season import get_current_season_year, get_season_label
 from services.win_totals import get_team_identity
-from web.core import render
+from services.database import db
+from web.core import current_user, render
 from web.routes.over_under import load_lines
 
 router = APIRouter()
@@ -30,11 +31,14 @@ router = APIRouter()
 @router.get("/daily")
 def daily_page(request: Request):
     players = daily.search_list()
+    user = current_user(request)
     payload = json.dumps({
         "puzzle": daily.puzzle_number(),
         "max": daily.MAX_GUESSES,
         "next_in": daily.seconds_to_next(),
         "players": players,
+        "signed_in": bool(user),
+        "server_stats": db.get_daily_stats(user["id"]) if user and db.available else None,
     }, ensure_ascii=False).replace("</", "<\\/")
     return render(request, "daily.html", active="daily", payload=payload,
                   ready=bool(players), puzzle=daily.puzzle_number())
@@ -86,6 +90,26 @@ async def daily_reveal(request: Request):
             any(g not in pool for g in guesses):
         return _bad("Use all your guesses first.", 403)
     return {"answer": daily.public_answer(answer)}
+
+
+_STAT_KEYS = ("played", "wins", "streak", "best", "last", "lastWin")
+
+
+@router.post("/api/daily/stats")
+async def daily_stats(request: Request):
+    """Giris yapan kullanicinin serisi: her cihazda ayni istatistik."""
+    user = current_user(request)
+    if not user:
+        return _bad("Sign in to keep your streak on every device.", 401)
+    body = await request.json()
+    try:
+        stats = {k: max(0, min(int(body.get(k) or 0), 100000)) for k in _STAT_KEYS}
+        dist = [max(0, min(int(x or 0), 100000)) for x in (body.get("dist") or [])][:daily.MAX_GUESSES]
+    except (TypeError, ValueError):
+        return _bad("Bad stats.")
+    stats["dist"] = dist + [0] * (daily.MAX_GUESSES - len(dist))
+    db.save_daily_stats(user["id"], stats)
+    return {"ok": True}
 
 
 @router.get("/card-game")

@@ -300,6 +300,12 @@ class Database:
                    device TEXT
                )""",
             "CREATE INDEX IF NOT EXISTS idx_page_views_ts ON page_views (ts)",
+            # Mystery Player istatistikleri: giris yapan kullanicinin serisi her cihazda
+            """CREATE TABLE IF NOT EXISTS daily_stats (
+                   user_id INTEGER PRIMARY KEY,
+                   stats JSONB NOT NULL,
+                   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+               )""",
             # Davet e-postalari: kime ne zaman gitti, kim abonelikten cikti
             """CREATE TABLE IF NOT EXISTS outreach_contacts (
                    email TEXT PRIMARY KEY,
@@ -577,7 +583,7 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks", "promo_redemptions"):
+                      "season_win_picks", "promo_redemptions", "daily_stats"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
         # Suren mock draftlar kullanici kimligine degil sahip anahtarina bagli
@@ -1087,6 +1093,23 @@ class Database:
         if isinstance(state, str):
             state = json.loads(state)
         return state, row.get("saved_id")
+
+    def claim_live_drafts(self, old_owner, new_owner):
+        """Misafirken baslanan draftlar giris/kayit sonrasi hesaba gecer."""
+        return self._run("UPDATE live_drafts SET owner = %s WHERE owner = %s",
+                         (new_owner, old_owner), fetch="rowcount") or 0
+
+    def get_daily_stats(self, user_id):
+        value = self._run("SELECT stats FROM daily_stats WHERE user_id = %s", (user_id,), fetch="value")
+        if isinstance(value, str):
+            value = json.loads(value)
+        return value
+
+    def save_daily_stats(self, user_id, stats):
+        return bool(self._run(
+            "INSERT INTO daily_stats (user_id, stats, updated_at) VALUES (%s, %s, NOW()) "
+            "ON CONFLICT (user_id) DO UPDATE SET stats = EXCLUDED.stats, updated_at = NOW()",
+            (user_id, json.dumps(stats))))
 
     def purge_live_drafts(self, days=3):
         return self._run("DELETE FROM live_drafts WHERE updated_at < CURRENT_TIMESTAMP - %s * INTERVAL '1 day'",

@@ -20,6 +20,19 @@
   }
   const stats = Object.assign({ played: 0, wins: 0, streak: 0, best: 0, last: 0, lastWin: 0,
                                 dist: [0, 0, 0, 0, 0, 0, 0, 0] }, load(STATS_KEY, {}));
+  // Hesaptaki istatistik: hangisi daha cok oyun iceriyorsa o gecerli
+  // (yeni cihazda giris yapan kullanici serisini geri alir).
+  const remote = data.server_stats;
+  if (remote && ((remote.played || 0) > stats.played || ((remote.played || 0) === stats.played && (remote.last || 0) > stats.last))) {
+    Object.assign(stats, remote);
+    save(STATS_KEY, stats);
+  } else if (data.signed_in && stats.played && (!remote || stats.played > (remote.played || 0))) {
+    pushStats();
+  }
+  function pushStats() {
+    if (!data.signed_in) return;
+    api("/api/daily/stats", { method: "POST", body: stats }).catch(() => {});
+  }
 
   const input = $("#dp-input");
   const list = $("#dp-list");
@@ -123,6 +136,7 @@
     }
     stats.best = Math.max(stats.best, stats.streak);
     save(STATS_KEY, stats);
+    pushStats();
     if (window.gtag) gtag("event", "daily_finish", { won: game.won, guesses: game.rows.length });
   }
 
@@ -213,7 +227,15 @@
           <div><b>${stats.best}</b><span>Best</span></div>
         </div>
         <div class="dp-dist">${dist}</div>
+        ${data.signed_in ? "" : `
+        <div class="dp-keep">
+          <div><b>${streak > 0 ? `Don't lose your ${streak}-day streak` : "Keep your stats"}</b>
+            <span>Your streak only lives in this browser. A free account keeps it on every device.</span></div>
+          <a class="btn btn-primary btn-sm" href="/register?next=%2Fdaily" data-keep>Create free account</a>
+        </div>`}
       </div>`;
+    const keep = resultEl.querySelector("[data-keep]");
+    if (keep && window.gtag) gtag("event", "signup_prompt", { place: "daily_result" });
     $("#dp-share").addEventListener("click", share);
     tick();
     clearInterval(timer);
