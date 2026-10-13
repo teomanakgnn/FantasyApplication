@@ -65,3 +65,12 @@
   .tl-chip { width: 62px; }
   .tl-chip img { width: 54px; height: 40px; }
 }
+
+.sm-choose { text-align: center; }
+.sm-choose-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sm-choose-row .btn { flex-direction: column; min-height: 76px; gap: 2px; }
+.sm-choose-row .btn span { font-size: .8rem; font-weight: 600; opacity: .85; }
+.sm-share-mini { margin-left: auto; }
+.sm-top .sm-dots { flex: none; }
+.sm-next-row { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+@media (max-width: 640px) { .sm-top { flex-wrap: wrap; } .sm-top .sm-dots { width: 100%; justify-content: center; order: 3; } }

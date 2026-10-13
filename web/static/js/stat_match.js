@@ -1,5 +1,5 @@
-// Stat Match: iki oyuncu, iki istatistik satiri. Gunluk tur bu cihazda
-// saklanir; bitince pratik turlari acilir.
+// Stat Match: iki oyuncu, iki istatistik satiri. Gunluk tur 5 ya da 10
+// tur; skor her an paylasilabilir. Ilerleme bu cihazda saklanir.
 (function () {
   const { $, api, toast, escapeHtml: h } = window.HL;
   const data = JSON.parse($("#sm-data").textContent);
@@ -11,18 +11,19 @@
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
   let game = load(KEY, null);
-  if (!game || game.puzzle !== data.puzzle) game = { puzzle: data.puzzle, picks: [] };
+  if (!game || game.puzzle !== data.puzzle) game = { puzzle: data.puzzle, picks: [], length: 0 };
+  if (!game.length && game.picks.length) game.length = 10;      // eski kayit
   const stats = Object.assign({ played: 0, best: 0, total: 0, last: 0 }, load(STATS, {}));
   // mode: "daily" ya da "practice"
   let mode = "daily", rounds = data.rounds, picks = game.picks;
-
+  const total = () => (mode === "daily" ? Math.min(game.length || 10, data.rounds.length) : rounds.length);
   const score = (arr, rs) => arr.filter((p, i) => p === rs[i].answer).length;
+  const grid = (arr, rs) => arr.map((p, i) => (p === rs[i].answer ? "🟩" : "🟥")).join("");
 
   function statLine(line, idx, r, chosen) {
     let cls = "";
     if (chosen !== undefined) {
-      const owner = idx === r.answer ? 0 : 1;   // bu satir kimin
-      cls = owner === 0 ? "is-left" : "is-right";
+      cls = idx === r.answer ? "is-left" : "is-right";
       if (idx === chosen) cls += chosen === r.answer ? " is-right-pick" : " is-wrong-pick";
     }
     const owner = chosen !== undefined ? r.players[idx === r.answer ? 0 : 1] : null;
@@ -32,13 +33,29 @@
     </button>`;
   }
 
+  function chooser() {
+    root.innerHTML = `
+      <div class="card sm-choose">
+        <div class="card-title">How many rounds?</div>
+        <div class="sm-choose-row">
+          <button class="btn btn-primary" data-len="5"><b>Quick</b><span>5 rounds</span></button>
+          <button class="btn" data-len="10"><b>Full</b><span>10 rounds</span></button>
+        </div>
+        <p class="tiny dim" style="margin:10px 0 0">Share your score at any point. Pick Quick and you can play the other 5 later.</p>
+      </div>`;
+  }
+
+  function shareLabel() { return `Share ${score(picks, rounds)}/${picks.length}`; }
+
   function render() {
+    if (mode === "daily" && !game.length) return chooser();
     const i = picks.length;
-    if (i >= rounds.length) return finish();
+    if (i >= total()) return finish();
     const r = rounds[i];
     root.innerHTML = `
-      <div class="sm-top"><span class="chip">${mode === "practice" ? "Practice" : "Round"} ${i + 1} / ${rounds.length}</span>
-        <span class="sm-dots">${rounds.map((x, j) => `<i class="${j < i ? (picks[j] === rounds[j].answer ? "ok" : "no") : j === i ? "now" : ""}"></i>`).join("")}</span></div>
+      <div class="sm-top"><span class="chip">${mode === "practice" ? "Practice" : "Round"} ${i + 1} / ${total()}</span>
+        ${i > 0 ? `<button class="btn btn-sm btn-ghost sm-share-mini" id="sm-share" type="button">${shareLabel()}</button>` : ""}
+        <span class="sm-dots">${rounds.slice(0, total()).map((x, j) => `<i class="${j < i ? (picks[j] === rounds[j].answer ? "ok" : "no") : j === i ? "now" : ""}"></i>`).join("")}</span></div>
       <div class="sm-players">
         ${r.players.map((p, side) => `
           <div class="sm-player ${side === 0 ? "left" : "right"}">
@@ -59,25 +76,36 @@
     const ok = chosen === r.answer;
     root.querySelector(".sm-lines").innerHTML = r.lines.map((l, idx) => statLine(l, idx, r, chosen)).join("") +
       `<div class="sm-verdict ${ok ? "good" : "bad"}">${ok ? "Correct!" : "Not this time."}</div>
-       <button class="btn btn-primary btn-block" id="sm-next">${picks.length >= rounds.length ? "See result" : "Next round"}</button>`;
+       <div class="sm-next-row">
+         <button class="btn btn-primary" id="sm-next">${picks.length >= total() ? "See result" : "Next round"}</button>
+         <button class="btn" id="sm-share" type="button">${shareLabel()}</button>
+       </div>`;
     root.querySelectorAll(".sm-dots i")[i].className = ok ? "ok" : "no";
+    const mini = root.querySelector(".sm-share-mini");
+    if (mini) mini.remove();
     $("#sm-next").focus();
   }
 
   root.addEventListener("click", (e) => {
     const line = e.target.closest("[data-line]");
     if (line && !line.disabled) return reveal(+line.dataset.line);
+    const len = e.target.closest("[data-len]");
+    if (len) { game.length = +len.dataset.len; save(KEY, game); return render(); }
     if (e.target.closest("#sm-next")) return render();
     if (e.target.closest("#sm-share")) return share();
     if (e.target.closest("#sm-practice")) return practice();
+    if (e.target.closest("#sm-more")) {
+      mode = "daily"; rounds = data.rounds; picks = game.picks; game.length = data.rounds.length; save(KEY, game);
+      return render();
+    }
   });
 
-  function grid(arr, rs) { return arr.map((p, i) => (p === rs[i].answer ? "🟩" : "🟥")).join(""); }
-
   async function share() {
-    const s = score(game.picks, data.rounds);
-    const text = `HoopLife Stat Match #${data.puzzle} ${s}/${data.rounds.length}\n${grid(game.picks, data.rounds)}\n${location.origin}/stat-match?ref=statmatch-share`;
-    if (window.gtag) gtag("event", "statmatch_share");
+    const done = picks.length, s = score(picks, rounds);
+    const head = mode === "practice" ? "HoopLife Stat Match (practice)" : `HoopLife Stat Match #${data.puzzle}`;
+    const progress = done < total() ? ` after ${done} of ${total()}` : "";
+    const text = `${head} ${s}/${done}${progress}\n${grid(picks, rounds)}\n${location.origin}/stat-match?ref=statmatch-share`;
+    if (window.gtag) gtag("event", "statmatch_share", { done });
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
     }
@@ -88,7 +116,7 @@
   async function practice() {
     try {
       const res = await api("/api/stat-match/practice");
-      mode = "practice"; rounds = res.rounds; picks = [];
+      mode = "practice"; rounds = res.rounds.slice(0, game.length || 10); picks = [];
       render(); window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) { toast(err.message, true); }
   }
@@ -98,26 +126,30 @@
       const s = score(picks, rounds);
       root.innerHTML = `<div class="card sm-result"><div class="eyebrow">Practice</div><h2>${s} / ${rounds.length}</h2>
         <div class="sm-grid">${grid(picks, rounds)}</div>
-        <div class="dp-actions"><button class="btn btn-primary" id="sm-practice">Another practice round</button><a class="btn btn-ghost" href="/mock-draft">Run a mock draft</a></div></div>`;
+        <div class="dp-actions"><button class="btn btn-primary" id="sm-share" type="button">Share result</button>
+          <button class="btn" id="sm-practice" type="button">Another practice round</button></div></div>`;
       return;
     }
-    const s = score(game.picks, data.rounds);
-    if (stats.last !== data.puzzle) {
+    const n = total(), s = score(game.picks.slice(0, n), data.rounds);
+    // Istatistik tam gunluk turda (10) tutulur; 5'lik tur sonra tamamlanabilir.
+    if (stats.last !== data.puzzle && n >= data.rounds.length) {
       stats.last = data.puzzle; stats.played += 1; stats.total += s; stats.best = Math.max(stats.best, s);
       save(STATS, stats);
       if (window.gtag) gtag("event", "statmatch_finish", { score: s });
     }
     const avg = stats.played ? (stats.total / stats.played).toFixed(1) : "-";
+    const more = data.rounds.length - n;
     root.innerHTML = `
       <div class="card sm-result">
         <div class="eyebrow">Stat Match #${data.puzzle}</div>
-        <h2>${s} / ${data.rounds.length}</h2>
-        <div class="sm-grid">${grid(game.picks, data.rounds)}</div>
+        <h2>${s} / ${n}</h2>
+        <div class="sm-grid">${grid(game.picks.slice(0, n), data.rounds)}</div>
         <div class="dp-actions">
           <button class="btn btn-primary" id="sm-share" type="button">Share result</button>
-          <button class="btn" id="sm-practice" type="button">Practice round</button>
+          ${more > 0 ? `<button class="btn" id="sm-more" type="button">Play ${more} more</button>` : ""}
+          <button class="btn ${more > 0 ? "btn-ghost" : ""}" id="sm-practice" type="button">Practice round</button>
         </div>
-        <div class="dp-stats"><div><b>${stats.played}</b><span>Played</span></div><div><b>${avg}</b><span>Average</span></div><div><b>${stats.best}</b><span>Best</span></div></div>
+        <div class="dp-stats"><div><b>${stats.played}</b><span>Full games</span></div><div><b>${avg}</b><span>Average</span></div><div><b>${stats.best}</b><span>Best</span></div></div>
         <p class="small muted" style="margin-top:12px">New pairs every day at midnight UK time. Also try <a href="/daily">Mystery Player</a>.</p>
         ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Track your scores</b><span>Free account: save mock drafts, keep your Mystery Player streak on every device.</span></div>
           <a class="btn btn-primary btn-sm" href="/register?next=%2Fstat-match">Create free account</a></div>`}
