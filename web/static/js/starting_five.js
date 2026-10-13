@@ -31,11 +31,11 @@
   const ORDER = [["G", 0], ["G", 1], ["F", 0], ["F", 1], ["C", 0]];
   const group = (pos) => (/C/.test(pos || "") ? "C" : /G/.test(pos || "") ? "G" : "F");
 
-  function spotsFor(slots) {
+  function spotsFor(slots, vert = vertical()) {
     const free = ORDER.slice();
     const take = (g) => { const k = free.findIndex(([x]) => x === g); return k >= 0 ? free.splice(k, 1)[0] : null; };
     const picked = slots.map((s) => take(group(s.pos)));
-    const spots = vertical() ? SPOTS_V : SPOTS;
+    const spots = vert ? SPOTS_V : SPOTS;
     return picked.map((p) => p || free.shift()).map(([g, n]) => spots[g][n]);
   }
 
@@ -178,13 +178,75 @@
     return `${head} · ${game.teams.map((t) => t.abbr).join(" vs ")} ${game.season}\n${foundCount()}/${game.hidden}${prog} ${ticks}\n${location.origin}/starting-five?ref=startingfive-share`;
   }
   async function share() {
-    const text = shareText();
+    const text = `${mode === "daily" ? `HoopLife Starting Five #${data.puzzle}` : "HoopLife Starting Five"}: I named ${foundCount()}/${game.hidden} starters from ${game.teams.map((t) => t.abbr).join(" vs ")} (${game.season}). ${location.origin}/starting-five?ref=startingfive-share`;
     if (window.gtag) gtag("event", "startingfive_share");
-    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-      try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
-    }
-    try { await navigator.clipboard.writeText(text); toast("Result copied - paste it anywhere."); }
-    catch (err) { window.prompt("Copy your result:", text); }
+    try { await HLCard.share(await card(), { filename: "starting-five.png", text, title: "Starting Five" }); }
+    catch (err) { toast("Could not create the image.", true); }
+  }
+
+  // Spoiler'siz gorsel: acik verilen iki oyuncu fotografli, bulunanlar
+  // yesil tik, bulunamayanlar soru isareti. Gizli isimler gorselde yok.
+  async function card() {
+    const K = HLCard, g0 = game;
+    const { cv, g } = await K.base("STARTING FIVE", mode === "daily" ? data.puzzle : "");
+    K.text(g, g0.title.toUpperCase(), K.W / 2, 200, { weight: 800, size: 30, color: K.C.muted, align: "center", max: 960 });
+    const logos = await Promise.all(g0.teams.map((t) => K.loadImg(t.logo)));
+    g0.teams.forEach((t, ti) => {
+      const cx = ti ? K.W - 250 : 250;
+      if (logos[ti]) g.drawImage(logos[ti], cx - 60, 230, 120, 120);
+      K.text(g, t.abbr, cx, 392, { weight: 900, size: 40, align: "center" });
+      K.text(g, String(t.score), ti ? K.W / 2 + 130 : K.W / 2 - 130, 322, { weight: 900, size: 88, align: "center" });
+    });
+    K.text(g, "–", K.W / 2, 322, { weight: 900, size: 70, align: "center", color: K.C.dim });
+    K.text(g, `${g0.season} season`, K.W / 2, 392, { weight: 700, size: 26, color: K.C.dim, align: "center" });
+    const n = foundCount();
+    K.text(g, `${n}/${g0.hidden}`, K.W / 2, 530, { weight: 900, size: 120, align: "center", color: n === g0.hidden ? K.C.good : "#fff" });
+    K.text(g, n === g0.hidden ? "PERFECT LINEUP" : "STARTERS NAMED", K.W / 2, 580, { weight: 800, size: 28, align: "center", color: K.C.muted });
+
+    // Tam saha
+    const x0 = 40, y0 = 630, cw = K.W - 80, ch = cw * 50 / 94;
+    K.rr(g, x0, y0, cw, ch, 26); g.save(); g.clip();
+    const wood = g.createLinearGradient(0, y0, 0, y0 + ch); wood.addColorStop(0, "#C88446"); wood.addColorStop(1, "#A9692F");
+    g.fillStyle = wood; g.fillRect(x0, y0, cw, ch);
+    const fx = (v) => x0 + cw * v / 94, fy = (v) => y0 + ch * v / 50;
+    g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(fx(47), fy(0)); g.lineTo(fx(47), fy(50)); g.stroke();
+    g.beginPath(); g.arc(fx(47), fy(25), cw * 6 / 94, 0, Math.PI * 2); g.stroke();
+    [0, 1].forEach((m) => {
+      const X = (v) => fx(m ? 94 - v : v);
+      g.fillStyle = "rgba(122,32,32,.55)"; const a = X(0), b = X(19);
+      g.fillRect(Math.min(a, b), fy(17), Math.abs(b - a), fy(33) - fy(17)); g.strokeRect(Math.min(a, b), fy(17), Math.abs(b - a), fy(33) - fy(17));
+      g.beginPath(); g.arc(X(19), fy(25), cw * 6 / 94, 0, Math.PI * 2); g.stroke();
+      // uc sayi yayi: pota merkezli, 23.75 ayak
+      const hx = X(5.25), hy = fy(25), rx = cw * 23.75 / 94;
+      const half = Math.PI / 2 - 0.36;
+      g.beginPath(); m ? g.arc(hx, hy, rx, Math.PI - half, Math.PI + half) : g.arc(hx, hy, rx, -half, half); g.stroke();
+    });
+    g.restore();
+
+    const shown = [];
+    g0.teams.forEach((t, ti) => t.slots.forEach((sl, si) => { if (sl.given) shown.push(sl.id); }));
+    const imgs = new Map(await Promise.all(shown.map(async (id) => [id, await K.loadImg(`https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${id}.png&w=220&h=160`)])));
+    g0.teams.forEach((t, ti) => {
+      const sp = spotsFor(t.slots, false);
+      t.slots.forEach((sl, si) => {
+        let [x, y] = sp[si]; if (ti) x = 94 - x;
+        const cx = fx(x), cy = fy(y), r = 40;
+        const found = st.found[slotKey(ti, si)];
+        if (sl.given) {
+          K.disc(g, imgs.get(sl.id), cx, cy, r, { ring: t.color, ringW: 5, name: sl.name });
+          K.pill(g, sl.name.split(" ").slice(-1)[0], cx, cy + r + 18, { size: 18, h: 30, padX: 9 });
+        } else {
+          g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+          g.fillStyle = found ? K.C.good : "rgba(11,15,23,.8)"; g.fill();
+          g.lineWidth = 5; g.strokeStyle = found ? "#fff" : st.done ? K.C.bad : "rgba(255,255,255,.7)"; g.stroke();
+          K.text(g, found ? "✓" : "?", cx, cy + 16, { weight: 900, size: 46, align: "center", color: found ? "#0B0F17" : "#fff" });
+          K.pill(g, sl.pos || "?", cx, cy + r + 18, { size: 18, h: 30, padX: 9 });
+        }
+      });
+    });
+    K.footer(g, "/starting-five");
+    return cv;
   }
 
   function renderResult() {

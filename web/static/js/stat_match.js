@@ -101,16 +101,39 @@
   });
 
   async function share() {
-    const done = picks.length, s = score(picks, rounds);
-    const head = mode === "practice" ? "HoopLife Stat Match (practice)" : `HoopLife Stat Match #${data.puzzle}`;
-    const progress = done < total() ? ` after ${done} of ${total()}` : "";
-    const text = `${head} ${s}/${done}${progress}\n${grid(picks, rounds)}\n${location.origin}/stat-match?ref=statmatch-share`;
+    const done = picks.length, sc = score(picks, rounds);
+    const head = mode === "practice" ? "HoopLife Stat Match" : `HoopLife Stat Match #${data.puzzle}`;
+    const text = `${head}: ${sc}/${done}${done < total() ? ` after ${done} of ${total()}` : ""}. Which stat line is whose? ${location.origin}/stat-match?ref=statmatch-share`;
     if (window.gtag) gtag("event", "statmatch_share", { done });
-    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-      try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
+    try { await HLCard.share(await card(), { filename: "stat-match.png", text, title: "Stat Match" }); }
+    catch (err) { toast("Could not create the image.", true); }
+  }
+
+  // Spoiler'siz: bugunun eslesmeleri yok, yalnizca skor ve tur tur sonuc.
+  async function card() {
+    const K = HLCard, done = picks.length, sc = score(picks, rounds), n = total();
+    const { cv, g } = await K.base("STAT MATCH", mode === "daily" ? data.puzzle : "");
+    const pct = done ? sc / done : 0;
+    const title = done < n ? "IN PROGRESS" : pct === 1 ? "PERFECT" : pct >= .8 ? "STAT GENIUS" : pct >= .6 ? "BALL KNOWER" : pct >= .4 ? "COIN FLIPPER" : "CHECK THE BOX SCORE";
+    K.text(g, `${sc}/${done}`, K.W / 2, 400, { weight: 900, size: 230, align: "center", color: pct === 1 && done === n ? K.C.gold : "#fff" });
+    K.pill(g, title, K.W / 2, 470, { bg: pct === 1 && done === n ? K.C.gold : "rgba(255,255,255,.12)", color: pct === 1 && done === n ? "#1B1300" : "#fff", size: 30, h: 56, padX: 26 });
+    K.text(g, done < n ? `after ${done} of ${n} rounds` : `${n} rounds · ${Math.round(pct * 100)}% correct`, K.W / 2, 545, { weight: 700, size: 30, color: K.C.muted, align: "center" });
+
+    // Tur kutulari: ust uste iki sira
+    const cols = 5, size = 150, gap = 26, rows = Math.ceil(n / cols);
+    const x0 = (K.W - (cols * size + (cols - 1) * gap)) / 2, y0 = 620;
+    for (let k = 0; k < n; k++) {
+      const x = x0 + (k % cols) * (size + gap), y = y0 + Math.floor(k / cols) * (size + gap);
+      const has = k < done, ok = has && picks[k] === rounds[k].answer;
+      K.rr(g, x, y, size, size, 26);
+      g.fillStyle = !has ? "rgba(255,255,255,.06)" : ok ? K.C.good : K.C.bad; g.fill();
+      if (!has) { g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,.14)"; g.stroke(); }
+      K.text(g, has ? (ok ? "✓" : "✗") : String(k + 1), x + size / 2, y + size / 2 + 24, { weight: 900, size: has ? 76 : 44, align: "center", color: has ? "#0B0F17" : K.C.dim });
     }
-    try { await navigator.clipboard.writeText(text); toast("Result copied - paste it anywhere."); }
-    catch (err) { window.prompt("Copy your result:", text); }
+    const yb = y0 + rows * (size + gap) + 30;
+    K.text(g, "Two players. Two stat lines. Which is whose?", K.W / 2, yb + 30, { weight: 700, size: 32, color: K.C.muted, align: "center" });
+    K.footer(g, "/stat-match");
+    return cv;
   }
 
   async function practice() {

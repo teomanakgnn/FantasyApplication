@@ -15,7 +15,7 @@
   let mode = "daily", spins = data.spins;
   let st = load(KEY, null);
   if (!st || st.puzzle !== data.puzzle) st = fresh(data.puzzle);
-  let selected = null, animating = false;
+  let selected = null, animating = false, revealing = false;
 
   function fresh(puzzle) { return { puzzle, spin: 0, rerolls: C.rerolls, lineup: {}, done: false }; }
   const persist = () => { if (mode === "daily") save(KEY, st); };
@@ -76,9 +76,9 @@
             ${st.rerolls > 0 ? `<button class="btn btn-sm btn-ghost" id="ez-reroll" type="button" title="Spin a different team">Re-spin (${st.rerolls})</button>` : ""}
           </div>
           <p class="tiny dim" style="margin:6px 0 8px">${selected ? `Now tap a spot on the court for <b>${h(selected.name)}</b>.` : "Pick one player from this team."}</p>
-          <div class="ez-roster">${sp.players.map((p) => {
+          <div class="ez-roster ${animating ? "is-spinning" : revealing ? "is-revealing" : ""}" id="ez-roster">${animating ? spinRows(sp.players.length) : sp.players.map((p, i) => {
             const dup = used.has(p.id);
-            return `<button type="button" class="ez-p ${selected && selected.id === p.id ? "is-sel" : ""}" data-pid="${p.id}" ${dup ? "disabled" : ""}>
+            return `<button type="button" class="ez-p ${selected && selected.id === p.id ? "is-sel" : ""}" data-pid="${p.id}" ${dup ? "disabled" : ""} style="--i:${i}">
               <img src="${photo(p.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
               <span class="ez-pn"><b>${h(p.name)}</b><small>${h(p.pos)} · ${p.pts.toFixed(1)} pts · ${p.reb.toFixed(1)} reb · ${p.ast.toFixed(1)} ast${dup ? " · already on your team" : ""}</small></span>
               <i class="ez-ovr ${ovrClass(p.ovr)}">${p.ovr}</i></button>`;
@@ -99,16 +99,34 @@
     spinAnim();
   }
 
+  // Cark donerken kadro da doner: takim adi, logo, sezon ve oyuncu
+  // satirlari birlikte rastgele akar, yavaslar; durunca gercek kadro
+  // satir satir acilir. Boylece takim adi bitmeden kadro gorunmez.
+  const pool = () => data.spins.concat(spins).flatMap((t) => t.players);
+  function rowHtml(p) {
+    return `<div class="ez-p ez-ghost"><img src="${photo(p.id)}" alt="" onerror="this.style.visibility='hidden'"><span class="ez-pn"><b>${h(p.name)}</b><small>${h(p.pos)} · ${p.pts.toFixed(1)} pts</small></span><i class="ez-ovr ${ovrClass(p.ovr)}">${p.ovr}</i></div>`;
+  }
+  function spinRows(n) { const all = pool(); return Array.from({ length: n }, () => rowHtml(all[Math.floor(Math.random() * all.length)])).join(""); }
+
   function spinAnim() {
     animating = true; render();
-    const el = $("#ez-team");
-    const others = data.spins.concat(spins);
-    let n = 0;
-    const t = setInterval(() => {
-      const r = others[Math.floor(Math.random() * others.length)];
-      if (el) el.querySelector("b").textContent = r.name;
-      if (++n > 8) { clearInterval(t); animating = false; render(); }
-    }, 70);
+    const teams = data.spins.concat(spins);
+    const head = $("#ez-team"), roster = $("#ez-roster");
+    const n = current().players.length;
+    const delays = [60, 60, 60, 70, 70, 80, 90, 110, 130, 160, 200, 250];
+    let k = 0;
+    const tick = () => {
+      if (k >= delays.length) { animating = false; revealing = true; render(); revealing = false; return; }
+      const r = teams[Math.floor(Math.random() * teams.length)];
+      if (head) {
+        head.querySelector("b").textContent = r.name;
+        head.querySelector(".eyebrow").textContent = r.label;
+        const img = head.querySelector("img"); if (img && r.logo) img.src = r.logo;
+      }
+      if (roster) roster.innerHTML = spinRows(n);
+      setTimeout(tick, delays[k++]);
+    };
+    tick();
   }
 
   root.addEventListener("click", async (e) => {
@@ -189,14 +207,50 @@
 
   async function share() {
     const [w, l] = record(avg());
-    const head = mode === "daily" ? `HoopLife 82-0 #${data.puzzle}` : "HoopLife 82-0 (practice)";
-    const text = `${head}: ${w}-${l}${w === 82 ? " 🏆 PERFECT" : ""}\n${lineupText()}\n${location.origin}/82-0?ref=82-0-share`;
+    const head = mode === "daily" ? `HoopLife 82-0 #${data.puzzle}` : "HoopLife 82-0";
+    const text = `${head}: I went ${w}-${l}${w === 82 ? " 🏆" : ""}. Can you beat it? ${location.origin}/82-0?ref=82-0-share`;
     if (window.gtag) gtag("event", "eightytwo_share", { wins: w });
-    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-      try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
-    }
-    try { await navigator.clipboard.writeText(text); toast("Season copied - paste it anywhere."); }
-    catch (err) { window.prompt("Copy your season:", text); }
+    const btn = $("#ez-share"); if (btn) btn.classList.add("is-loading");
+    try { await HLCard.share(await card(w, l), { filename: `82-0-${w}-${l}.png`, text, title: "82-0 Challenge" }); }
+    catch (err) { toast("Could not create the image.", true); }
+    finally { if (btn) btn.classList.remove("is-loading"); }
+  }
+
+  async function card(w, l) {
+    const K = HLCard, a = avg();
+    const { cv, g } = await K.base("82-0 CHALLENGE", mode === "daily" ? data.puzzle : "");
+    const verdict = w === 82 ? "PERFECT SEASON" : w >= 73 ? "ALL-TIME GREAT" : w >= 60 ? "TITLE CONTENDER" : w >= 45 ? "PLAYOFF TEAM" : w >= 30 ? "LOTTERY BOUND" : "TANK COMMANDER";
+    K.text(g, `${w}-${l}`, K.W / 2, 330, { weight: 900, size: 190, align: "center", color: w === 82 ? K.C.gold : "#fff" });
+    K.pill(g, verdict, K.W / 2, 392, { bg: w === 82 ? K.C.gold : "rgba(255,255,255,.12)", color: w === 82 ? "#1B1300" : "#fff", size: 30, h: 56, padX: 26 });
+    K.text(g, `TEAM OVR ${a.toFixed(1)}`, K.W / 2, 462, { weight: 800, size: 30, color: K.C.muted, align: "center" });
+
+    // Yari saha
+    const x0 = 60, y0 = 500, cw = K.W - 120, ch = 720;
+    K.rr(g, x0, y0, cw, ch, 28); g.save(); g.clip();
+    const wood = g.createLinearGradient(0, y0, 0, y0 + ch); wood.addColorStop(0, "#C88446"); wood.addColorStop(1, "#A9692F");
+    g.fillStyle = wood; g.fillRect(x0, y0, cw, ch);
+    for (let x = x0; x < x0 + cw; x += 46) { g.fillStyle = "rgba(0,0,0,.05)"; g.fillRect(x, y0, 2, ch); }
+    g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 4;
+    // Sahadaki cizgiler 100x70 birimde; oyuncu yerleri (SPOT) yuzde.
+    const px = (v) => x0 + cw * v / 100, py = (v) => y0 + ch * v / 70, pct = (v) => y0 + ch * v / 100;
+    g.fillStyle = "rgba(122,32,32,.55)"; g.fillRect(px(34), py(0), px(66) - px(34), py(38) - py(0)); g.strokeRect(px(34), py(0), px(66) - px(34), py(38) - py(0));
+    g.beginPath(); g.ellipse(px(50), py(38), cw * .12, ch * .12 / .7 * .7 * 1.0, 0, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo(px(6), py(0)); g.lineTo(px(6), py(18)); g.ellipse(px(50), py(18), cw * .44, ch * .44 * 0.95, 0, Math.PI, 0, true); g.lineTo(px(94), py(0)); g.stroke();
+    g.strokeStyle = "#FF7A1A"; g.beginPath(); g.arc(px(50), py(8), 16, 0, Math.PI * 2); g.stroke();
+    g.restore();
+
+    const imgs = await Promise.all(C.slots.map((s) => K.loadImg(`https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${st.lineup[s].id}.png&w=350&h=254`)));
+    C.slots.forEach((s, i) => {
+      const x = st.lineup[s], [sx, sy] = SPOT[s];
+      const cx = px(sx), cy = pct(sy) - 40, eff = effective(s);
+      K.disc(g, imgs[i], cx, cy, 72, { ring: eff >= 95 ? K.C.gold : "#fff", ringW: 7, name: x.name });
+      const bg = eff >= 95 ? K.C.gold : eff >= 88 ? "#1E9E5A" : eff >= 78 ? "#2F6FB6" : "#3A4357";
+      K.pill(g, String(eff), cx + 60, cy + 50, { bg, color: eff >= 95 ? "#1B1300" : "#fff", size: 28, h: 46, padX: 12 });
+      K.pill(g, x.name.split(" ").slice(-1)[0].toUpperCase(), cx, cy + 98, { size: 25, h: 42 });
+      K.pill(g, `${s} · ${x.team} '${String(x.season).slice(2)}`, cx, cy + 136, { bg: "rgba(255,255,255,.9)", color: "#0B0F17", size: 20, h: 32, weight: 800 });
+    });
+    K.footer(g, "/82-0");
+    return cv;
   }
 
   async function practice() {
@@ -207,5 +261,6 @@
     } catch (err) { toast(err.message, true); }
   }
 
-  render();
+  // Acilista cark doner (oyun bitmemisse)
+  if (st.done) render(); else spinAnim();
 })();

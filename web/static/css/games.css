@@ -197,3 +197,17 @@
   .ez-face { width: 50px; height: 50px; }
   .ez-tag { font-size: .68rem; }
 }
+
+/* Paylasim gorseli onizlemesi */
+.share-preview { text-align: center; }
+.share-preview img { width: 100%; max-width: 380px; border-radius: 14px; box-shadow: var(--shadow); }
+.share-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
+
+/* 82-0 cark animasyonu */
+.ez-roster.is-spinning .ez-p { filter: blur(2.5px); opacity: .55; pointer-events: none; animation: ez-roll .12s linear infinite; }
+.ez-roster.is-spinning { overflow: hidden; }
+.ez-team.spinning img { animation: ez-roll .12s linear infinite; }
+@keyframes ez-roll { 0% { transform: translateY(-6px); } 100% { transform: translateY(6px); } }
+.ez-roster.is-revealing .ez-p { animation: ez-in .35s ease-out both; animation-delay: calc(var(--i) * 45ms); }
+@keyframes ez-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ez-p.ez-ghost { cursor: default; }
