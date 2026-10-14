@@ -148,17 +148,18 @@ def tier_list(request: Request):
 
 @router.get("/82-0")
 def eighty_two(request: Request):
-    day = daily.today()
-    payload = {"puzzle": e82.puzzle_number(day), "spins": e82.spins(f"82-0-{day.isoformat()}"),
-               "config": e82.config(), "signed_in": bool(current_user(request))}
+    payload = {"puzzle": e82.puzzle_number(), "config": e82.config(),
+               "signed_in": bool(current_user(request))}
     return render(request, "eighty_two.html", active="eightytwo", payload=_json(payload),
                   puzzle=payload["puzzle"], ready=True)
 
 
-@router.get("/api/82-0/practice")
-def eighty_two_practice():
+@router.get("/api/82-0/game")
+def eighty_two_game(span: int = 1, daily_game: int = 1):
+    """Gunluk oyun: tarih + donem uzunlugu tohumlu; pratik: rastgele."""
     import secrets
-    return {"spins": e82.spins(secrets.token_hex(8))}
+    seed = f"82-0-{daily.today().isoformat()}" if daily_game else secrets.token_hex(8)
+    return {"spins": e82.game(seed, span), "span": span if span in e82.SPANS else 1}
 
 
 # ==================== STARTING FIVE ====================

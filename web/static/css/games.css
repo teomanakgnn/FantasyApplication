@@ -245,3 +245,23 @@
 .ez-roster.is-revealing .ez-p { animation: ez-in .35s ease-out both; animation-delay: calc(var(--i) * 45ms); }
 @keyframes ez-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .ez-p.ez-ghost { cursor: default; }
+
+/* 82-0 v2: mod secimi, yeniden cevirmeler, kolay mod, sonuc listesi */
+.ez-setup { max-width: 560px; margin: 0 auto; }
+.ez-setup .seg-block button { min-height: 44px; }
+.ez-setup-go { display: grid; gap: 8px; margin-top: 16px; }
+.ez-rerolls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.ez-yr { font-size: .7rem; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; margin-left: 4px; }
+.ez-slot.is-sel .ez-face { border-color: var(--accent); box-shadow: 0 0 0 5px rgba(57, 135, 229, .4); }
+.ez-slot.filled:not(:disabled) { cursor: pointer; }
+.ez-reveal { display: grid; gap: 6px; margin: 12px 0; text-align: left; }
+.ez-reveal div { display: grid; grid-template-columns: 34px 1fr auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  padding: 6px 10px; border-radius: 10px; background: var(--surface-2); }
+.ez-reveal span { grid-row: 1 / 3; font-size: .72rem; font-weight: 900; color: var(--dim); }
+.ez-reveal b { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ez-reveal small { grid-column: 2; font-size: .72rem; color: var(--muted); }
+.ez-reveal .ez-ovr { grid-column: 3; grid-row: 1 / 3; }
+.ez-allin { display: grid; gap: 4px; padding: 6px 2px; }
+.ez-allin span { color: var(--muted); font-size: .86rem; }
+.ez-sub { white-space: nowrap; }
+.ez-sub.off { background: #EF6464; color: #fff; }

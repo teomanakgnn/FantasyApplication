@@ -261,10 +261,20 @@ def test_starting_five_hides_names_and_checks_guesses():
     assert sf.guess(gid, "Nobody Atall") == []
 
 
-def test_eighty_two_spins_and_record():
+def test_eighty_two_game_and_scoring():
     from services import eighty_two as e82
-    spins = e82.spins("seed")
-    assert len(spins) == e82.SPINS + e82.REROLLS and spins == e82.spins("seed")
-    assert len({(s["abbr"], s["season"]) for s in spins}) == len(spins)
-    assert all(len(s["players"]) >= 7 and all(55 <= p["ovr"] <= 99 for p in s["players"]) for s in spins)
-    assert e82.record(87.5)[0] == 41 and e82.record(98.5)[0] == 82 and e82.record(80)[0] < 5
+    for span in (1, 5, 10):
+        g = e82.game("seed", span)
+        assert len(g) == e82.SPINS and g == e82.game("seed", span)
+        keys = [s[k]["key"] for s in g for k in ("main", "t", "y", "ty", "yt")]
+        assert len(keys) == len(set(keys))                     # ayni takim-donem tekrar etmez
+        for s in g:
+            # 'takim' alternatifi ayni yillar, 'yil' alternatifi ayni takim
+            assert s["t"]["start"] == s["main"]["start"] and s["t"]["abbr"] != s["main"]["abbr"]
+            assert s["y"]["abbr"] == s["main"]["abbr"] and s["y"]["start"] != s["main"]["start"]
+            assert s["ty"]["abbr"] == s["t"]["abbr"] and s["yt"]["start"] == s["y"]["start"]
+            assert 5 <= len(s["main"]["players"]) <= e82.ROSTER_LIMIT
+    # Iki yildiz + uc zayif oyuncu artik 2-80 degil
+    assert 25 <= e82.wins_for(e82.rating([95, 95, 60, 60, 60])) <= 40
+    assert e82.wins_for(e82.rating([99, 99, 99, 99, 99])) == 82
+    assert e82.wins_for(e82.rating([60] * 5)) < 10
