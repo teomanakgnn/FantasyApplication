@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 {% block title %}My League · HoopLife NBA{% endblock %}
 {% block description %}Standings, all-play power rankings and a roto simulation for your ESPN or Yahoo fantasy basketball league.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/league.css?v={{ asset_version }}">{% endblock %}
+{% macro prow(p, extra='') -%}
+<div class="lg-p">
+  <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ p.id }}.png&w=96&h=70" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+  <div class="lg-pn"><b>{{ p.name }}</b><small>{{ p.team }}{% if p.injury != 'ACTIVE' %} · <span class="bad">{{ p.injury|replace('_', ' ')|lower }}</span>{% endif %}{% if extra %} · {{ extra }}{% endif %}</small></div>
+  <div class="lg-pv"><span class="lg-trend {{ p.trend }}">{% if p.trend == 'hot' %}▲{% elif p.trend == 'cold' %}▼{% endif %} {{ p.last15 if p.last15 is not none else (p.last7 if p.last7 is not none else '-') }}</span><small>season {{ p.value }}</small></div>
+</div>
+{%- endmacro %}
 {% block content %}
 <div class="page-head">
   <div class="eyebrow">Fantasy league</div>
   <h1>My League</h1>
-  <p>Standings, matchups, an all-play-all power ranking and a roto simulation for your ESPN or Yahoo league.</p>
+  <p>Alerts for your lineup, who is hot or cold, free agents worth a pickup, a form table - plus standings, matchups, power ranking and roto. Sign in to save all your leagues and get a daily email when something needs your attention.</p>
 </div>
 
 <nav class="seg" style="margin-bottom:14px">
@@ -61,6 +69,32 @@
 
 {% if error %}<div class="flash flash-error" style="margin-top:14px">{{ error }}</div>{% endif %}
 
+{% if platform == 'espn' and insights %}
+<div class="card lg-bar">
+  <div class="lg-bar-name"><span class="eyebrow" style="margin:0">ESPN · {{ insights.season - 1 }}-{{ (insights.season|string)[2:] }}</span><b>{{ insights.name }}</b>
+    {% if insights.fallback %}<span class="tiny dim">This league has not renewed for the new season yet - showing last season.</span>{% endif %}</div>
+  <form method="get" action="/league" class="lg-team-pick">
+    <input type="hidden" name="platform" value="espn"><input type="hidden" name="league_id" value="{{ league_id }}">
+    <label class="field"><span>Your team</span>
+      <select class="input" name="team" data-autosubmit>
+        <option value="">Choose your team…</option>
+        {% for t in insights.teams %}<option value="{{ t.id }}" {{ 'selected' if t.id|string == team }}>{{ t.name }}</option>{% endfor %}
+      </select></label>
+  </form>
+  {% if signed_in %}
+    {% if saved and (saved.team_id or '') == team %}<span class="chip chip-accent">Saved to My Leagues</span>
+    {% else %}
+    <form method="post" action="/league/save">
+      <input type="hidden" name="platform" value="espn"><input type="hidden" name="league_ref" value="{{ league_id }}">
+      <input type="hidden" name="team_id" value="{{ team }}"><input type="hidden" name="name" value="{{ insights.name }}">
+      <button class="btn btn-primary" type="submit">{{ 'Update saved team' if saved else 'Save league' }}</button>
+    </form>{% endif %}
+  {% else %}
+    <a class="btn btn-primary" href="/register?next={{ ('/league?platform=espn&league_id=' ~ league_id)|urlencode }}">Save it - free account</a>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if share_url %}
 <div class="card row-between" style="margin-top:14px;gap:12px;flex-wrap:wrap">
   <div style="flex:1 1 240px"><b>Send this to your league</b>
@@ -71,12 +105,62 @@
 
 {% if standings is not none or matchups %}
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
+  {% if insights %}<button class="tab" data-tab="insights">Insights</button>{% endif %}
   <button class="tab" data-tab="standings">Standings</button>
   <button class="tab" data-tab="matchups">Matchups</button>
   <button class="tab" data-tab="power">Power rank</button>
   <button class="tab" data-tab="roto">Roto</button>
   {% if platform == 'yahoo' %}<button class="tab" data-tab="trade">Trade</button>{% endif %}
 </div>
+
+{% if insights %}
+<div class="tab-panel" data-panel-of="league" data-panel="insights">
+  {% set me = insights.me %}
+  {% if me %}
+  <div class="lg-grid">
+    <section class="card">
+      <div class="card-title">{{ me.name }} <span class="dim small">· {{ me.wins }}-{{ me.losses }}</span></div>
+      <div class="lg-kpis">
+        <div><b>{{ me.strength_rank }}<small>/{{ insights.teams|length }}</small></b><span>Roster on paper</span></div>
+        <div><b>{{ me.recent_rank }}<small>/{{ insights.teams|length }}</small></b><span>Form, last 15 days</span></div>
+        <div><b>{{ (insights.alerts or [])|length }}</b><span>Alerts</span></div>
+      </div>
+      <div class="lg-notes">{% for n in insights.notes %}<p>{{ n }}</p>{% endfor %}</div>
+    </section>
+    <section class="card">
+      <div class="card-title">What to do</div>
+      {% for a in insights.alerts %}<div class="lg-alert {{ a.level }}">{{ a.text }}</div>
+      {% else %}<p class="muted small">Nothing urgent. Your lineup looks healthy.</p>{% endfor %}
+      {% if saved %}<p class="tiny dim" style="margin:10px 0 0">{{ 'You get these by email once a day.' if saved.email_alerts else 'Email alerts are off for this league.' }} Change it on <a href="/league">My Leagues</a>.</p>
+      {% elif signed_in %}<p class="tiny dim" style="margin:10px 0 0">Save the league to get these by email.</p>{% endif %}
+    </section>
+  </div>
+  <section class="card" style="margin-top:12px">
+    <div class="card-title">Your roster <span class="dim small">· ▲ hot / ▼ cold = last 15 days vs season value</span></div>
+    <div class="lg-roster">{% for p in me.roster %}{{ prow(p, 'IR' if p.slot == 13 else 'bench' if p.slot == 12 else '') }}{% endfor %}</div>
+  </section>
+  {% else %}
+  <div class="note note-info">Choose your team above to get alerts, notes and your roster's form.</div>
+  {% endif %}
+
+  <div class="lg-grid" style="margin-top:12px">
+    <section class="card"><div class="card-title">Hottest in the league</div>
+      {% for p in insights.hot %}{{ prow(p, p.owner) }}{% else %}<p class="muted small">No one is running hot yet.</p>{% endfor %}</section>
+    <section class="card"><div class="card-title">Gone cold</div>
+      {% for p in insights.cold %}{{ prow(p, p.owner) }}{% else %}<p class="muted small">No big names in a slump.</p>{% endfor %}</section>
+  </div>
+  <div class="lg-grid" style="margin-top:12px">
+    <section class="card"><div class="card-title">Waiver watch <span class="dim small">· free agents, best last 15 days</span></div>
+      {% for p in insights.waiver %}{{ prow(p, p.owned ~ '% owned') }}{% else %}<p class="muted small">No free agents with recent games.</p>{% endfor %}</section>
+    <section class="card"><div class="card-title">Form table <span class="dim small">· top-10 roster value, last 15 days</span></div>
+      <table class="table small"><thead><tr><th>#</th><th class="l">Team</th><th>Form</th><th>On paper</th><th>Record</th></tr></thead><tbody>
+        {% for t in insights.form_table %}<tr class="{{ 'lg-mine' if me and t.id == me.id }}"><td>{{ t.recent_rank }}</td><td class="l">{{ t.name }}</td>
+          <td><b>{{ t.recent|round|int }}</b>{% set d = t.strength_rank - t.recent_rank %}{% if d >= 2 %} <span class="good">▲{{ d }}</span>{% elif d <= -2 %} <span class="bad">▼{{ -d }}</span>{% endif %}</td>
+          <td>{{ t.strength_rank }}</td><td>{{ t.wins }}-{{ t.losses }}</td></tr>{% endfor %}
+      </tbody></table></section>
+  </div>
+</div>
+{% endif %}
 
 <div class="tab-panel" data-panel-of="league" data-panel="standings">
   {% if standings %}

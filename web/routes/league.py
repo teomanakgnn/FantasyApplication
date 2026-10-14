@@ -13,7 +13,8 @@ import pandas as pd
 from fastapi import APIRouter, Form, Request
 
 import config
-from web.core import redirect, render
+from services.database import db
+from web.core import current_user, login_required, redirect, render
 
 router = APIRouter()
 
@@ -212,11 +213,95 @@ def _parse_league_id(value):
     return value if value.isdigit() else None
 
 
+# ==================== KAYITLI LIGLER ====================
+
+def _summary(row):
+    """Pano karti: ESPN liginde takim sirasi, rekor, uyari sayisi, ilk yorum."""
+    out = dict(row)
+    if row["platform"] != "espn":
+        return out
+    try:
+        from services import league_insights as li
+        r = li.build(int(row["league_ref"]), row.get("team_id"))
+        me = r.get("me")
+        out.update(league_name=r["name"], fallback=r["fallback"], teams=len(r["teams"]),
+                   alerts=r.get("alerts") or [], note=(r.get("notes") or [None])[0])
+        if me:
+            out.update(team_name=me["name"], record=f"{me['wins']}-{me['losses']}", rank=me["rank"],
+                       form_rank=me["recent_rank"])
+    except Exception as exc:
+        out["error"] = str(exc)[:160]
+    return out
+
+
+def _dashboard(request, user):
+    import concurrent.futures as cf
+    rows = db.list_leagues(user["id"])
+    with cf.ThreadPoolExecutor(4) as ex:
+        cards = list(ex.map(_summary, rows))
+    return render(request, "league_home.html", active="league", cards=cards, yahoo_ready=_yahoo_ready())
+
+
+@router.get("/league/my/{league_id}")
+def my_league(request: Request, league_id: int):
+    gate = login_required(request)
+    if gate:
+        return gate
+    row = db.get_league(current_user(request)["id"], league_id)
+    if not row:
+        return redirect("/league", "That league is not in your list.", "error")
+    if row["platform"] == "espn":
+        return redirect(f"/league?platform=espn&league_id={row['league_ref']}&team={row['team_id'] or ''}#insights")
+    return redirect(f"/league?platform=yahoo&league_key={row['league_ref']}")
+
+
+@router.post("/league/save")
+def save_league(request: Request, platform: str = Form("espn"), league_ref: str = Form(""),
+                team_id: str = Form(""), name: str = Form("")):
+    user = current_user(request)
+    if not user:
+        return redirect("/login?next=/league", "Sign in to save your leagues.", "info")
+    platform = "yahoo" if platform == "yahoo" else "espn"
+    if platform == "espn":
+        league_ref = _parse_league_id(league_ref) or ""
+    if not league_ref:
+        return redirect("/league", "That league ID does not look right.", "error")
+    if len(db.list_leagues(user["id"])) >= 12:
+        return redirect("/league", "You can keep up to 12 leagues.", "error")
+    saved = db.save_league(user["id"], platform, league_ref, team_id or None, name)
+    if not saved:
+        return redirect("/league", "Could not save the league. Try again.", "error")
+    if platform == "espn":
+        return redirect(f"/league?platform=espn&league_id={league_ref}&team={team_id}#insights",
+                        "League saved. It is now on your My League page.")
+    return redirect("/league", "League saved.")
+
+
+@router.post("/league/{league_id}/delete")
+def delete_league(request: Request, league_id: int):
+    user = current_user(request)
+    if user:
+        db.delete_league(user["id"], league_id)
+    return redirect("/league", "League removed.")
+
+
+@router.post("/league/{league_id}/alerts")
+def league_alerts(request: Request, league_id: int, on: str = Form("0")):
+    user = current_user(request)
+    if user:
+        db.update_league(user["id"], league_id, email_alerts=on == "1")
+    return redirect("/league", "Email alerts " + ("on." if on == "1" else "off."))
+
+
 @router.get("/league")
 def league(request: Request):
     q = request.query_params
     platform = q.get("platform")
+    user = current_user(request)
+    if not platform and user and db.available and db.list_leagues(user["id"]):
+        return _dashboard(request, user)
     context = {"platform": platform, "error": None, "standings": None, "matchups": None,
+               "insights": None, "team": "", "saved": None, "league_id": None, "signed_in": bool(user),
                "cats": CATS, "labels": LABELS, "yahoo_ready": _yahoo_ready()}
     try:
         week = int(q.get("week") or 0)
@@ -231,21 +316,40 @@ def league(request: Request):
         if raw_id and not league_id:
             context["error"] = "Enter the numeric league ID (or paste the league URL)."
         elif league_id:
+            from services import league_insights as li
             from services.espn_league import (LeagueError, get_league_matchups,
                                               get_league_standings)
+            saved = None
+            if user and db.available:
+                saved = next((r for r in db.list_leagues(user["id"])
+                              if r["platform"] == "espn" and r["league_ref"] == str(league_id)), None)
+            team = q.get("team") or (saved or {}).get("team_id") or ""
+            context.update(team=str(team), saved=saved, league_id=league_id)
+            season = None
+            # Once analiz: yeni sezon ligi yenilenmemisse bir onceki sezona duser,
+            # puan durumu da ayni sezondan okunur.
             try:
-                standings = get_league_standings(int(league_id))
-                matchups = get_league_matchups(int(league_id), matchup_period=week or None)
-                context.update(standings=standings.to_dict("records") if not standings.empty else [],
-                               matchups=matchups)
-                # Herkese acik ESPN ligi: link ligdeki herkes icin calisiyor
-                context["share_url"] = (f"{config.SITE_URL.rstrip('/')}/league?platform=espn"
-                                        f"&league_id={league_id}&ref=league-share")
+                insights = li.build(int(league_id), team or None)
+                context["insights"] = insights
+                season = insights["season"]
             except LeagueError as exc:
                 context["error"] = str(exc)
             except Exception as exc:
-                print(f"espn league failed: {exc}")
-                context["error"] = "That league could not be read. Check the ID and try again."
+                print(f"league insights failed: {exc}")
+            if not context["error"]:
+                try:
+                    standings = get_league_standings(int(league_id), season)
+                    matchups = get_league_matchups(int(league_id), season, matchup_period=week or None)
+                    context.update(standings=standings.to_dict("records") if not standings.empty else [],
+                                   matchups=matchups)
+                    # Herkese acik ESPN ligi: link ligdeki herkes icin calisiyor
+                    context["share_url"] = (f"{config.SITE_URL.rstrip('/')}/league?platform=espn"
+                                            f"&league_id={league_id}&ref=league-share")
+                except LeagueError as exc:
+                    context["error"] = str(exc)
+                except Exception as exc:
+                    print(f"espn league failed: {exc}")
+                    context["error"] = "That league could not be read. Check the ID and try again."
 
     elif platform == "yahoo":
         _, entry = _yahoo_entry(request)

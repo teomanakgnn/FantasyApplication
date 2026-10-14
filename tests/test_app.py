@@ -278,3 +278,15 @@ def test_eighty_two_game_and_scoring():
     assert 25 <= e82.wins_for(e82.rating([95, 95, 60, 60, 60])) <= 40
     assert e82.wins_for(e82.rating([99, 99, 99, 99, 99])) == 82
     assert e82.wins_for(e82.rating([60] * 5)) < 10
+
+
+def test_league_alerts_flag_injured_starter_and_hot_bench():
+    from services.league_insights import alerts
+    def p(i, slot, value, last15, injury="ACTIVE", trend=""):
+        return {"id": str(i), "name": f"P{i}", "team": "T", "slot": slot, "value": value, "last15": last15,
+                "last7": last15, "injury": injury, "trend": trend}
+    me = {"roster": [p(1, 0, 40, 38), p(2, 1, 20, 12, trend="cold"), p(3, 2, 25, 25, injury="OUT"),
+                     p(4, 12, 15, 30, trend="hot")]}
+    keys = {a["key"].split("-")[0] for a in alerts(me, [])}
+    assert {"out", "bench"} <= keys
+    assert alerts(me, [])[0]["level"] == "bad"

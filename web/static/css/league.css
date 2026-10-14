@@ -1,0 +1,43 @@
+/* My Leagues */
+.lg-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.lg-card { display: flex; flex-direction: column; gap: 8px; }
+.lg-card h3 { margin: 0; font-size: 1.1rem; }
+.lg-card-top { display: flex; justify-content: space-between; align-items: center; }
+.lg-espn { background: rgba(239, 68, 68, .15); color: #F87171; }
+.lg-yahoo { background: rgba(139, 92, 246, .18); color: #A78BFA; }
+.lg-badge { font-size: .7rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.lg-badge.bad { background: var(--bad-soft); color: var(--bad); }
+.lg-me { display: flex; flex-direction: column; }
+.lg-me span { color: var(--muted); font-size: .84rem; }
+.lg-note { margin: 0; }
+.lg-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
+.lg-add { border-style: dashed; }
+.lg-alert { font-size: .84rem; padding: 8px 10px; border-radius: 10px; margin-top: 6px; border-left: 3px solid var(--line-strong); background: var(--surface-2); }
+.lg-alert.bad { border-color: var(--bad); background: var(--bad-soft); }
+.lg-alert.warn { border-color: var(--warn); background: var(--warn-soft); }
+.lg-alert.good { border-color: var(--good); background: var(--good-soft); }
+.lg-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 14px; }
+.lg-bar-name { flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px; }
+.lg-bar-name b { font-size: 1.1rem; }
+.lg-team-pick { flex: 1 1 220px; }
+.lg-team-pick .field { margin: 0; }
+.lg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lg-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.lg-kpis div { background: var(--surface-2); border-radius: 10px; padding: 10px; text-align: center; }
+.lg-kpis b { display: block; font-size: 1.5rem; font-weight: 900; }
+.lg-kpis b small { font-size: .8rem; color: var(--dim); }
+.lg-kpis span { font-size: .7rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.lg-notes p { margin: 6px 0; font-size: .9rem; }
+.lg-roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 14px; }
+.lg-p { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.lg-p img { width: 44px; height: 32px; object-fit: cover; flex: none; }
+.lg-pn { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lg-pn b { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-pn small { font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-pv { display: flex; flex-direction: column; align-items: flex-end; }
+.lg-pv small { font-size: .68rem; color: var(--dim); }
+.lg-trend { font-weight: 900; font-variant-numeric: tabular-nums; }
+.lg-trend.hot { color: var(--good); }
+.lg-trend.cold { color: #6EA8FF; }
+.lg-mine td { background: var(--accent-soft); }
+@media (max-width: 760px) { .lg-grid { grid-template-columns: 1fr; } }

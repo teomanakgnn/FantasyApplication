@@ -235,3 +235,6 @@ def start_warmup():
         _WARM_DONE.set()
         return
     threading.Thread(target=_warm, daemon=True).start()
+    # Lig uyarilari: gunde bir e-posta (services/league_digest.py)
+    from services import league_digest
+    league_digest.start()

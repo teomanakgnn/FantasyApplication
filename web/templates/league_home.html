@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}My Leagues · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/league.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">Fantasy leagues</div>
+  <h1>My Leagues</h1>
+  <p>Every league you play in, in one place: where you stand, who is hot or cold on your roster, free agents worth a look and what to fix before lock.</p>
+</div>
+
+<div class="lg-cards">
+  {% for c in cards %}
+  <article class="card lg-card">
+    <div class="lg-card-top">
+      <span class="chip {{ 'lg-espn' if c.platform == 'espn' else 'lg-yahoo' }}">{{ c.platform|upper }}</span>
+      {% set bad = (c.alerts or [])|selectattr('level', 'equalto', 'bad')|list %}
+      {% if c.alerts %}<span class="lg-badge {{ 'bad' if bad else '' }}" title="Things to check">{{ c.alerts|length }} alert{{ 's' if c.alerts|length != 1 }}</span>{% endif %}
+    </div>
+    <h3>{{ c.league_name or c.name or ('League ' ~ c.league_ref) }}</h3>
+    {% if c.error %}<p class="small bad">{{ c.error }}</p>
+    {% elif c.team_name %}
+      <div class="lg-me"><b>{{ c.team_name }}</b><span>{{ c.record }}{% if c.rank %} · {{ c.rank }}{{ 'st' if c.rank == 1 else 'nd' if c.rank == 2 else 'rd' if c.rank == 3 else 'th' }} of {{ c.teams }}{% endif %}{% if c.form_rank %} · form {{ c.form_rank }}/{{ c.teams }}{% endif %}</span></div>
+      {% if c.note %}<p class="small muted lg-note">{{ c.note }}</p>{% endif %}
+      {% for a in (c.alerts or [])[:2] %}<div class="lg-alert {{ a.level }}">{{ a.text }}</div>{% endfor %}
+    {% elif c.platform == 'espn' %}<p class="small muted">Pick your team to get alerts and notes.</p>
+    {% else %}<p class="small muted">Yahoo: standings, matchups and power ranking. Roster alerts are ESPN-only for now.</p>{% endif %}
+    {% if c.fallback %}<p class="tiny dim">Showing last season until your league renews on ESPN.</p>{% endif %}
+    <div class="lg-card-actions">
+      <a class="btn btn-primary btn-sm" href="/league/my/{{ c.id }}">Open</a>
+      {% if c.platform == 'espn' %}
+      <form method="post" action="/league/{{ c.id }}/alerts"><input type="hidden" name="on" value="{{ '0' if c.email_alerts else '1' }}">
+        <button class="btn btn-sm btn-ghost" type="submit" title="Daily email when something needs your attention">{{ 'Email alerts: on' if c.email_alerts else 'Email alerts: off' }}</button></form>
+      {% endif %}
+      <form method="post" action="/league/{{ c.id }}/delete" data-confirm="Remove this league from your list?"><button class="btn btn-sm btn-ghost" type="submit">Remove</button></form>
+    </div>
+  </article>
+  {% endfor %}
+
+  <article class="card lg-card lg-add">
+    <h3>Add a league</h3>
+    <form method="get" action="/league" data-loading>
+      <input type="hidden" name="platform" value="espn">
+      <label class="field"><span>ESPN league ID or URL</span><input class="input" name="league_id" placeholder="e.g. 987023001" required></label>
+      <button class="btn btn-primary btn-block" type="submit">Find ESPN league</button>
+    </form>
+    {% if yahoo_ready %}<a class="btn btn-block" href="/league?platform=yahoo" style="margin-top:8px">Add a Yahoo league</a>{% endif %}
+    <p class="tiny dim" style="margin:8px 0 0">After the league loads, pick your team and press Save.</p>
+  </article>
+</div>
+{% endblock %}

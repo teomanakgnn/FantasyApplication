@@ -306,6 +306,24 @@ class Database:
                    stats JSONB NOT NULL,
                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
                )""",
+            # Kayitli fantasy ligleri ve gonderilen uyarilar
+            """CREATE TABLE IF NOT EXISTS user_leagues (
+                   id SERIAL PRIMARY KEY,
+                   user_id INTEGER NOT NULL,
+                   platform TEXT NOT NULL,
+                   league_ref TEXT NOT NULL,
+                   team_id TEXT,
+                   name TEXT,
+                   email_alerts BOOLEAN NOT NULL DEFAULT TRUE,
+                   added_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                   UNIQUE (user_id, platform, league_ref)
+               )""",
+            """CREATE TABLE IF NOT EXISTS league_alert_log (
+                   user_id INTEGER NOT NULL,
+                   alert_key TEXT NOT NULL,
+                   sent_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                   PRIMARY KEY (user_id, alert_key)
+               )""",
             # Davet e-postalari: kime ne zaman gitti, kim abonelikten cikti
             """CREATE TABLE IF NOT EXISTS outreach_contacts (
                    email TEXT PRIMARY KEY,
@@ -583,7 +601,8 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks", "promo_redemptions", "daily_stats"):
+                      "season_win_picks", "promo_redemptions", "daily_stats",
+                      "user_leagues", "league_alert_log"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
         # Suren mock draftlar kullanici kimligine degil sahip anahtarina bagli
@@ -863,6 +882,56 @@ class Database:
                          "WHERE game_date < %s AND game_date >= %s - %s::int",
                          (day, day, days), fetch="all")
         return {r["player_id"] for r in rows or []}
+
+    # ==================== KAYITLI LIGLER ====================
+
+    def list_leagues(self, user_id):
+        return self._run("SELECT id, platform, league_ref, team_id, name, email_alerts, added_at "
+                         "FROM user_leagues WHERE user_id = %s ORDER BY added_at", (user_id,), fetch="all") or []
+
+    def get_league(self, user_id, league_id):
+        return self._run("SELECT id, platform, league_ref, team_id, name, email_alerts FROM user_leagues "
+                         "WHERE id = %s AND user_id = %s", (league_id, user_id), fetch="one")
+
+    def save_league(self, user_id, platform, league_ref, team_id, name):
+        row = self._run(
+            "INSERT INTO user_leagues (user_id, platform, league_ref, team_id, name) VALUES (%s, %s, %s, %s, %s) "
+            "ON CONFLICT (user_id, platform, league_ref) DO UPDATE SET team_id = EXCLUDED.team_id, "
+            "name = EXCLUDED.name RETURNING id", (user_id, platform, str(league_ref), team_id, (name or "")[:120]),
+            fetch="one")
+        return row["id"] if row else None
+
+    def update_league(self, user_id, league_id, team_id=None, email_alerts=None):
+        if team_id is not None:
+            self._run("UPDATE user_leagues SET team_id = %s WHERE id = %s AND user_id = %s",
+                      (team_id, league_id, user_id))
+        if email_alerts is not None:
+            self._run("UPDATE user_leagues SET email_alerts = %s WHERE id = %s AND user_id = %s",
+                      (bool(email_alerts), league_id, user_id))
+
+    def delete_league(self, user_id, league_id):
+        return bool(self._run("DELETE FROM user_leagues WHERE id = %s AND user_id = %s",
+                              (league_id, user_id), fetch="rowcount"))
+
+    def alert_digest_targets(self):
+        """E-posta uyarisi acik ligi olan kullanicilar."""
+        return self._run(
+            "SELECT u.id AS user_id, u.email, u.username, l.id, l.platform, l.league_ref, l.team_id, l.name "
+            "FROM user_leagues l JOIN users u ON u.id = l.user_id "
+            "WHERE l.email_alerts AND l.team_id IS NOT NULL AND l.platform = 'espn' ORDER BY u.id",
+            fetch="all") or []
+
+    def unsent_alert_keys(self, user_id, keys):
+        if not keys:
+            return set()
+        rows = self._run("SELECT alert_key FROM league_alert_log WHERE user_id = %s AND alert_key = ANY(%s)",
+                         (user_id, list(keys)), fetch="all") or []
+        return set(keys) - {r["alert_key"] for r in rows}
+
+    def log_alerts(self, user_id, keys):
+        for k in keys:
+            self._run("INSERT INTO league_alert_log (user_id, alert_key) VALUES (%s, %s) "
+                      "ON CONFLICT DO NOTHING", (user_id, k[:200]))
 
     # ==================== ZIYARETCILER ====================
 
