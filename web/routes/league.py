@@ -231,6 +231,24 @@ def draft_assist_page(request: Request, league: str = "", team: str = ""):
     return render(request, "draft_assist.html", active="league", leagues=leagues, league=league, team=team)
 
 
+@router.post("/api/admin/draft")
+async def draft_assist_manual(request: Request):
+    """Elle girilen secimlerle oneri (ESPN canli secimleri yayinlamiyor)."""
+    from fastapi.responses import JSONResponse
+    if not _is_admin(request):
+        return JSONResponse({"error": "Not available."}, 403)
+    body = await request.json()
+    try:
+        from services.draft_assist import pool, state
+        out = state(int(body.get("league")), str(body.get("team")), manual=[str(x) for x in body.get("taken") or []])
+        if body.get("with_pool"):
+            out["pool"] = pool(int(body.get("league")))
+        return out
+    except Exception as exc:
+        print(f"draft assist failed: {exc}")
+        return JSONResponse({"error": f"Could not build advice: {exc}"[:200]}, 502)
+
+
 @router.get("/api/admin/draft")
 def draft_assist_api(request: Request, league: str = "", team: str = ""):
     from fastapi.responses import JSONResponse

@@ -52,8 +52,36 @@ def _group(positions):
     return out
 
 
-def state(league_id, my_team):
-    d = _draft(league_id)
+@cache_data(ttl=600, show_spinner=False, copy_result=False)
+def _draft_cached(league_id):
+    return _draft(league_id)
+
+
+def pool(league_id):
+    """Elle giris icin oyuncu listesi (otomatik tamamlama)."""
+    d = _draft_cached(league_id)
+    teams = len(d.get("teams") or []) or 12
+    rounds = max(1, len(d["draftDetail"]["picks"]) // teams)
+    sc = _scores(teams, rounds)
+    out = []
+    for _, r in sc.sort_values("ADP").iterrows():
+        if r["ESPN_ID"] == r["ESPN_ID"]:
+            out.append({"id": str(int(r["ESPN_ID"])), "name": r["PLAYER"], "team": r["TEAM"], "pos": "/".join(r["POSITIONS"])})
+    return out
+
+
+def state(league_id, my_team, manual=None):
+    """
+    manual: elle girilen secimler (oyuncu kimlikleri, secim sirasiyla).
+    ESPN canli draft sirasinda secimleri API'de yayinlamiyor; o zaman
+    sira ESPN'in secim tablosundan, oyuncular kullanicidan gelir.
+    """
+    d = _draft_cached(league_id) if manual is not None else _draft(league_id)
+    if manual is not None:
+        order = sorted(d["draftDetail"]["picks"], key=lambda p: p["overallPickNumber"])
+        for i, p in enumerate(order):
+            p["playerId"] = int(manual[i]) if i < len(manual) else -1
+        d = dict(d, draftDetail=dict(d["draftDetail"], picks=order))
     teams = {t["id"]: (t.get("name") or t.get("abbrev") or f"Team {t['id']}") for t in d.get("teams", [])}
     picks = sorted(d["draftDetail"]["picks"], key=lambda p: p["overallPickNumber"])
     total, nteams = len(picks), len(teams) or 12
