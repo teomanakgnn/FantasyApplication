@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Draft assistant · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<div class="page-head"><div class="eyebrow">Admin · live</div><h1>Draft assistant</h1>
+  <p>Follows your ESPN draft live and ranks who to take next. Refreshes every 6 seconds.</p></div>
+<form class="card filters" method="get" action="/admin/draft">
+  <label class="field" style="flex:2 1 260px"><span>League</span>
+    <select class="input" name="pick" id="da-pick">
+      {% for l in leagues %}<option value="{{ l.league_ref }}|{{ l.team_id }}" {{ 'selected' if l.league_ref == league }}>{{ l.name }}</option>{% endfor %}
+    </select></label>
+  <button class="btn btn-primary" type="button" id="da-go">Follow draft</button>
+</form>
+<div id="da"></div>
+<style>
+  .da-top { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:14px 0; }
+  .da-clock { font-size:1.1rem; font-weight:800; padding:10px 14px; border-radius:12px; background:var(--surface-2); }
+  .da-clock.me { background:var(--brand); color:#fff; animation: da-pulse 1.2s infinite; }
+  @keyframes da-pulse { 50% { box-shadow:0 0 0 8px rgba(208,17,43,.25); } }
+  .da-grid { display:grid; grid-template-columns: 1.6fr 1fr; gap:12px; }
+  .da-rec { display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .da-rec img { width:52px; height:38px; object-fit:cover; flex:none; }
+  .da-rec .n { flex:1; min-width:0; }
+  .da-rec .n b { display:block; }
+  .da-rec .n small { color:var(--muted); font-size:.76rem; }
+  .da-rec .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .da-rec.first { background:var(--good-soft); border-radius:10px; padding:10px; border:1px solid var(--good); }
+  .da-num { width:22px; font-weight:900; color:var(--dim); }
+  .da-list div { padding:5px 0; border-bottom:1px solid var(--line); font-size:.86rem; }
+  .da-list .mine { color:var(--good); font-weight:700; }
+  @media (max-width: 800px) { .da-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const { $, api, escapeHtml: h } = window.HL;
+  const box = $("#da"); let timer = null, cur = null, lastPick = null;
+  const photo = (id) => `https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${id}.png&w=110&h=80`;
+  async function tick() {
+    if (!cur) return;
+    try {
+      const s = await api(`/api/admin/draft?league=${cur[0]}&team=${cur[1]}`);
+      if (s.on_me && lastPick !== s.pick && navigator.vibrate) navigator.vibrate(300);
+      lastPick = s.pick;
+      document.title = s.on_me ? "YOUR PICK - Draft assistant" : `Pick ${s.pick || "-"} · Draft assistant`;
+      const clock = s.done ? "Draft complete" : s.on_me ? `YOUR PICK · #${s.pick}` : `Pick #${s.pick || "-"} of ${s.total} · ${h(s.on_clock || "")} on the clock`;
+      const recs = s.recs.map((r, i) => `<div class="da-rec ${i === 0 ? "first" : ""}"><span class="da-num">${i + 1}</span>
+          <img src="${photo(r.id)}" alt="" onerror="this.style.visibility='hidden'">
+          <div class="n"><b>${h(r.name)} <span class="dim small">${h(r.pos)} · ${h(r.team)}${r.injury && r.injury !== "ACTIVE" ? ` · <span class="bad">${h(r.injury)}</span>` : ""}</span></b><small>${h(r.reason)}</small></div>
+          <div class="r"><b>${r.value.toFixed(1)}</b><div class="tiny dim">ADP ${r.adp ?? "-"}${!s.on_me && s.my_next ? ` · ${Math.round(r.now_odds * 100)}% at #${s.my_next}` : ""}</div></div></div>`).join("");
+      const mine = s.mine.map((p) => `<div>R${p.round} · #${p.pick} <b>${h(p.player)}</b></div>`).join("") || '<p class="muted small">No picks yet.</p>';
+      const recent = s.recent.map((p) => `<div class="${p.mine ? "mine" : ""}">#${p.pick} ${h(String(p.team))} - <b>${h(p.player)}</b></div>`).join("") || '<p class="muted small">Waiting for the first pick.</p>';
+      box.innerHTML = `
+        <div class="da-top">
+          <div class="da-clock ${s.on_me ? "me" : ""}">${clock}</div>
+          ${!s.on_me && s.until_me != null ? `<span class="chip chip-accent">${s.until_me} picks until you (#${s.my_next})</span>` : ""}
+          ${s.weak.length ? `<span class="chip">Weakest: ${s.weak.join(", ")}</span>` : ""}
+          <span class="chip">G ${s.counts.G} · F ${s.counts.F} · C ${s.counts.C}</span>
+        </div>
+        <div class="da-grid">
+          <section class="card"><div class="card-title">${s.on_me ? "Take one of these" : "Best for your next pick"}</div>${recs}</section>
+          <div>
+            <section class="card"><div class="card-title">My team</div><div class="da-list">${mine}</div></section>
+            <section class="card"><div class="card-title">Latest picks</div><div class="da-list">${recent}</div></section>
+          </div>
+        </div>`;
+    } catch (err) { box.insertAdjacentHTML("afterbegin", `<div class="flash flash-error">${h(err.message)}</div>`); }
+  }
+  $("#da-go").addEventListener("click", () => {
+    cur = $("#da-pick").value.split("|");
+    history.replaceState(null, "", `/admin/draft?league=${cur[0]}&team=${cur[1]}`);
+    clearInterval(timer); box.innerHTML = '<div class="spinner"></div>'; tick(); timer = setInterval(tick, 6000);
+  });
+  if ("{{ league }}") $("#da-go").click();
+})();
+</script>
+{% endblock %}

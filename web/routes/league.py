@@ -213,6 +213,37 @@ def _parse_league_id(value):
     return value if value.isdigit() else None
 
 
+# ==================== CANLI DRAFT ASISTANI (yonetici) ====================
+
+def _is_admin(request):
+    u = current_user(request)
+    return bool(u and u.get("username") in config.ADMIN_USERNAMES)
+
+
+@router.get("/admin/draft")
+def draft_assist_page(request: Request, league: str = "", team: str = ""):
+    gate = login_required(request)
+    if gate:
+        return gate
+    if not _is_admin(request):
+        return redirect("/", "Not available.", "error")
+    leagues = [r for r in db.list_leagues(current_user(request)["id"]) if r["platform"] == "espn"]
+    return render(request, "draft_assist.html", active="league", leagues=leagues, league=league, team=team)
+
+
+@router.get("/api/admin/draft")
+def draft_assist_api(request: Request, league: str = "", team: str = ""):
+    from fastapi.responses import JSONResponse
+    if not _is_admin(request):
+        return JSONResponse({"error": "Not available."}, 403)
+    try:
+        from services.draft_assist import state
+        return state(int(league), team)
+    except Exception as exc:
+        print(f"draft assist failed: {exc}")
+        return JSONResponse({"error": f"Could not read the draft: {exc}"[:200]}, 502)
+
+
 # ==================== KAYITLI LIGLER ====================
 
 def _summary(row):
