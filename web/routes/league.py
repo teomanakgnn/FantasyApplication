@@ -266,8 +266,9 @@ async def draft_feed(request: Request, token: str):
         by_name = {_n(p["name"]): p["id"] for p in pool(int(league))}
         ids = [by_name[_n(n)] for n in body["names"] if _n(n) in by_name]
     prev = _FEED.get(league, {}).get("ids", [])
-    if body.get("debug"):
-        print("draft feed debug:", str(body.get("debug"))[:1500])
+    if body.get("names") is not None:
+        n = body.get("names") or []
+        print(f"draft feed names: {len(n)} first={n[:4]} last={n[-4:]}")
     _FEED[league] = {"ids": ids if len(ids) >= len(prev) or body.get("ids") else prev, "ts": time.time(),
                      "source": "api" if body.get("ids") else "page", "seen": len(body.get("names") or ids)}
     return JSONResponse({"ok": True, "picks": len(_FEED[league]["ids"])}, headers=cors)
