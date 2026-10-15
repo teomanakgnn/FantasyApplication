@@ -109,6 +109,25 @@ def state(league_id, my_team, manual=None):
         for g in _group(r["POSITIONS"]):
             counts[g] += 1
 
+    # Kategori karsilastirmasi: su anki kadrom vs ligdeki diger kadrolar
+    # (herkesin o ana kadar sectikleri; z-skoru toplamlari, TO ters cevrilmis)
+    rosters = {}
+    for p in made:
+        r = row(p["playerId"])
+        if r is not None:
+            rosters.setdefault(str(p["teamId"]), []).append(r)
+    cat_table = []
+    if my_rows and len(rosters) > 1:
+        others = [rs for tid, rs in rosters.items() if tid != str(my_team)]
+        for c in NINE_CAT:
+            mine_v = profile[c]
+            vals = [sum(r[c] for r in rs) for rs in others]
+            beat = sum(1 for v in vals if mine_v > v)
+            avg = sum(vals) / len(vals) if vals else 0.0
+            cat_table.append({"cat": CAT_LABEL[c], "rank": 1 + sum(1 for v in vals if v > mine_v),
+                              "beat": beat, "of": len(vals), "win": mine_v > avg})
+    cat_record = [sum(1 for x in cat_table if x["win"]), sum(1 for x in cat_table if not x["win"])]
+
     avail = sc[~sc["ESPN_ID"].astype("Int64").astype(str).isin(taken)].copy()
     first, second = (my_open + [None, None])[:2]
     on_me = first is not None and nxt is not None and nxt["overallPickNumber"] == first
@@ -162,6 +181,7 @@ def state(league_id, my_team, manual=None):
         "recent": [named(p) for p in made[-10:]][::-1],
         "mine": [named(p) for p in mine],
         "weak": [CAT_LABEL[c] for c in weak], "counts": counts,
+        "cats": cat_table, "cat_record": cat_record, "teams_n": len(teams),
         "strong": [CAT_LABEL[c] for c in sorted(NINE_CAT, key=lambda c: -profile[c])[:3]] if my_rows else [],
         "recs": recs,
     }

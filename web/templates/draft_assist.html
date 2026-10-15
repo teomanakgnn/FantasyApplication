@@ -46,7 +46,12 @@
   .da-num { width:22px; font-weight:900; color:var(--dim); }
   .da-list div { padding:5px 0; border-bottom:1px solid var(--line); font-size:.86rem; }
   .da-list .mine { color:var(--good); font-weight:700; }
-  @media (max-width: 800px) { .da-grid { grid-template-columns: 1fr; } }
+  .da-cats { display:grid; grid-template-columns: repeat(9, minmax(0,1fr)); gap:6px; }
+  .da-cats div { text-align:center; padding:8px 4px; border-radius:10px; display:flex; flex-direction:column; gap:2px; }
+  .da-cats .w { background:var(--good-soft); border:1px solid var(--good); }
+  .da-cats .l { background:var(--bad-soft); border:1px solid var(--bad); }
+  .da-cats b { font-size:.8rem; } .da-cats span { font-size:1.15rem; font-weight:900; } .da-cats small { font-size:.66rem; color:var(--muted); }
+  @media (max-width: 800px) { .da-grid { grid-template-columns: 1fr; } .da-cats { grid-template-columns: repeat(5, minmax(0,1fr)); } }
 </style>
 {% endblock %}
 {% block scripts %}
@@ -94,6 +99,10 @@
         ${s.weak.length ? `<span class="chip" style="background:var(--bad-soft);color:var(--bad)">Weakest: ${s.weak.join(", ")}</span>` : ""}
         <span class="chip">G ${s.counts.G} · F ${s.counts.F} · C ${s.counts.C}</span>
       </div>
+      ${s.cats && s.cats.length ? `<section class="card" style="margin-bottom:12px">
+        <div class="card-title">Your roster now: <b class="${s.cat_record[0] >= 5 ? "good" : "bad"}">${s.cat_record[0]}-${s.cat_record[1]}</b> vs the average team <span class="dim small">· rank among ${s.teams_n} teams, and how many rosters you beat</span></div>
+        <div class="da-cats">${s.cats.map((c) => `<div class="${c.win ? "w" : "l"}"><b>${c.cat}</b><span>#${c.rank}</span><small>beats ${c.beat}/${c.of}</small></div>`).join("")}</div>
+      </section>` : ""}
       <div class="da-grid">
         <section class="card"><div class="card-title">${s.on_me ? "Take one of these (tap = mark as your pick)" : "Best for your next pick"}</div>${recs}</section>
         <div>
