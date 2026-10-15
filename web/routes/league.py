@@ -228,7 +228,49 @@ def draft_assist_page(request: Request, league: str = "", team: str = ""):
     if not _is_admin(request):
         return redirect("/", "Not available.", "error")
     leagues = [r for r in db.list_leagues(current_user(request)["id"]) if r["platform"] == "espn"]
-    return render(request, "draft_assist.html", active="league", leagues=leagues, league=league, team=team)
+    return render(request, "draft_assist.html", active="league", leagues=leagues, league=league, team=team,
+                  feed_url=f"{config.SITE_URL.rstrip('/')}/api/draft-feed/{_feed_token()}")
+
+
+# ESPN draft odasindaki yer iminden gelen canli secimler: {league: {"ids": [...], "ts": ...}}
+_FEED = {}
+
+
+def _feed_token():
+    import hashlib
+    import hmac
+    return hmac.new(config.SECRET_KEY.encode(), b"draft-feed", hashlib.sha256).hexdigest()[:24]
+
+
+@router.post("/api/draft-feed/{token}")
+async def draft_feed(request: Request, token: str):
+    """
+    ESPN canli draft secimlerini API'de yayinlamiyor; kullanicinin draft
+    odasi sekmesindeki yer imi her birkac saniyede secimleri buraya yollar.
+    Cerez yok (baska site), gizli anahtarla korunur.
+    """
+    from fastapi.responses import JSONResponse
+    cors = {"Access-Control-Allow-Origin": "*"}
+    if token != _feed_token():
+        return JSONResponse({"error": "bad token"}, 403, headers=cors)
+    import json as _json
+    try:
+        body = _json.loads((await request.body()).decode("utf-8") or "{}")
+    except ValueError:
+        return JSONResponse({"error": "bad body"}, 400, headers=cors)
+    league = str(body.get("league") or "")
+    ids = [str(x) for x in body.get("ids") or [] if str(x).isdigit()]
+    if not ids and body.get("names"):
+        from services.draft_assist import pool
+        from services.daily_player import norm as _n
+        by_name = {_n(p["name"]): p["id"] for p in pool(int(league))}
+        ids = [by_name[_n(n)] for n in body["names"] if _n(n) in by_name]
+    prev = _FEED.get(league, {}).get("ids", [])
+    if body.get("debug"):
+        print("draft feed debug:", str(body.get("debug"))[:1500])
+    _FEED[league] = {"ids": ids if len(ids) >= len(prev) or body.get("ids") else prev, "ts": time.time(),
+                     "source": "api" if body.get("ids") else "page", "seen": len(body.get("names") or ids)}
+    return JSONResponse({"ok": True, "picks": len(_FEED[league]["ids"])}, headers=cors)
 
 
 @router.post("/api/admin/draft")
@@ -240,7 +282,13 @@ async def draft_assist_manual(request: Request):
     body = await request.json()
     try:
         from services.draft_assist import pool, state
-        out = state(int(body.get("league")), str(body.get("team")), manual=[str(x) for x in body.get("taken") or []])
+        feed = _FEED.get(str(body.get("league")))
+        live = feed and time.time() - feed["ts"] < 30
+        taken = feed["ids"] if live else [str(x) for x in body.get("taken") or []]
+        out = state(int(body.get("league")), str(body.get("team")), manual=taken)
+        out["feed"] = {"live": bool(live), "picks": len(taken), "source": feed and feed.get("source"),
+                       "age": round(time.time() - feed["ts"]) if feed else None}
+        out["taken"] = taken
         if body.get("with_pool"):
             out["pool"] = pool(int(body.get("league")))
         return out

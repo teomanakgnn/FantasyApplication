@@ -11,6 +11,16 @@
     </select></label>
   <button class="btn btn-primary" type="button" id="da-go">Start</button>
 </form>
+<div class="card" style="margin-top:12px">
+  <div class="card-title">Automatic mode (recommended)</div>
+  <ol class="small muted" style="padding-left:18px;margin:0 0 8px">
+    <li>Drag this button to your bookmarks bar: <a class="btn btn-sm btn-primary" id="da-bm" href="#">HoopLife draft feed</a></li>
+    <li>In your <b>ESPN draft room</b> tab, click that bookmark once. Keep the tab open.</li>
+    <li>This page then updates by itself every few seconds.</li>
+  </ol>
+  <div id="da-feed" class="small"></div>
+</div>
+<script id="da-bm-code" type="text/plain">javascript:(function(){var U='{{ feed_url }}';var L=new URLSearchParams(location.search).get('leagueId')||'{{ league or '' }}';if(!L){alert('Open this in your ESPN draft room tab');return;}function grab(){return fetch('https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/2027/segments/0/leagues/'+L+'?view=mDraftDetail&_='+Date.now(),{credentials:'include'}).then(function(r){return r.json()}).then(function(d){var p=((d.draftDetail||{}).picks||[]).filter(function(x){return x.playerId>0}).sort(function(a,b){return a.overallPickNumber-b.overallPickNumber}).map(function(x){return x.playerId});return p}).catch(function(){return []});}function dom(){var sel='.pick-history .playerinfo__playername, .pick-history-tables .playerinfo__playername, [class*=pickHistory] .playerinfo__playername, [class*=PickHistory] [class*=layername], .draft-pick .playerinfo__playername';var n=[].slice.call(document.querySelectorAll(sel)).map(function(e){return e.textContent.trim()}).filter(Boolean);var cls={};[].slice.call(document.querySelectorAll('[class]')).forEach(function(e){String(e.className).split(/\s+/).forEach(function(c){if(/pick|draft|history|roster|team/i.test(c))cls[c]=(cls[c]||0)+1})});return {names:n,debug:{url:location.pathname,classes:Object.keys(cls).slice(0,80),sample:[].slice.call(document.querySelectorAll('[class*=layername]')).slice(0,5).map(function(e){return e.className+':'+e.textContent.trim()})}};}function push(){grab().then(function(ids){var b=ids.length?{league:L,ids:ids}:Object.assign({league:L},dom());fetch(U,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(function(r){return r.json()}).then(function(j){document.title='HL feed: '+j.picks+' picks'})})}push();setInterval(push,4000);alert('HoopLife draft feed is on. Keep this tab open.');})();</script>
 <div id="da-entry" class="card" hidden style="margin-top:12px;position:relative">
   <div class="row" style="gap:8px;align-items:center">
     <input class="input" id="da-input" placeholder="Who was just picked? Type a name…" autocomplete="off" style="flex:1;min-width:200px;font-size:1.05rem">
@@ -44,7 +54,9 @@
 (function () {
   const { $, api, toast, escapeHtml: h } = window.HL;
   const box = $("#da"), input = $("#da-input"), list = $("#da-list");
-  let cur = null, taken = [], players = [], byId = new Map(), matches = [], active = 0, busy = false;
+  let cur = null, taken = [], players = [], byId = new Map(), matches = [], active = 0, busy = false, poll = null;
+  $("#da-bm").href = $("#da-bm-code").textContent.trim();
+  $("#da-bm").addEventListener("click", (e) => { e.preventDefault(); toast("Drag this button to your bookmarks bar, then click it in the ESPN draft tab."); });
   const photo = (id) => `https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${id}.png&w=110&h=80`;
   const key = () => `hl_da_${cur[0]}`;
   const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -55,6 +67,10 @@
     try {
       const s = await api("/api/admin/draft", { method: "POST", body: { league: cur[0], team: cur[1], taken, with_pool: !!withPool } });
       if (s.pool) { players = s.pool; byId = new Map(players.map((p) => [p.id, p])); }
+      if (s.feed && s.feed.live) { taken = s.taken; }
+      $("#da-feed").innerHTML = s.feed && s.feed.live
+        ? `<span class="good">● Live from your ESPN tab</span> · ${s.feed.picks} picks · updated ${s.feed.age}s ago`
+        : s.feed && s.feed.age != null ? `<span class="warn">Feed stopped ${s.feed.age}s ago</span> - is the ESPN tab still open?` : `<span class="dim">Waiting for the bookmark in your ESPN draft tab…</span>`;
       draw(s);
     } catch (err) { toast(err.message, true); }
     finally { busy = false; }
@@ -123,6 +139,7 @@
     history.replaceState(null, "", `/admin/draft?league=${cur[0]}&team=${cur[1]}`);
     $("#da-entry").hidden = false; box.innerHTML = '<div class="spinner"></div>';
     refresh(true); input.focus();
+    clearInterval(poll); poll = setInterval(() => refresh(false), 4000);
   });
   if ("{{ league }}") $("#da-go").click();
 })();

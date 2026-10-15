@@ -182,3 +182,13 @@ def public_answer(answer):
     return {"id": answer["id"], "name": answer["name"], "team": answer["team"],
             "team_name": TEAMS.get(answer["team"], ("", "", answer["team"]))[2],
             "headshot": f"https://a.espncdn.com/i/headshots/nba/players/full/{answer['id']}.png"}
+
+
+def norm(name):
+    import re
+    import unicodedata
+    name = unicodedata.normalize("NFD", name or "")
+    name = "".join(c for c in name if unicodedata.category(c) != "Mn").lower()
+    name = re.sub(r"[.'’\-]", " ", name)
+    name = re.sub(r"\b(jr|sr|ii|iii|iv)\b", " ", name)
+    return re.sub(r"\s+", " ", name).strip()

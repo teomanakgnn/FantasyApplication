@@ -47,7 +47,7 @@ async def security(request: Request, call_next):
     POST reddedilir. Baska bir sitedeki form kullanicinin adina islem
     yapamaz.
     """
-    if request.method not in SAFE_METHODS:
+    if request.method not in SAFE_METHODS and not request.url.path.startswith("/api/draft-feed/"):
         origin = request.headers.get("origin") or request.headers.get("referer")
         if origin:
             host = urlparse(origin).netloc
