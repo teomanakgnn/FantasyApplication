@@ -260,11 +260,17 @@ async def draft_feed(request: Request, token: str):
         return JSONResponse({"error": "bad body"}, 400, headers=cors)
     league = str(body.get("league") or "")
     ids = [str(x) for x in body.get("ids") or [] if str(x).isdigit()]
+    names = body.get("names")
     if not ids and body.get("names"):
         from services.draft_assist import pool
         from services.daily_player import norm as _n
         by_name = {_n(p["name"]): p["id"] for p in pool(int(league))}
-        ids = [by_name[_n(n)] for n in body["names"] if _n(n) in by_name]
+        # Listede bulunamayan isim atlanmaz: yerini tutar, yoksa sonraki tum
+        # secimler bir sira kayar ve takimlar yanlis hesaplanir.
+        ids = [by_name.get(_n(n)) or ("?" + n[:60]) for n in body["names"]]
+        missing = [i[1:] for i in ids if i.startswith("?")]
+        if missing:
+            print("draft feed unmatched:", missing[:10])
     prev = _FEED.get(league, {}).get("ids", [])
     if body.get("names") is not None:
         n = body.get("names") or []

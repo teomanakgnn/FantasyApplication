@@ -77,10 +77,19 @@ def state(league_id, my_team, manual=None):
     sira ESPN'in secim tablosundan, oyuncular kullanicidan gelir.
     """
     d = _draft_cached(league_id) if manual is not None else _draft(league_id)
+    unknown = {}
     if manual is not None:
         order = sorted(d["draftDetail"]["picks"], key=lambda p: p["overallPickNumber"])
+        unknown = {}
         for i, p in enumerate(order):
-            p["playerId"] = int(manual[i]) if i < len(manual) else -1
+            if i >= len(manual):
+                p["playerId"] = -1
+            elif str(manual[i]).isdigit():
+                p["playerId"] = int(manual[i])
+            else:
+                # Listede olmayan oyuncu: secim sayilir, yeri korunur
+                p["playerId"] = 900000000 + i
+                unknown[p["playerId"]] = str(manual[i]).lstrip("?")
         d = dict(d, draftDetail=dict(d["draftDetail"], picks=order))
     teams = {t["id"]: (t.get("name") or t.get("abbrev") or f"Team {t['id']}") for t in d.get("teams", [])}
     picks = sorted(d["draftDetail"]["picks"], key=lambda p: p["overallPickNumber"])
@@ -170,7 +179,7 @@ def state(league_id, my_team, manual=None):
     def named(p):
         r = row(p["playerId"])
         return {"pick": p["overallPickNumber"], "round": p["roundId"], "team": teams.get(p["teamId"], p["teamId"]),
-                "player": r["PLAYER"] if r is not None else f"#{p['playerId']}", "mine": str(p["teamId"]) == str(my_team)}
+                "player": r["PLAYER"] if r is not None else unknown.get(p["playerId"], f"#{p['playerId']}"), "mine": str(p["teamId"]) == str(my_team)}
 
     return {
         "league": (d.get("settings") or {}).get("name"), "my_team": teams.get(int(my_team)) if str(my_team).isdigit() else my_team,
