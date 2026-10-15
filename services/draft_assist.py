@@ -121,11 +121,11 @@ def state(league_id, my_team, manual=None):
         others = [rs for tid, rs in rosters.items() if tid != str(my_team)]
         for c in NINE_CAT:
             mine_v = profile[c]
-            vals = [sum(r[c] for r in rs) for rs in others]
+            vals = [float(sum(r[c] for r in rs)) for rs in others]
             beat = sum(1 for v in vals if mine_v > v)
             avg = sum(vals) / len(vals) if vals else 0.0
-            cat_table.append({"cat": CAT_LABEL[c], "rank": 1 + sum(1 for v in vals if v > mine_v),
-                              "beat": beat, "of": len(vals), "win": mine_v > avg})
+            cat_table.append({"cat": CAT_LABEL[c], "rank": int(1 + sum(1 for v in vals if v > mine_v)),
+                              "beat": int(beat), "of": len(vals), "win": bool(mine_v > avg)})
     cat_record = [sum(1 for x in cat_table if x["win"]), sum(1 for x in cat_table if not x["win"])]
 
     avail = sc[~sc["ESPN_ID"].astype("Int64").astype(str).isin(taken)].copy()
