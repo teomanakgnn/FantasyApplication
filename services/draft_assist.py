@@ -162,5 +162,6 @@ def state(league_id, my_team, manual=None):
         "recent": [named(p) for p in made[-10:]][::-1],
         "mine": [named(p) for p in mine],
         "weak": [CAT_LABEL[c] for c in weak], "counts": counts,
+        "strong": [CAT_LABEL[c] for c in sorted(NINE_CAT, key=lambda c: -profile[c])[:3]] if my_rows else [],
         "recs": recs,
     }

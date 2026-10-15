@@ -90,7 +90,8 @@
       <div class="da-top">
         <div class="da-clock ${s.on_me ? "me" : ""}">${clock}</div>
         ${!s.on_me && s.until_me != null ? `<span class="chip chip-accent">${s.until_me} picks until you (#${s.my_next})</span>` : ""}
-        ${s.weak.length ? `<span class="chip">Weakest: ${s.weak.join(", ")}</span>` : ""}
+        ${s.strong && s.strong.length ? `<span class="chip" style="background:var(--good-soft);color:var(--good)">Strongest: ${s.strong.join(", ")}</span>` : ""}
+        ${s.weak.length ? `<span class="chip" style="background:var(--bad-soft);color:var(--bad)">Weakest: ${s.weak.join(", ")}</span>` : ""}
         <span class="chip">G ${s.counts.G} · F ${s.counts.F} · C ${s.counts.C}</span>
       </div>
       <div class="da-grid">
