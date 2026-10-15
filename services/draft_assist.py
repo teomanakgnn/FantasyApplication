@@ -93,7 +93,7 @@ def state(league_id, my_team):
     # Sira bende degilse: benim secimime kadar kalma ihtimali dusuk olanlar asagi
     if first and not on_me:
         avail["NOW_ODDS"] = survival(avail["ADP"].values, first)
-        avail["SCORE"] = avail["SCORE"] - 3.0 * (avail["NOW_ODDS"] < 0.3)
+        avail["SCORE"] = avail["SCORE"] - 20.0 * (avail["NOW_ODDS"] < 0.3)
     else:
         avail["NOW_ODDS"] = 1.0
     top = avail.sort_values("SCORE", ascending=False).head(12)
