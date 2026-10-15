@@ -32,6 +32,10 @@ def _scores(teams, rounds):
     from services.draft_data import get_draft_board
     board = get_draft_board()
     sc = category_scores(board, draftable_depth(teams, rounds))
+    # Sakatlik riski fiyatlanmis deger (Draft Strategy ile ayni): cok mac
+    # kacirmasi beklenen oyuncu geriye duser.
+    from services.strategy_engine import availability_weighted, replacement_level
+    sc = availability_weighted(sc, replacement_level(sc, teams, rounds))
     sc = sc.assign(VALUE=total_value(sc), ESPN_ID=board.set_index("PLAYER").reindex(sc["PLAYER"])["ESPN_ID"].values)
     return sc
 
