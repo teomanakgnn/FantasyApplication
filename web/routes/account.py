@@ -44,6 +44,7 @@ def account(request: Request):
         request, "account.html", active="account",
         features=PRO_FEATURES, upgrade_note=UPGRADE_NOTE,
         watch_count=db.watchlist_count(user["id"]),
+        referrals=db.referral_count(user["id"]),
         draft_count=db.saved_draft_count(user["id"]),
         watch_limit=FREE_WATCHLIST_LIMIT, draft_limit=FREE_SAVED_DRAFT_LIMIT,
         sessions=sessions, display=db.get_score_display_preference(user["id"]),

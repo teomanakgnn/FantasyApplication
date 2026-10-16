@@ -198,5 +198,7 @@
   }
 
   hydrate();
-  window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate };
+  // Paylasim linklerine paylasanin davet kodu: linkle gelen uye olursa ikisi de Pro kazanir
+  const inv = () => (window.HL_INV ? `&inv=${window.HL_INV}` : "");
+  window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate, inv };
 })();

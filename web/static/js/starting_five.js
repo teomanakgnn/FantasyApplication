@@ -175,10 +175,10 @@
     const ticks = game.teams.map((t, ti) => t.slots.map((s, si) => (s.given ? "" : st.found[slotKey(ti, si)] ? "🟩" : "⬛")).join("")).join(" ");
     const head = mode === "daily" ? `HoopLife Starting Five #${data.puzzle}` : "HoopLife Starting Five (practice)";
     const prog = st.done ? "" : " so far";
-    return `${head} · ${game.teams.map((t) => t.abbr).join(" vs ")} ${game.season}\n${foundCount()}/${game.hidden}${prog} ${ticks}\n${location.origin}/starting-five?ref=startingfive-share`;
+    return `${head} · ${game.teams.map((t) => t.abbr).join(" vs ")} ${game.season}\n${foundCount()}/${game.hidden}${prog} ${ticks}\n${location.origin}/starting-five?ref=startingfive-share${window.HL.inv()}`;
   }
   async function share() {
-    const text = `${mode === "daily" ? `HoopLife Starting Five #${data.puzzle}` : "HoopLife Starting Five"}: I named ${foundCount()}/${game.hidden} starters from ${game.teams.map((t) => t.abbr).join(" vs ")} (${game.season}). ${location.origin}/starting-five?ref=startingfive-share`;
+    const text = `${mode === "daily" ? `HoopLife Starting Five #${data.puzzle}` : "HoopLife Starting Five"}: I named ${foundCount()}/${game.hidden} starters from ${game.teams.map((t) => t.abbr).join(" vs ")} (${game.season}). ${location.origin}/starting-five?ref=startingfive-share${window.HL.inv()}`;
     if (window.gtag) gtag("event", "startingfive_share");
     try { await HLCard.share(await card(), { filename: "starting-five.png", text, title: "Starting Five" }); }
     catch (err) { toast("Could not create the image.", true); }

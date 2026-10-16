@@ -95,10 +95,10 @@ def _count_visit(request, response):
 # ==================== SAYFALAR ====================
 
 from web.routes import (account, auth, draft, games, home, injuries, league,  # noqa: E402
-                        mock, outreach, over_under, trade, trends, watchlist)
+                        mock, outreach, over_under, players, trade, trends, watchlist)
 
 for module in (home, auth, account, watchlist, over_under, draft, mock, games,
-               injuries, trade, league, trends, outreach):
+               injuries, trade, league, trends, outreach, players):
     app.include_router(module.router)
 
 
@@ -115,7 +115,7 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/register", "/privacy", "/terms"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
 @app.get("/privacy", include_in_schema=False)
@@ -138,6 +138,12 @@ def robots():
         f"\nSitemap: {base}/sitemap.xml\n")
 
 
+def _extra_pages():
+    """Oyuncu sayfalari (Google'in bulmasi icin). Punt siralamalari ayni sayfanin
+    sorgulu hali (canonical /rankings), haritaya konmuyor."""
+    return players.sitemap_paths()
+
+
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap():
     """Google'in tarayacagi herkese acik sayfalar."""
@@ -145,7 +151,7 @@ def sitemap():
     from fastapi.responses import Response
     base = config.SITE_URL.rstrip("/")
     urls = "".join(f"<url><loc>{base}{path}</loc><lastmod>{date.today()}</lastmod></url>"
-                   for path in PUBLIC_PAGES)
+                   for path in PUBLIC_PAGES + _extra_pages())
     body = ('<?xml version="1.0" encoding="UTF-8"?>'
             f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
     return Response(body, media_type="application/xml")
@@ -227,6 +233,8 @@ def _warm():
         step("mystery player", daily_player.answer_for)
         from services.trade_values import players as trade_players
         step("trade values", lambda: trade_players("proj"))
+        from services.player_pages import table as player_table
+        step("player pages", player_table)
     finally:
         _WARM_DONE.set()
 

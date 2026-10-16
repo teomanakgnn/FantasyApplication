@@ -103,7 +103,7 @@
   async function share() {
     const done = picks.length, sc = score(picks, rounds);
     const head = mode === "practice" ? "HoopLife Stat Match" : `HoopLife Stat Match #${data.puzzle}`;
-    const text = `${head}: ${sc}/${done}${done < total() ? ` after ${done} of ${total()}` : ""}. Which stat line is whose? ${location.origin}/stat-match?ref=statmatch-share`;
+    const text = `${head}: ${sc}/${done}${done < total() ? ` after ${done} of ${total()}` : ""}. Which stat line is whose? ${location.origin}/stat-match?ref=statmatch-share${window.HL.inv()}`;
     if (window.gtag) gtag("event", "statmatch_share", { done });
     try { await HLCard.share(await card(), { filename: "stat-match.png", text, title: "Stat Match" }); }
     catch (err) { toast("Could not create the image.", true); }

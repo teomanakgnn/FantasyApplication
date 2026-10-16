@@ -313,7 +313,7 @@
   async function share() {
     const [w, l] = record();
     const head = st.daily ? `HoopLife 82-0 #${data.puzzle}` : "HoopLife 82-0";
-    const text = `${head} (${modeText()}): I went ${w}-${l}${w === 82 ? " 🏆" : ""}. Can you beat it? ${location.origin}/82-0?ref=82-0-share`;
+    const text = `${head} (${modeText()}): I went ${w}-${l}${w === 82 ? " 🏆" : ""}. Can you beat it? ${location.origin}/82-0?ref=82-0-share${window.HL.inv()}`;
     if (window.gtag) gtag("event", "eightytwo_share", { wins: w });
     const btn = $("#ez-share"); if (btn) btn.classList.add("is-loading");
     try { await HLCard.share(await card(w, l), { filename: `82-0-${w}-${l}.png`, text, title: "82-0 Challenge" }); }

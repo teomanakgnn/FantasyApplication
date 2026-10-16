@@ -9,10 +9,11 @@ from fastapi import APIRouter, Form, Request
 import config
 from services import mailer
 from services.database import LOGIN_WINDOW_MINUTES, db
-from web.core import (CODE_COOKIE, SIGNUP_COOKIE, SOURCE_COOKIE, clear_session_cookie, client_ip,
+from web.core import (CODE_COOKIE, INVITE_COOKIE, SIGNUP_COOKIE, SOURCE_COOKIE, clear_session_cookie, client_ip,
                       current_user, forget_user_cache, redirect, render, set_session_cookie)
 
 router = APIRouter()
+REFERRAL_DAYS = 30
 
 
 def _safe_next(target):
@@ -141,9 +142,17 @@ def register(request: Request, username: str = Form(""), email: str = Form(""),
     if code:
         redeemed, note = db.redeem_promo_code(user["id"], code)
         message += " " + (note if redeemed else f"The invite code did not work: {note}")
+    # Arkadas daveti: iki tarafa da 30 gun Pro
+    inviter = db.user_by_invite(request.cookies.get(INVITE_COOKIE))
+    if inviter and inviter["id"] != user["id"] and db.set_referred_by(user["id"], inviter["id"]):
+        db.extend_pro(user["id"], REFERRAL_DAYS)
+        db.extend_pro(inviter["id"], REFERRAL_DAYS)
+        forget_user_cache()
+        message += f" You and {inviter['username']} both got {REFERRAL_DAYS} days of Pro."
     from web.routes.mock import claim_guest_drafts
     claim_guest_drafts(request, user["id"])
     response = redirect(target, message)
+    response.delete_cookie(INVITE_COOKIE, path="/")
     response.delete_cookie(CODE_COOKIE, path="/")
     response.set_cookie(SIGNUP_COOKIE, "1", max_age=600, httponly=True,
                         secure=config.PRODUCTION, samesite="lax", path="/")

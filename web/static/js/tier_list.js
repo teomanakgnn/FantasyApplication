@@ -115,7 +115,7 @@
 
   $("#tl-link").addEventListener("click", async () => {
     const t = TIERS.map(([k]) => `${k}:${state.tiers[k].join(",")}`).join("|");
-    const url = `${location.origin}/tier-list?t=${encodeURIComponent(t)}&n=${encodeURIComponent(state.title)}&ref=tierlist-share`;
+    const url = `${location.origin}/tier-list?t=${encodeURIComponent(t)}&n=${encodeURIComponent(state.title)}&ref=tierlist-share${window.HL.inv()}`;
     if (window.gtag) gtag("event", "tierlist_share", { kind: "link" });
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       try { await navigator.share({ title: state.title, url }); return; } catch (err) { if (err.name === "AbortError") return; }

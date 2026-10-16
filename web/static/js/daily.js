@@ -169,7 +169,7 @@
   function shareText() {
     const grid = game.rows.map((r) => r.cells.map((c) => c.status === "hit" ? "🟩" : c.status === "near" ? "🟨" : "⬛").join("")).join("\n");
     const score = game.won ? game.rows.length : "X";
-    return `HoopLife Mystery Player #${data.puzzle} ${score}/${data.max}\n${grid}\n${location.origin}/daily?ref=daily-share`;
+    return `HoopLife Mystery Player #${data.puzzle} ${score}/${data.max}\n${grid}\n${location.origin}/daily?ref=daily-share${window.HL.inv()}`;
   }
 
   async function share() {

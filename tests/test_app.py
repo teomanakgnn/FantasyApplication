@@ -290,3 +290,14 @@ def test_league_alerts_flag_injured_starter_and_hot_bench():
     keys = {a["key"].split("-")[0] for a in alerts(me, [])}
     assert {"out", "bench"} <= keys
     assert alerts(me, [])[0]["level"] == "bad"
+
+
+def test_player_slug_and_outlook():
+    from services.player_pages import outlook, slugify
+    assert slugify("Nikola Jokić") == "nikola-jokic" and slugify("Shai Gilgeous-Alexander") == "shai-gilgeous-alexander"
+    p = {"name": "Test Player", "rank": 40, "avail": 0.7, "injury": "ACTIVE",
+         "s": {"pts": 20, "reb": 5, "ast": 4, "stl": 1, "blk": 0.5, "tpm": 2},
+         "z": {"FG%": -1.2, "FT%": 1.0, "3PM": 1.1, "PTS": 1.0, "REB": -0.2, "AST": 0.1, "STL": 0.2, "BLK": -0.3, "TO": -0.6},
+         "punt_rank": {"FT%": 50, "FG%": 22, "AST": 41, "3PM": 60, "PTS": 70, "TO": 35}}
+    text = " ".join(outlook(p))
+    assert "No. 40" in text and "punt FG%" in text and "57 games" in text

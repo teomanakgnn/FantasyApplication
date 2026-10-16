@@ -9,6 +9,23 @@
     {% if user.created_at %}<span class="dim small"> · member since {{ user.created_at.strftime('%d %b %Y') }}</span>{% endif %}</p>
 </div>
 
+<section class="card invite-card" id="invite" style="margin-bottom:12px">
+  <div class="card-title">Invite friends - you both get 30 days of Pro</div>
+  <p class="small muted" style="margin:0 0 10px">Share your link. When a friend signs up with it, you each get 30 days of Pro - it stacks with every friend. Your game results and shared links already carry it.</p>
+  <div class="row" style="gap:8px">
+    <input class="input" id="inv-link" readonly value="{{ site_url }}/?inv={{ invite }}" style="flex:1;min-width:220px" onclick="this.select()">
+    <button class="btn btn-primary" type="button" id="inv-copy">Copy link</button>
+  </div>
+  <p class="tiny dim" style="margin:8px 0 0">Friends joined with your link: <b>{{ referrals }}</b></p>
+</section>
+<script>
+document.getElementById("inv-copy").addEventListener("click", async () => {
+  const v = document.getElementById("inv-link").value;
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) { try { await navigator.share({ text: "Free fantasy basketball tools and daily NBA games - join with my link and we both get Pro:", url: v }); return; } catch (e) { if (e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(v); window.HL.toast("Link copied."); } catch (e) { window.prompt("Copy your link:", v); }
+});
+</script>
+
 <div class="grid grid-2">
   <section class="card">
     <div class="card-title">Plan</div>

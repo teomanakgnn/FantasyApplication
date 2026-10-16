@@ -34,6 +34,7 @@ SESSION_COOKIE = "hl_session"
 FLASH_COOKIE = "hl_flash"
 SOURCE_COOKIE = "hl_src"      # ilk gelis kaynagi (utm / ref / yonlendiren site)
 CODE_COOKIE = "hl_code"       # linkle gelen Pro davet kodu
+INVITE_COOKIE = "hl_inv"      # bir uyenin kisisel davet linkiyle gelis
 SIGNUP_COOKIE = "hl_signup"   # yeni kayit: analitik/reklam donusumu icin tek seferlik
 SESSION_MAX_AGE = 30 * 24 * 3600
 
@@ -44,6 +45,7 @@ NAV = [
     ("home", "/", "Home"),
     ("mock", "/mock-draft", "Mock Draft"),
     ("strategy", "/draft-strategy", "Draft Strategy"),
+    ("rankings", "/rankings", "Rankings 2026-27"),
     ("ou", "/over-under", "Over / Under"),
     ("daily", "/daily", "Mystery Player"),
     ("statmatch", "/stat-match", "Stat Match"),
@@ -143,6 +145,10 @@ def remember_source(request: Request, response):
     ?code=XYZ ile gelen davet kodu da kayit formuna tasinir.
     """
     q = request.query_params
+    inv = re.sub(r"[^a-z0-9]", "", (q.get("inv") or "").lower())[:12]
+    if inv and not request.cookies.get(INVITE_COOKIE):
+        response.set_cookie(INVITE_COOKIE, inv, max_age=60 * 86400, httponly=True,
+                            secure=config.PRODUCTION, samesite="lax", path="/")
     code = re.sub(r"[^A-Za-z0-9_-]", "", q.get("code") or "")[:32]
     if code:
         response.set_cookie(CODE_COOKIE, code.upper(), max_age=30 * 86400, httponly=True,
@@ -150,7 +156,9 @@ def remember_source(request: Request, response):
     if request.cookies.get(SOURCE_COOKIE):
         return
     source = None
-    if q.get("utm_source") or q.get("ref"):
+    if inv:
+        source = f"friend-invite/{_clean(q.get('ref'))}" if q.get("ref") else "friend-invite"
+    elif q.get("utm_source") or q.get("ref"):
         parts = [q.get("utm_source") or q.get("ref"), q.get("utm_medium"), q.get("utm_campaign")]
         source = "/".join(_clean(x) for x in parts if _clean(x))
     else:
@@ -217,6 +225,7 @@ def render(request: Request, template, active=None, status_code=200, **context):
         # Kayittan sonraki ilk sayfa: donusum olayi bir kez gonderilir
         "signup_event": bool(request.cookies.get(SIGNUP_COOKIE)),
         "site_url": config.SITE_URL.rstrip("/"),
+        "invite": ((user.get("invite_code") or db.invite_code(user["id"])) if user and db.available else None),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)
     if getattr(request.state, "clear_flash", False):

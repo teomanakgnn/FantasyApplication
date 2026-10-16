@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} Fantasy Outlook 2026-27 - Rank #{{ p.rank }}, Projections · HoopLife NBA{% endblock %}
+{% block description %}{{ p.name }} fantasy basketball outlook for 2026-27: No. {{ p.rank }} in 9-cat, projected {{ '%.1f'|format(p.s.pts) }} pts, {{ '%.1f'|format(p.s.reb) }} reb, {{ '%.1f'|format(p.s.ast) }} ast. Category strengths, best punt build, ADP value and similar players.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<nav class="tiny dim" style="margin-bottom:8px"><a href="/rankings">Rankings</a> › {{ p.name }}</nav>
+<div class="card pl-head">
+  <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ p.id }}.png&w=350&h=254" alt="{{ p.name }}" onerror="this.style.visibility='hidden'">
+  <div class="pl-id">
+    <div class="eyebrow" style="margin:0">{{ p.team }} · {{ p.pos }}</div>
+    <h1>{{ p.name }}</h1>
+    <div class="pl-chips"><span class="chip chip-accent">#{{ p.rank }} overall</span><span class="chip">{{ tier }}</span>{% if adp %}<span class="chip">ADP {{ '%.0f'|format(adp) }}</span>{% endif %}<span class="chip">~{{ (p.avail * 82)|round|int }} games</span>{% if p.injury != 'ACTIVE' %}<span class="chip chip-bad">{{ p.injury|replace('_', ' ')|lower }}</span>{% endif %}</div>
+  </div>
+</div>
+
+<div class="pl-grid">
+  <section class="card">
+    <h2 class="card-title">2026-27 fantasy outlook</h2>
+    {% for para in outlook %}<p class="pl-p">{{ para }}</p>{% endfor %}
+    <div class="pl-stats">
+      {% for k, label in [('pts', 'PTS'), ('reb', 'REB'), ('ast', 'AST'), ('stl', 'STL'), ('blk', 'BLK'), ('tpm', '3PM'), ('to', 'TO')] %}<div><b>{{ '%.1f'|format(p.s[k]) }}</b><span>{{ label }}</span></div>{% endfor %}
+      <div><b>{{ '%.1f'|format(100 * p.s.fgm / p.s.fga) if p.s.fga else '-' }}%</b><span>FG%</span></div>
+      <div><b>{{ '%.1f'|format(100 * p.s.ftm / p.s.fta) if p.s.fta else '-' }}%</b><span>FT%</span></div>
+    </div>
+    <p class="tiny dim">Per-game projection for the 2026-27 season.</p>
+  </section>
+  <section class="card">
+    <h2 class="card-title">Category strengths</h2>
+    {% for c in cats %}{% set v = p.z[c] %}
+    <div class="pl-cat"><b>{{ c }}</b><div class="pl-bar"><span class="pl-zero"></span><i class="{{ 'pos' if v >= 0 else 'neg' }}" style="{% if v >= 0 %}left:50%;width:{{ [v * 16, 50]|min }}%{% else %}left:{{ 50 - [(-v) * 16, 50]|min }}%;width:{{ [(-v) * 16, 50]|min }}%{% endif %}"></i></div><span class="{{ 'good' if v >= 0.75 else 'bad' if v <= -0.5 else 'dim' }}">{{ '%+.1f'|format(v) }}</span></div>
+    {% endfor %}
+    <h3 class="pl-h3">Rank by punt build</h3>
+    <div class="pl-punts">{% for c in punts %}<a href="/rankings?punt={{ c|urlencode }}" class="{{ 'good' if p.punt_rank[c] + 5 < p.rank }}"><span>Punt {{ c }}</span><b>#{{ p.punt_rank[c] }}</b></a>{% endfor %}</div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">Similar players</h2>
+  <div class="pl-sim">{% for q in similar %}<a href="/players/{{ q.slug }}"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ q.id }}.png&w=110&h=80" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><b>{{ q.name }}</b><small>#{{ q.rank }} · {{ q.team }}</small></a>{% endfor %}</div>
+</section>
+
+<section class="card pl-cta">
+  <div><b>Is {{ p.name.split(' ')[-1] }} worth it for your team?</b><span>Put him in a trade, see who is there at your pick, or track him all season.</span></div>
+  <div class="pl-cta-actions">
+    <a class="btn btn-primary" href="/trade-analyzer?b={{ p.name|urlencode }}">Test a trade</a>
+    <a class="btn" href="/draft-strategy">Draft strategy by pick</a>
+    {% if not signed_in %}<a class="btn" href="/register?next={{ ('/players/' ~ p.slug)|urlencode }}">Free account - watchlist</a>{% endif %}
+  </div>
+</section>
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "Article", "headline": p.name ~ " fantasy basketball outlook 2026-27", "about": {"@type": "Person", "name": p.name}, "publisher": {"@type": "Organization", "name": "HoopLife NBA"}}|tojson }}</script>
+{% endblock %}

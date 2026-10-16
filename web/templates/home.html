@@ -228,7 +228,7 @@
         document.getElementById("trivia-share").addEventListener("click", async () => {
           const day = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
           const streakTxt = res.streak ? ` - ${res.streak} day streak 🔥` : "";
-          const text = `HoopLife Daily Trivia (${day}) ${res.correct ? "✅" : "❌"}${streakTxt}\n${location.origin}/?ref=trivia-share`;
+          const text = `HoopLife Daily Trivia (${day}) ${res.correct ? "✅" : "❌"}${streakTxt}\n${location.origin}/?ref=trivia-share${window.HL.inv()}`;
           if (window.gtag) gtag("event", "trivia_share");
           if (navigator.share && matchMedia("(pointer: coarse)").matches) {
             try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }

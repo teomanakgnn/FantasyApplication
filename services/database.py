@@ -335,6 +335,10 @@ class Database:
                    sent_at TIMESTAMP,
                    unsubscribed_at TIMESTAMP
                )""",
+            # Davet sistemi: her uyenin kisisel kodu, kimin davetiyle geldigi
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_invite_code ON users (invite_code)",
             # Kayit kaynagi (utm/ref) ve Pro kodlari
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT",
             """CREATE TABLE IF NOT EXISTS promo_codes (
@@ -1031,6 +1035,46 @@ class Database:
         """E-posta linkinden gelen kayit sayisi."""
         return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
                              fetch="value") or 0)
+
+    # ==================== DAVET (REFERANS) ====================
+
+    def invite_code(self, user_id):
+        """Kullanicinin kisisel davet kodu (ilk istekte uretilir)."""
+        code = self._run("SELECT invite_code FROM users WHERE id = %s", (user_id,), fetch="value")
+        if code:
+            return code
+        alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+        for _ in range(5):
+            code = "".join(secrets.choice(alphabet) for _ in range(6))
+            try:
+                if self._run("UPDATE users SET invite_code = %s WHERE id = %s AND invite_code IS NULL",
+                             (code, user_id), fetch="rowcount"):
+                    return code
+            except pg_errors.UniqueViolation:
+                continue
+        return self._run("SELECT invite_code FROM users WHERE id = %s", (user_id,), fetch="value")
+
+    def user_by_invite(self, code):
+        if not code:
+            return None
+        return self._run("SELECT id, username, email FROM users WHERE invite_code = %s",
+                         (code.lower()[:12],), fetch="one")
+
+    def set_referred_by(self, user_id, referrer_id):
+        return bool(self._run("UPDATE users SET referred_by = %s WHERE id = %s AND referred_by IS NULL "
+                              "AND id <> %s", (referrer_id, user_id, referrer_id), fetch="rowcount"))
+
+    def referral_count(self, user_id):
+        return int(self._run("SELECT COUNT(*) FROM users WHERE referred_by = %s", (user_id,), fetch="value") or 0)
+
+    def extend_pro(self, user_id, days):
+        """Pro suresini uzatir (suresiz Pro'ya dokunmaz)."""
+        plan, expires = self.get_plan(user_id)
+        if plan == PLAN_PRO and expires is None:
+            return True
+        start = expires if (plan == PLAN_PRO and expires and expires > datetime.now()) else datetime.now()
+        return bool(self._run("UPDATE users SET plan = %s, plan_expires_at = %s WHERE id = %s",
+                              (PLAN_PRO, start + timedelta(days=days), user_id)))
 
     # ==================== KAYNAK / PRO KODLARI ====================
 

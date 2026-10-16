@@ -327,3 +327,4 @@ details.more > .more-body { padding: 0 14px 14px; }
 .consent[hidden] { display: none; }
 .consent p { margin: 0; flex: 1 1 240px; font-size: .82rem; color: var(--muted); }
 .consent-actions { display: flex; gap: 8px; }
+.nav-invite { color: var(--gold) !important; font-weight: 700; }
