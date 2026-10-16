@@ -225,6 +225,8 @@ def _warm():
         step("player photos", name_to_id_map)
         from services import daily_player
         step("mystery player", daily_player.answer_for)
+        from services.trade_values import players as trade_players
+        step("trade values", lambda: trade_players("proj"))
     finally:
         _WARM_DONE.set()
 
