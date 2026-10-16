@@ -1,86 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Trade Analyzer · HoopLife NBA{% endblock %}
-{% block description %}NBA fantasy trade analyzer - put players on both sides and see who wins, category by category.{% endblock %}
+{% block title %}Fantasy Basketball Trade Analyzer · HoopLife NBA{% endblock %}
+{% block description %}Free fantasy basketball trade analyzer for 9-cat, 8-cat and points leagues: category impact, 2-for-1 roster math, punt builds and injury risk.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/trade.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <div class="page-head">
   <div class="eyebrow">Trade math</div>
   <h1>Trade Analyzer</h1>
-  <p>Put players on both sides and see who wins the deal, category by category.</p>
+  <p>Add what you send and what you get back. You see who wins, what it does to each category, and what a 2-for-1 really costs - set up for your league and your punts.</p>
 </div>
 
-<div class="card" style="margin-bottom:14px">
-  <div class="form-row">
-    <div class="field"><span>Stats period</span>
-      <nav class="seg seg-block">{% for key, label in periods.items() %}<a href="/trade-analyzer?period={{ key }}" class="{{ 'is-on' if key == period }}">{{ label }}</a>{% endfor %}</nav></div>
-    <label class="field"><span>Valuation method</span>
-      <select class="input" id="t-method">
-        <option value="threshold">Threshold (recommended)</option>
-        <option value="quality">Quality over quantity</option>
-        <option value="diminishing">Diminishing returns</option>
-        <option value="simple">Simple average</option>
-      </select></label>
+<section class="card tr-settings">
+  <div class="tr-set">
+    <span class="tr-lab">Stats</span>
+    <nav class="seg">{% for key, label in bases.items() %}<a href="/trade-analyzer?basis={{ key }}" data-basis="{{ key }}" class="{{ 'is-on' if key == basis }}">{{ label }}</a>{% endfor %}</nav>
   </div>
-  <div class="field"><span>Punt categories</span>
-    <div class="row">
-      <label class="check"><input type="checkbox" class="t-punt" value="FG"> Punt FG%</label>
-      <label class="check"><input type="checkbox" class="t-punt" value="FT"> Punt FT%</label>
-      <label class="check"><input type="checkbox" class="t-punt" value="TO"> Punt turnovers</label>
-    </div>
+  <div class="tr-set">
+    <span class="tr-lab">League</span>
+    <div class="seg" id="tr-league"><button type="button" data-lt="9" class="is-on">9-cat</button><button type="button" data-lt="8">8-cat (no TO)</button><button type="button" data-lt="pts">Points</button></div>
+    <label class="tr-teams">Teams <select class="input" id="tr-teams">{% for n in [8, 10, 12, 14, 16] %}<option {{ 'selected' if n == 12 }}>{{ n }}</option>{% endfor %}</select></label>
   </div>
-  <details class="more" id="t-threshold-box">
-    <summary>Threshold settings</summary>
-    <div class="more-body form-row">
-      <label class="field"><span>Minimum fantasy points: <b id="t-min-v">12</b></span><input type="range" id="t-min" min="8" max="20" step="1" value="12"></label>
-      <label class="field"><span>Penalty strength: <b id="t-pen-v">0.3</b></span><input type="range" id="t-pen" min="0.1" max="1" step="0.1" value="0.3"></label>
-    </div>
-  </details>
-</div>
+  <div class="tr-set" id="tr-punt-row">
+    <span class="tr-lab">Punting</span>
+    <div class="tr-punts" id="tr-punts">{% for c in ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO'] %}<button type="button" data-punt="{{ c }}">{{ c }}</button>{% endfor %}</div>
+  </div>
+  {% if basis == 'proj' %}
+  <label class="check" style="margin:2px 0 0"><input type="checkbox" id="tr-injury" checked> Price in injury risk (games each player is projected to miss)</label>
+  {% endif %}
+</section>
 
 {% if not players %}
-  <div class="empty">No games in this period yet{% if period != 'season' %} - try the season average{% endif %}.</div>
+  <div class="empty" style="margin-top:14px">No stats for this period yet. Try the projections.</div>
 {% else %}
-<div class="grid grid-2">
-  {% for side, label, color in [('a', 'Team 1 receives', 'var(--accent)'), ('b', 'Team 2 receives', '#f97316')] %}
-  <section class="card t-side" data-side="{{ side }}" style="border-top:3px solid {{ color }}">
-    <div class="card-title">{{ label }}</div>
-    <div class="form-row">
-      <label class="field"><span>Team filter</span>
-        <select class="input t-team"><option value="">All teams</option>{% for t in teams %}<option value="{{ t }}">{{ team_names.get(t, t) }}</option>{% endfor %}</select></label>
-      <label class="field"><span>Add player</span>
-        <input class="input t-add" list="t-list-{{ side }}" placeholder="Type a name" autocomplete="off">
-        <datalist id="t-list-{{ side }}"></datalist></label>
+<div class="tr-sides">
+  {% for side, label, hint in [('a', 'You send', 'Players leaving your team'), ('b', 'You get', 'Players coming to your team')] %}
+  <section class="card tr-side" data-side="{{ side }}">
+    <div class="tr-side-head"><div><div class="card-title" style="margin:0">{{ label }}</div><div class="tiny dim">{{ hint }}</div></div><b class="tr-sum" data-sum="{{ side }}"></b></div>
+    <div class="dp-search tr-search">
+      <input class="input tr-input" placeholder="Add a player…" autocomplete="off" spellcheck="false" aria-label="{{ label }}: add a player">
+      <ul class="dp-list" hidden></ul>
     </div>
-    <div class="t-players"></div>
-    <div class="t-total muted small"></div>
+    <div class="tr-list"></div>
   </section>
   {% endfor %}
 </div>
 
-<section id="t-result" style="margin-top:16px" hidden>
-  <div class="card">
-    <div class="row-between">
-      <div><div class="kpi-label">Team 1</div><div class="kpi-value" id="t-v1"></div></div>
-      <div class="center"><div id="t-verdict" style="font-size:1.2rem;font-weight:800"></div><div class="small muted" id="t-gap"></div></div>
-      <div class="right"><div class="kpi-label">Team 2</div><div class="kpi-value" id="t-v2"></div></div>
-    </div>
+<section id="tr-result" hidden>
+  <div class="card tr-verdict-card">
+    <div class="tr-verdict" id="tr-verdict"></div>
+    <div class="tr-meter"><i id="tr-meter-fill"></i><span class="tr-mid"></span></div>
+    <div class="tr-math" id="tr-math"></div>
+    <div class="tr-actions"><button class="btn btn-sm" type="button" id="tr-share">Copy link to this trade</button><button class="btn btn-sm btn-ghost" type="button" id="tr-swap">Swap sides</button><button class="btn btn-sm btn-ghost" type="button" id="tr-clear">Clear</button></div>
   </div>
-  <h2>Category breakdown</h2>
-  <div class="card" id="t-bars"></div>
+  <div class="tr-grid">
+    <section class="card"><div class="card-title">What it does to your categories</div><div id="tr-cats"></div>
+      <p class="tiny dim" style="margin:8px 0 0" id="tr-cats-note"></p></section>
+    <section class="card"><div class="card-title">The read</div><div id="tr-notes" class="tr-notes"></div></section>
+  </div>
 </section>
-<p class="note" id="t-hint" style="margin-top:14px">Add at least one player to each side.</p>
+<p class="note" id="tr-hint" style="margin-top:14px">Add at least one player on each side.</p>
+<script id="tr-data" type="application/json">{{ players|tojson }}</script>
 {% endif %}
-<style>
-  .t-chip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); margin-bottom: 6px; }
-  .t-chip b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .t-chip .x { border: 0; background: transparent; color: var(--muted); cursor: pointer; min-width: 36px; min-height: 36px; font-size: 1.1rem; border-radius: 8px; }
-  .t-chip .x:hover { background: var(--surface-3); color: var(--text); }
-  .t-bar { display: grid; grid-template-columns: 1fr 70px 1fr; align-items: center; gap: 8px; margin: 8px 0; font-size: .86rem; }
-  .t-bar .l1 { display: flex; justify-content: flex-end; }
-  .t-bar i { display: block; height: 22px; border-radius: 5px; min-width: 2px; }
-  .t-bar .lab { text-align: center; font-weight: 800; font-size: .78rem; color: var(--muted); }
-</style>
 {% endblock %}
-{% block scripts %}
-<script>window.TRADE = { players: {{ players|tojson }} };</script>
-<script src="/static/js/trade.js?v={{ asset_version }}"></script>
-{% endblock %}
+{% block scripts %}{% if players %}<script>window.TRADE_BASIS = "{{ basis }}";</script><script src="/static/js/trade.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
