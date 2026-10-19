@@ -317,6 +317,45 @@ def draft_assist_api(request: Request, league: str = "", team: str = ""):
         return JSONResponse({"error": f"Could not read the draft: {exc}"[:200]}, 502)
 
 
+# ==================== TRADE FIT (yonetici) ====================
+
+@router.get("/admin/trade-fit")
+def trade_fit_page(request: Request):
+    gate = login_required(request)
+    if gate:
+        return gate
+    if not _is_admin(request):
+        return redirect("/", "Not available.", "error")
+    leagues = [r for r in db.list_leagues(current_user(request)["id"]) if r["platform"] == "espn" and r["team_id"]]
+    return render(request, "trade_fit.html", active="league", leagues=leagues)
+
+
+@router.get("/api/admin/trade-fit/rosters")
+def trade_fit_rosters(request: Request, league: str = ""):
+    from fastapi.responses import JSONResponse
+    if not _is_admin(request):
+        return JSONResponse({"error": "Not available."}, 403)
+    try:
+        from services.trade_fit import rosters
+        return rosters(int(league))
+    except Exception as exc:
+        return JSONResponse({"error": f"Could not read the league: {exc}"[:200]}, 502)
+
+
+@router.post("/api/admin/trade-fit")
+async def trade_fit_eval(request: Request):
+    from fastapi.responses import JSONResponse
+    if not _is_admin(request):
+        return JSONResponse({"error": "Not available."}, 403)
+    b = await request.json()
+    try:
+        from services.trade_fit import evaluate
+        return evaluate(int(b["league"]), int(b["team"]), b.get("partner"), b.get("send") or [], b.get("get") or [])
+    except Exception as exc:
+        print(f"trade fit failed: {exc}")
+        return JSONResponse({"error": f"Could not evaluate: {exc}"[:200]}, 502)
+
+
 # ==================== HAFTALIK TAHMIN ====================
 
 def _week_context(user, league_id, season, team):
