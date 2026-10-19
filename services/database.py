@@ -1051,6 +1051,13 @@ class Database:
                          (user_id,), fetch="all") or []
         return {r["game"]: {"last": r["last"], "streak": r["streak"]} for r in rows}
 
+    def sync_streak(self, user_id, game, last, streak):
+        """Cihazdaki daha uzun seriyi sunucuya yazar (yalnizca ileri gider)."""
+        self._run("INSERT INTO game_streaks (user_id, game, last, streak) VALUES (%s, %s, %s, %s) "
+                  "ON CONFLICT (user_id, game) DO UPDATE SET last = EXCLUDED.last, streak = EXCLUDED.streak "
+                  "WHERE game_streaks.last < EXCLUDED.last OR (game_streaks.last = EXCLUDED.last "
+                  "AND game_streaks.streak < EXCLUDED.streak)", (user_id, game, last, streak))
+
     def bump_streak(self, user_id, game, puzzle, seed=0):
         """Bugun oynandi: dun de oynandiysa seri +1, degilse 1 (ya da cihazdan gelen seri)."""
         row = self._run("SELECT last, streak FROM game_streaks WHERE user_id = %s AND game = %s",

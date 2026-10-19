@@ -225,7 +225,22 @@
     const SRV = window.HL_STREAKS || null;
     let streaks = get("hl_streaks") || {};
     let pending = 0, changed = false;
-    const pick = (a, b) => (!a ? b : !b ? a : (b.last > a.last || (b.last === a.last && b.streak > a.streak)) ? b : a);
+    // Oyunlarin kendi istatistiginden seri tahmini: oyunlar #1 ile basladi; oynanan
+    // oyun sayisi son oynanan gunun numarasina esitse ilk gunden beri her gun oynanmis.
+    const NATIVE = { statmatch: "hl_statmatch_stats", starting5: "hl_sf_stats", eightytwo: "hl_82_stats" };
+    function nativeSeed(key) {
+      const st = get(NATIVE[key]); if (!st) return null;
+      const last = parseInt(st.last, 10) || 0;
+      if (!last || (last !== P[key] && last !== P[key] - 1)) return null;
+      return (st.played || 0) >= last ? { last, streak: last } : { last, streak: 1 };
+    }
+    // Iki kaydi birlestir: ayni gun -> buyuk seri; ardisik gunler -> eskisinin uzerine devam
+    const pick = (a, b) => {
+      if (!a) return b; if (!b) return a;
+      if (a.last === b.last) return a.streak >= b.streak ? a : b;
+      const [hi, lo] = a.last > b.last ? [a, b] : [b, a];
+      return hi.last === lo.last + 1 ? { last: hi.last, streak: Math.max(hi.streak, lo.streak + 1) } : hi;
+    };
     Object.keys(done).forEach((key) => {
       if (!P[key]) return;
       const link = document.querySelector(`.nav-link[data-nav="${key}"]`);
@@ -235,7 +250,7 @@
         const native = pick(get("hl_daily_stats"), SRV && SRV.daily_native);
         alive = native && (native.lastWin === P.daily || native.lastWin === P.daily - 1) ? native.streak : 0;
       } else {
-        let s = pick(streaks[key], SRV && SRV[key]) || { last: 0, streak: 0 };
+        let s = pick(pick(streaks[key], SRV && SRV[key]), nativeSeed(key)) || { last: 0, streak: 0 };
         if (ok && s.last !== P[key]) {
           const before = s.last === P[key] - 1 ? s.streak : 0;
           s = { last: P[key], streak: before + 1 };
@@ -246,6 +261,12 @@
           }
         }
         alive = s.last === P[key] || s.last === P[key] - 1 ? s.streak : 0;
+        // Bu cihaz daha uzun bir seri biliyorsa sunucuya da yaz (diger cihazlar gorsun)
+        const srv = SRV && SRV[key];
+        if (SRV && alive && (!srv || srv.last < s.last || (srv.last === s.last && srv.streak < s.streak))) {
+          SRV[key] = { last: s.last, streak: s.streak };
+          api("/api/streak", { method: "POST", body: { game: key, sync: true, last: s.last, streak: s.streak } }).catch(() => {});
+        }
         if (s.last === P[key]) ok = true;      // baska cihazda bugun oynandi
       }
       if (!ok) pending++;

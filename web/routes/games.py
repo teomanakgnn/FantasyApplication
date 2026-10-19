@@ -206,6 +206,11 @@ async def streak_api(request: Request):
     from web.core import _puzzles
     game = str(body.get("game") or "")
     today = _puzzles().get(game)
+    if body.get("sync") and today:
+        last, streak = int(body.get("last") or 0), int(body.get("streak") or 0)
+        if last in (today, today - 1) and 0 < streak <= last:
+            db.sync_streak(user["id"], game, last, streak)
+        return {"ok": True}
     if not today or int(body.get("puzzle") or 0) != today:
         return _bad("Unknown game or day.")
     return {"streak": db.bump_streak(user["id"], game, today, int(body.get("seed") or 0))}
