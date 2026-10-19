@@ -335,6 +335,14 @@ class Database:
                    sent_at TIMESTAMP,
                    unsubscribed_at TIMESTAMP
                )""",
+            # Gunluk oyun serileri (giris yapan kullanici: her cihazda ayni)
+            """CREATE TABLE IF NOT EXISTS game_streaks (
+                   user_id INTEGER NOT NULL,
+                   game TEXT NOT NULL,
+                   last INTEGER NOT NULL DEFAULT 0,
+                   streak INTEGER NOT NULL DEFAULT 0,
+                   PRIMARY KEY (user_id, game)
+               )""",
             # Davet sistemi: her uyenin kisisel kodu, kimin davetiyle geldigi
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER",
@@ -605,7 +613,7 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks", "promo_redemptions", "daily_stats",
+                      "season_win_picks", "promo_redemptions", "daily_stats", "game_streaks",
                       "user_leagues", "league_alert_log"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
@@ -1035,6 +1043,28 @@ class Database:
         """E-posta linkinden gelen kayit sayisi."""
         return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
                              fetch="value") or 0)
+
+    # ==================== OYUN SERILERI ====================
+
+    def get_streaks(self, user_id):
+        rows = self._run("SELECT game, last, streak FROM game_streaks WHERE user_id = %s",
+                         (user_id,), fetch="all") or []
+        return {r["game"]: {"last": r["last"], "streak": r["streak"]} for r in rows}
+
+    def bump_streak(self, user_id, game, puzzle, seed=0):
+        """Bugun oynandi: dun de oynandiysa seri +1, degilse 1 (ya da cihazdan gelen seri)."""
+        row = self._run("SELECT last, streak FROM game_streaks WHERE user_id = %s AND game = %s",
+                        (user_id, game), fetch="one")
+        if row and row["last"] == puzzle:
+            return row["streak"]
+        if row and row["last"] == puzzle - 1:
+            streak = row["streak"] + 1
+        else:
+            streak = max(1, int(seed or 0) + 1)
+        self._run("INSERT INTO game_streaks (user_id, game, last, streak) VALUES (%s, %s, %s, %s) "
+                  "ON CONFLICT (user_id, game) DO UPDATE SET last = EXCLUDED.last, streak = EXCLUDED.streak",
+                  (user_id, game, puzzle, streak))
+        return streak
 
     # ==================== DAVET (REFERANS) ====================
 

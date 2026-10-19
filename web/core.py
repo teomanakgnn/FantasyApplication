@@ -226,6 +226,7 @@ def render(request: Request, template, active=None, status_code=200, **context):
         "signup_event": bool(request.cookies.get(SIGNUP_COOKIE)),
         "site_url": config.SITE_URL.rstrip("/"),
         "puzzles": _puzzles(),
+        "streaks": _streaks(user),
         "invite": ((user.get("invite_code") or db.invite_code(user["id"])) if user and db.available else None),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)
@@ -234,6 +235,21 @@ def render(request: Request, template, active=None, status_code=200, **context):
     if context["signup_event"]:
         response.delete_cookie(SIGNUP_COOKIE, path="/")
     return response
+
+
+def _streaks(user):
+    """Giris yapan kullanicinin sunucudaki serileri; Mystery Player kendi istatistiginden."""
+    if not user or not db.available:
+        return None
+    try:
+        out = db.get_streaks(user["id"])
+        mp = db.get_daily_stats(user["id"])
+        if mp:
+            out["daily_native"] = {"last": int(mp.get("last") or 0), "lastWin": int(mp.get("lastWin") or 0),
+                                   "streak": int(mp.get("streak") or 0)}
+        return out
+    except Exception:
+        return None
 
 
 def _puzzles():

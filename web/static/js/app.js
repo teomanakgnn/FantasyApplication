@@ -204,7 +204,10 @@
     const P = window.HL_PUZZLES || {};
     const get = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
     const done = {
-      daily: () => { const g = get("hl_daily_game"); return !!(g && g.puzzle === P.daily && g.done); },
+      daily: () => {
+        const g = get("hl_daily_game"); if (g && g.puzzle === P.daily && g.done) return true;
+        const n = window.HL_STREAKS && window.HL_STREAKS.daily_native; return !!(n && n.last === P.daily);
+      },
       statmatch: () => { const g = get("hl_statmatch_game"); return !!(g && g.puzzle === P.statmatch && g.picks && g.picks.length >= (g.length || 10)); },
       starting5: () => { const g = get("hl_sf_game"); return !!(g && g.puzzle === P.starting5 && g.done); },
       eightytwo: () => {
@@ -217,20 +220,34 @@
         return false;
       },
     };
-    // Seri: her oyun icin {last: oynanan son gunun numarasi, streak}
+    // Seri: cihazdaki kayit + (giris yaptiysa) sunucudaki kayit; Mystery
+    // Player kendi istatistiginden (galibiyet serisi, sunucuyla esitleniyor).
+    const SRV = window.HL_STREAKS || null;
     let streaks = get("hl_streaks") || {};
     let pending = 0, changed = false;
+    const pick = (a, b) => (!a ? b : !b ? a : (b.last > a.last || (b.last === a.last && b.streak > a.streak)) ? b : a);
     Object.keys(done).forEach((key) => {
       if (!P[key]) return;
       const link = document.querySelector(`.nav-link[data-nav="${key}"]`);
-      const ok = done[key]();
-      const s = streaks[key] || { last: 0, streak: 0 };
-      if (ok && s.last !== P[key]) {
-        s.streak = s.last === P[key] - 1 ? s.streak + 1 : 1;
-        s.last = P[key]; streaks[key] = s; changed = true;
+      let ok = done[key]();
+      let alive;
+      if (key === "daily") {
+        const native = pick(get("hl_daily_stats"), SRV && SRV.daily_native);
+        alive = native && (native.lastWin === P.daily || native.lastWin === P.daily - 1) ? native.streak : 0;
+      } else {
+        let s = pick(streaks[key], SRV && SRV[key]) || { last: 0, streak: 0 };
+        if (ok && s.last !== P[key]) {
+          const before = s.last === P[key] - 1 ? s.streak : 0;
+          s = { last: P[key], streak: before + 1 };
+          streaks[key] = s; changed = true;
+          if (SRV) {
+            SRV[key] = s;
+            api("/api/streak", { method: "POST", body: { game: key, puzzle: P[key], seed: before } }).catch(() => {});
+          }
+        }
+        alive = s.last === P[key] || s.last === P[key] - 1 ? s.streak : 0;
+        if (s.last === P[key]) ok = true;      // baska cihazda bugun oynandi
       }
-      // Dun oynanmadiysa seri bitti
-      const alive = s.last === P[key] || s.last === P[key] - 1 ? s.streak : 0;
       if (!ok) pending++;
       if (!link) return;
       let b = link.querySelector(".nav-badge");

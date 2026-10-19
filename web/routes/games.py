@@ -196,6 +196,21 @@ async def starting_five_reveal(request: Request):
     return {"teams": teams}
 
 
+@router.post("/api/streak")
+async def streak_api(request: Request):
+    """Gunluk oyun bitti: giris yapan kullanicinin serisini sunucuda isle."""
+    user = current_user(request)
+    if not user:
+        return _bad("Sign in to keep streaks on every device.", 401)
+    body = await request.json()
+    from web.core import _puzzles
+    game = str(body.get("game") or "")
+    today = _puzzles().get(game)
+    if not today or int(body.get("puzzle") or 0) != today:
+        return _bad("Unknown game or day.")
+    return {"streak": db.bump_streak(user["id"], game, today, int(body.get("seed") or 0))}
+
+
 @router.get("/card-game")
 @router.get("/card-game/play")
 def old_card_game():
