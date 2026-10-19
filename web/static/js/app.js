@@ -217,19 +217,29 @@
         return false;
       },
     };
-    let pending = 0;
+    // Seri: her oyun icin {last: oynanan son gunun numarasi, streak}
+    let streaks = get("hl_streaks") || {};
+    let pending = 0, changed = false;
     Object.keys(done).forEach((key) => {
       if (!P[key]) return;
       const link = document.querySelector(`.nav-link[data-nav="${key}"]`);
-      if (!link) return;
       const ok = done[key]();
+      const s = streaks[key] || { last: 0, streak: 0 };
+      if (ok && s.last !== P[key]) {
+        s.streak = s.last === P[key] - 1 ? s.streak + 1 : 1;
+        s.last = P[key]; streaks[key] = s; changed = true;
+      }
+      // Dun oynanmadiysa seri bitti
+      const alive = s.last === P[key] || s.last === P[key] - 1 ? s.streak : 0;
       if (!ok) pending++;
+      if (!link) return;
       let b = link.querySelector(".nav-badge");
       if (!b) { b = document.createElement("span"); link.appendChild(b); }
-      b.className = "nav-badge " + (ok ? "ok" : "todo");
-      b.textContent = ok ? "✓" : "!";
-      b.title = ok ? "Played today" : "Today's challenge is waiting";
+      b.className = "nav-badge " + (ok ? "lit" : "cold");
+      b.innerHTML = `<i>🔥</i>${alive ? `<b>${alive}</b>` : ""}`;
+      b.title = ok ? `Played today · ${alive}-day streak` : alive ? `Play today to keep your ${alive}-day streak` : "Play today to start a streak";
     });
+    if (changed) { try { localStorage.setItem("hl_streaks", JSON.stringify(streaks)); } catch (e) {} }
     const burger = document.getElementById("menu-open");
     if (burger) burger.classList.toggle("has-todo", pending > 0);
   }
