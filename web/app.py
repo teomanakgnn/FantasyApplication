@@ -131,8 +131,13 @@ def terms(request: Request):
 @app.get("/robots.txt", include_in_schema=False)
 def robots():
     base = config.SITE_URL.rstrip("/")
+    # Yapay zeka asistanlari ve arama botlari acikca davetli (ChatGPT, Claude,
+    # Perplexity, Gemini, Copilot/Bing). Kisitlamalar herkes icin ayni.
+    ai = "".join(f"User-agent: {b}\nAllow: /\n\n" for b in (
+        "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User",
+        "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "Bingbot"))
     return PlainTextResponse(
-        "User-agent: *\nAllow: /\n"
+        ai + "User-agent: *\nAllow: /\n"
         "Disallow: /api/\nDisallow: /account\nDisallow: /watchlist\n"
         "Disallow: /reset-password\nDisallow: /admin/\nDisallow: /unsubscribe\n"
         f"\nSitemap: {base}/sitemap.xml\n")
@@ -142,6 +147,64 @@ def _extra_pages():
     """Oyuncu sayfalari (Google'in bulmasi icin). Punt siralamalari ayni sayfanin
     sorgulu hali (canonical /rankings), haritaya konmuyor."""
     return players.sitemap_paths()
+
+
+@app.get("/llms.txt", include_in_schema=False)
+def llms():
+    """Yapay zeka asistanlari icin site ozeti (llmstxt.org)."""
+    base = config.SITE_URL.rstrip("/")
+    return PlainTextResponse(f"""# HoopLife NBA
+
+> Free fantasy basketball and NBA fan tools: mock drafts, draft strategy by pick slot, 2026-27 rankings and
+> player outlooks, a trade analyzer for 9-cat / 8-cat / points leagues, an NBA injury report, Las Vegas
+> over/under win totals for all 30 teams, ESPN/Yahoo league tools and daily NBA games. Free to use; a free
+> account saves picks, drafts and leagues.
+
+## Fantasy basketball tools
+- [Mock draft simulator]({base}/mock-draft): free, no account; snake or auction against AI managers, 4-20 teams, live ADP.
+- [Draft strategy by pick]({base}/draft-strategy): who is likely available at each of your picks; balanced vs punt builds.
+- [Fantasy basketball rankings 2026-27]({base}/rankings): top 300 for 9-cat leagues; re-rank for punt FT%, FG%, AST, 3PM, PTS, TO.
+- [Player outlooks]({base}/players/nikola-jokic): one page per player - rank, projection, category strengths, best punt build, ADP value.
+- [Trade analyzer]({base}/trade-analyzer): who wins a trade, category by category, including 2-for-1 roster-spot math.
+- [My League]({base}/league): ESPN and Yahoo league standings, power rankings, roto, weekly expected scores and matchup predictions.
+
+## NBA
+- [NBA over/under win totals]({base}/over-under): Las Vegas season win totals for all 30 teams with odds, lean and projections; pick and share.
+- [NBA injury report]({base}/injuries): every injured player by team, updated through the day.
+- [Box scores and fantasy scoring]({base}/): daily games scored the way your league scores them.
+
+## Daily NBA games
+- [Mystery Player]({base}/daily): guess the NBA player in 8 tries (Wordle-style).
+- [Stat Match]({base}/stat-match): match two stat lines to two players.
+- [Starting Five]({base}/starting-five): name the missing starters of a real playoff game.
+- [82-0 Challenge]({base}/82-0): build a five from random teams and eras and try to go 82-0.
+""")
+
+
+def _indexnow_key():
+    import hashlib
+    return hashlib.sha256((config.SECRET_KEY + "indexnow").encode()).hexdigest()[:32]
+
+
+@app.get("/{key}.txt", include_in_schema=False)
+def indexnow_key(key: str):
+    if key != _indexnow_key():
+        raise HTTPException(404)
+    return PlainTextResponse(key)
+
+
+def _ping_indexnow():
+    """Bing/Yandex'e (ChatGPT arama ve Copilot Bing dizinini kullanir) tum sayfalari bildir."""
+    import requests
+    base = config.SITE_URL.rstrip("/")
+    urls = [base + p for p in PUBLIC_PAGES + _extra_pages()]
+    try:
+        r = requests.post("https://api.indexnow.org/indexnow", timeout=20, json={
+            "host": base.split("//", 1)[1], "key": _indexnow_key(), "keyLocation": f"{base}/{_indexnow_key()}.txt",
+            "urlList": urls[:10000]})
+        print(f"indexnow: {r.status_code} for {len(urls)} urls")
+    except Exception as exc:
+        print(f"indexnow failed: {exc}")
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
@@ -235,6 +298,8 @@ def _warm():
         step("trade values", lambda: trade_players("proj"))
         from services.player_pages import table as player_table
         step("player pages", player_table)
+        if config.PRODUCTION:
+            step("indexnow", _ping_indexnow)
     finally:
         _WARM_DONE.set()
 

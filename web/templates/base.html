@@ -29,6 +29,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://a.espncdn.com">
   <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
+  <script type="application/ld+json">{{ {"@context": "https://schema.org", "@graph": [
+    {"@type": "WebSite", "name": "HoopLife NBA", "url": site_url ~ "/", "description": "Free fantasy basketball tools: mock drafts, draft strategy by pick, trade analyzer, rankings, injury report, NBA over/under win totals and daily NBA games."},
+    {"@type": "Organization", "name": "HoopLife NBA", "url": site_url ~ "/", "logo": site_url ~ "/static/img/logo.png"}]}|tojson }}</script>
   {% block head %}{% endblock %}
   {% if ga_id %}
   {# Consent Mode v2: izin verilene kadar analitik cerezi yazilmaz (gizlilik politikasi boyle diyor) #}

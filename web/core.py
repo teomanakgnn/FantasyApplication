@@ -283,5 +283,7 @@ def _num(value, decimals=1):
 
 
 templates.env.filters["num"] = _num
+templates.env.filters["faq_entity"] = lambda qa: {"@type": "Question", "name": qa[0],
+                                                  "acceptedAnswer": {"@type": "Answer", "text": qa[1]}}
 templates.env.globals["min"] = min
 templates.env.globals["max"] = max

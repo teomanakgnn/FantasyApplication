@@ -102,6 +102,20 @@
   .ou-btn.under.is-on { background: var(--bad); border-color: var(--bad); color: #fff; }
   .ou-btn:disabled { opacity: .6; }
 </style>
+{% from "partials/faq.html" import faq %}
+{% set by_line = cards|sort(attribute='line', reverse=True) %}
+{% if by_line %}
+{{ faq([
+  ("What are the NBA over/under win totals for " ~ season_label ~ "?",
+   "HoopLife lists the Las Vegas season win totals for all 30 NBA teams for " ~ season_label ~ ", with the over and under odds, which side Vegas leans, last season's record and a model projection. The highest line is " ~ by_line[0].team ~ " at " ~ by_line[0].line ~ " wins; the lowest is " ~ by_line[-1].team ~ " at " ~ by_line[-1].line ~ "."),
+  ("Which teams have the highest win totals this season?",
+   "The top lines are " ~ (by_line[:5]|map(attribute='team')|join(", ")) ~ " - see every team, its line and the over/under odds on this page."),
+  ("How do I make over/under picks and share them?",
+   "Create a free HoopLife account, pick over or under for each team before the season starts, and download or share your picks card. Other players' picks show as a percentage on every team."),
+  ("Is this a betting site?",
+   "No. HoopLife is a free fantasy basketball and NBA fan site. The lines are shown for fun predictions only - there is no money involved.")
+], "NBA win totals - questions") }}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

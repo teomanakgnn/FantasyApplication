@@ -1,0 +1,11 @@
+{#- Gorunur SSS + FAQPage yapilandirilmis verisi (arama motorlari ve yapay zeka
+    asistanlari dogrudan alintilayabilsin). items: [(soru, cevap), ...] -#}
+{% macro faq(items, title="Questions") -%}
+<section class="card faq" style="margin-top:16px">
+  <h2 class="card-title">{{ title }}</h2>
+  {% for q, a in items %}
+  <details {{ 'open' if loop.first }}><summary>{{ q }}</summary><p>{{ a }}</p></details>
+  {% endfor %}
+</section>
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": items|map('faq_entity')|list}|tojson }}</script>
+{%- endmacro %}

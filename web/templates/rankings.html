@@ -38,4 +38,17 @@
   </table>
 </div>
 <p class="tiny dim" style="margin-top:8px">Category columns are z-scores against the drafted player pool (0 = average draftable player); FG%/FT% are volume-weighted. Games = projected games played.</p>
+{% from "partials/faq.html" import faq %}
+{% if rows %}
+{{ faq([
+  ("Who is the No. 1 fantasy basketball player for 2026-27?",
+   rows[0].name ~ " ranks first in HoopLife's 2026-27 rankings for 9-category leagues, followed by " ~ (rows[1:5]|map(attribute='name')|join(", ")) ~ "."),
+  ("What are the best fantasy basketball rankings for 9-cat leagues?",
+   "These rankings value every player across FG%, FT%, 3PM, points, rebounds, assists, steals, blocks and turnovers against the drafted player pool, with injury risk priced in. Each player has his own page with an outlook, category strengths and his rank in each punt build."),
+  ("Who are the best punt FT% targets?",
+   "Switch the rankings to Punt FT% to re-rank every player without free throw percentage. Big men who score inside and block shots rise the most."),
+  ("Is there a free fantasy basketball mock draft and trade analyzer?",
+   "Yes - HoopLife has a free mock draft against AI opponents (snake or auction, no account needed), draft strategy by pick slot and a trade analyzer for 9-cat, 8-cat and points leagues.")
+], "Fantasy rankings - questions") }}
+{% endif %}
 {% endblock %}

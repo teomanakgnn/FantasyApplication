@@ -128,6 +128,17 @@
 </div>
 
 <link rel="stylesheet" href="/static/css/mock.css?v={{ asset_version }}">
+{% from "partials/faq.html" import faq %}
+<div style="max-width:900px">
+{{ faq([
+  ("Is there a free fantasy basketball mock draft simulator?",
+   "Yes. HoopLife's mock draft is free and needs no account: draft against AI managers in snake or auction format, 4 to 20 teams, using live average draft position. Every pick and bid from the AI is shown step by step."),
+  ("Can I practice an auction draft?",
+   "Yes - pick Auction in the setup. You nominate and bid against AI managers with a full budget, and you can see each AI bid as it happens."),
+  ("How should I draft from my pick slot?",
+   "Use HoopLife Draft Strategy: enter your league size and pick slot to see who is likely available at each of your picks and how balanced and punt builds compare.")
+], "Mock draft - questions") }}
+</div>
 {% endblock %}
 {% block scripts %}
 <script>window.MOCK = { signedIn: {{ 'true' if user else 'false' }} };</script>

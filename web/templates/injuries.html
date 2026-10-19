@@ -62,6 +62,15 @@
   .inj-card p { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
   .inj-card.is-open p { -webkit-line-clamp: unset; }
 </style>
+{% from "partials/faq.html" import faq %}
+{{ faq([
+  ("Who is injured in the NBA today?",
+   "This NBA injury report lists every player currently out, doubtful, questionable or day-to-day, grouped by team, with the injury and the latest note. It updates through the day from ESPN's injury feed."),
+  ("Which fantasy basketball players are hurt?",
+   "Every injured player is listed here with his status. Use the HoopLife watchlist to track your own players and My League to get alerts when an injured player is in your fantasy starting lineup."),
+  ("How often is the injury report updated?",
+   "The report refreshes several times an hour during the NBA season, so game-time decisions and new injuries show up quickly.")
+], "NBA injuries - questions") }}
 {% endblock %}
 {% block scripts %}
 <script>
