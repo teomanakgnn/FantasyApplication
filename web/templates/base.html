@@ -75,7 +75,7 @@
     <nav class="nav">
       {% for item in nav %}
         {% if item %}
-          <a href="{{ item[1] }}" class="nav-link{% if active == item[0] %} is-active{% endif %}"{% if active == item[0] %} aria-current="page"{% endif %}>
+          <a href="{{ item[1] }}" data-nav="{{ item[0] }}" class="nav-link{% if active == item[0] %} is-active{% endif %}"{% if active == item[0] %} aria-current="page"{% endif %}>
             {{ item[2] }}{% if item[0] == 'trends' %}<span class="chip chip-pro">PRO</span>{% endif %}
           </a>
         {% else %}
@@ -148,7 +148,7 @@
     </div>
   </dialog>
 
-  <script>window.HL_INV = {{ (invite or '')|tojson }};</script>
+  <script>window.HL_INV = {{ (invite or '')|tojson }}; window.HL_PUZZLES = {{ (puzzles or {})|tojson }};</script>
   <script src="/static/js/app.js?v={{ asset_version }}"></script>
   {% block scripts %}{% endblock %}
 </body>

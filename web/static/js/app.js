@@ -198,6 +198,46 @@
   }
 
   hydrate();
+  // ---------------- gunluk oyun rozetleri ----------------
+  // Bugunun oyunu bu cihazda oynanmadiysa menude "!" , bittiyse tik.
+  function dailyBadges() {
+    const P = window.HL_PUZZLES || {};
+    const get = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+    const done = {
+      daily: () => { const g = get("hl_daily_game"); return !!(g && g.puzzle === P.daily && g.done); },
+      statmatch: () => { const g = get("hl_statmatch_game"); return !!(g && g.puzzle === P.statmatch && g.picks && g.picks.length >= (g.length || 10)); },
+      starting5: () => { const g = get("hl_sf_game"); return !!(g && g.puzzle === P.starting5 && g.done); },
+      eightytwo: () => {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.indexOf("hl_82_d") === 0) { const g = get(k); if (g && g.puzzle === P.eightytwo && g.done) return true; }
+          }
+        } catch (e) {}
+        return false;
+      },
+    };
+    let pending = 0;
+    Object.keys(done).forEach((key) => {
+      if (!P[key]) return;
+      const link = document.querySelector(`.nav-link[data-nav="${key}"]`);
+      if (!link) return;
+      const ok = done[key]();
+      if (!ok) pending++;
+      let b = link.querySelector(".nav-badge");
+      if (!b) { b = document.createElement("span"); link.appendChild(b); }
+      b.className = "nav-badge " + (ok ? "ok" : "todo");
+      b.textContent = ok ? "✓" : "!";
+      b.title = ok ? "Played today" : "Today's challenge is waiting";
+    });
+    const burger = document.getElementById("menu-open");
+    if (burger) burger.classList.toggle("has-todo", pending > 0);
+  }
+  dailyBadges();
+  window.addEventListener("storage", dailyBadges);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) dailyBadges(); });
+  setInterval(dailyBadges, 5000);
+
   // Paylasim linklerine paylasanin davet kodu: linkle gelen uye olursa ikisi de Pro kazanir
   const inv = () => (window.HL_INV ? `&inv=${window.HL_INV}` : "");
   window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate, inv };

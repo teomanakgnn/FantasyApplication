@@ -225,6 +225,7 @@ def render(request: Request, template, active=None, status_code=200, **context):
         # Kayittan sonraki ilk sayfa: donusum olayi bir kez gonderilir
         "signup_event": bool(request.cookies.get(SIGNUP_COOKIE)),
         "site_url": config.SITE_URL.rstrip("/"),
+        "puzzles": _puzzles(),
         "invite": ((user.get("invite_code") or db.invite_code(user["id"])) if user and db.available else None),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)
@@ -233,6 +234,16 @@ def render(request: Request, template, active=None, status_code=200, **context):
     if context["signup_event"]:
         response.delete_cookie(SIGNUP_COOKIE, path="/")
     return response
+
+
+def _puzzles():
+    """Gunluk oyunlarin bugunku numarasi: menude 'bugun oynanmadi' rozeti icin."""
+    try:
+        from services import daily_player, eighty_two, minigames, starting_five
+        return {"daily": daily_player.puzzle_number(), "statmatch": minigames.stat_match_number(),
+                "starting5": starting_five.puzzle_number(), "eightytwo": eighty_two.puzzle_number()}
+    except Exception:
+        return {}
 
 
 def login_required(request: Request, next_url=None):

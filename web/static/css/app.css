@@ -328,3 +328,13 @@ details.more > .more-body { padding: 0 14px 14px; }
 .consent p { margin: 0; flex: 1 1 240px; font-size: .82rem; color: var(--muted); }
 .consent-actions { display: flex; gap: 8px; }
 .nav-invite { color: var(--gold) !important; font-weight: 700; }
+
+/* Gunluk oyun rozetleri */
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center;
+  font-size: .72rem; font-weight: 900; line-height: 1; }
+.nav-badge.todo { background: var(--brand); color: #fff; box-shadow: 0 0 0 0 rgba(208, 17, 43, .5); animation: nav-ping 2.2s infinite; }
+.nav-badge.ok { background: var(--good-soft); color: var(--good); }
+@keyframes nav-ping { 0% { box-shadow: 0 0 0 0 rgba(208, 17, 43, .45); } 70% { box-shadow: 0 0 0 7px rgba(208, 17, 43, 0); } 100% { box-shadow: 0 0 0 0 rgba(208, 17, 43, 0); } }
+#menu-open { position: relative; }
+#menu-open.has-todo::after { content: ""; position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); border: 2px solid var(--bg); }
+@media (prefers-reduced-motion: reduce) { .nav-badge.todo { animation: none; } }
