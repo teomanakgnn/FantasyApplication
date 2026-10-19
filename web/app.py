@@ -299,7 +299,11 @@ def _warm():
         from services.player_pages import table as player_table
         step("player pages", player_table)
         if config.PRODUCTION:
-            step("indexnow", _ping_indexnow)
+            # Yeni surum trafige acildiktan sonra: Bing anahtar dosyasini yeni surumden okumali
+            def later():
+                time.sleep(240)
+                _ping_indexnow()
+            threading.Thread(target=later, daemon=True).start()
     finally:
         _WARM_DONE.set()
 
