@@ -317,6 +317,70 @@ def draft_assist_api(request: Request, league: str = "", team: str = ""):
         return JSONResponse({"error": f"Could not read the draft: {exc}"[:200]}, 502)
 
 
+# ==================== HAFTALIK TAHMIN ====================
+
+def _week_context(user, league_id, season, team):
+    from services import league_week as lw
+    wk = lw.week(int(league_id), int(season), team or None)
+    mine = db.my_predictions(user["id"], league_id, season, wk["week"]) if user and db.available else {}
+    for m in wk["matchups"]:
+        m["pred"] = mine.get(m["id"])
+    return {"wk": wk, "leaderboard": _leaderboard(league_id, season, wk["week"]) if db.available else []}
+
+
+def _leaderboard(league_id, season, current):
+    """Biten haftalarin puanlari: tam skor 3, dogru kazanan (ya da beraberlik) 1."""
+    from services import league_week as lw
+    rows = db.league_predictions(league_id, season)
+    if not rows:
+        return []
+    board, results = {}, {}
+    for r in rows:
+        b = board.setdefault(r["user_id"], {"name": r["username"], "points": 0, "exact": 0, "picks": 0, "scored": 0})
+        b["picks"] += 1
+        if r["period"] not in results:
+            try:
+                results[r["period"]] = lw.results(int(league_id), int(season), r["period"])
+            except Exception:
+                results[r["period"]] = {}
+        res = results[r["period"]].get(r["matchup_id"])
+        if not res:
+            continue
+        b["scored"] += 1
+        if (r["home"], r["away"]) == tuple(res):
+            b["points"] += 3
+            b["exact"] += 1
+        elif (r["home"] > r["away"]) == (res[0] > res[1]) and (r["home"] == r["away"]) == (res[0] == res[1]):
+            b["points"] += 1
+    return sorted(board.values(), key=lambda b: (-b["points"], -b["exact"], b["name"].lower()))
+
+
+@router.post("/api/league/predict")
+async def predict(request: Request):
+    from datetime import datetime
+    from fastapi.responses import JSONResponse
+    from services import league_week as lw
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "Sign in to make predictions."}, 401)
+    body = await request.json()
+    try:
+        league, season, matchup = str(int(body["league"])), int(body["season"]), int(body["matchup"])
+        home, away = int(body["home"]), int(body["away"])
+    except (KeyError, TypeError, ValueError):
+        return JSONResponse({"error": "Bad prediction."}, 400)
+    wk = lw.week(int(league), season)
+    if not wk["open"] or datetime.now(lw.LONDON) >= wk["deadline"]:
+        return JSONResponse({"error": "Predictions for this week are closed."}, 403)
+    if matchup not in {m["id"] for m in wk["matchups"]}:
+        return JSONResponse({"error": "That matchup is not this week."}, 400)
+    n = wk["n_cats"]
+    if not (0 <= home <= n and 0 <= away <= n and home + away <= n):
+        return JSONResponse({"error": f"Scores must add up to at most {n} categories."}, 400)
+    db.save_prediction(user["id"], league, season, wk["week"], matchup, home, away)
+    return {"ok": True}
+
+
 # ==================== KAYITLI LIGLER ====================
 
 def _summary(row):
@@ -405,7 +469,7 @@ def league(request: Request):
     if not platform and user and db.available and db.list_leagues(user["id"]):
         return _dashboard(request, user)
     context = {"platform": platform, "error": None, "standings": None, "matchups": None,
-               "insights": None, "team": "", "saved": None, "league_id": None, "signed_in": bool(user),
+               "insights": None, "wk": None, "leaderboard": [], "team": "", "saved": None, "league_id": None, "signed_in": bool(user),
                "cats": CATS, "labels": LABELS, "yahoo_ready": _yahoo_ready()}
     try:
         week = int(q.get("week") or 0)
@@ -440,6 +504,12 @@ def league(request: Request):
                 context["error"] = str(exc)
             except Exception as exc:
                 print(f"league insights failed: {exc}")
+            # Bu hafta: beklenen skorlar ve tahminler
+            if season:
+                try:
+                    context.update(_week_context(user, league_id, season, team))
+                except Exception as exc:
+                    print(f"league week failed: {exc}")
             if not context["error"]:
                 try:
                     standings = get_league_standings(int(league_id), season)

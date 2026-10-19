@@ -335,6 +335,18 @@ class Database:
                    sent_at TIMESTAMP,
                    unsubscribed_at TIMESTAMP
                )""",
+            # Lig eslesme skor tahminleri (haftalik, Pazartesi 23:59 Londra'da kapanir)
+            """CREATE TABLE IF NOT EXISTS league_predictions (
+                   user_id INTEGER NOT NULL,
+                   league_ref TEXT NOT NULL,
+                   season INTEGER NOT NULL,
+                   period INTEGER NOT NULL,
+                   matchup_id INTEGER NOT NULL,
+                   home INTEGER NOT NULL,
+                   away INTEGER NOT NULL,
+                   saved_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                   PRIMARY KEY (user_id, league_ref, season, period, matchup_id)
+               )""",
             # Gunluk oyun serileri (giris yapan kullanici: her cihazda ayni)
             """CREATE TABLE IF NOT EXISTS game_streaks (
                    user_id INTEGER NOT NULL,
@@ -613,7 +625,7 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks", "promo_redemptions", "daily_stats", "game_streaks",
+                      "season_win_picks", "promo_redemptions", "daily_stats", "game_streaks", "league_predictions",
                       "user_leagues", "league_alert_log"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
@@ -1043,6 +1055,26 @@ class Database:
         """E-posta linkinden gelen kayit sayisi."""
         return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
                              fetch="value") or 0)
+
+    # ==================== LIG TAHMINLERI ====================
+
+    def save_prediction(self, user_id, league_ref, season, period, matchup_id, home, away):
+        return bool(self._run(
+            "INSERT INTO league_predictions (user_id, league_ref, season, period, matchup_id, home, away) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (user_id, league_ref, season, period, matchup_id) "
+            "DO UPDATE SET home = EXCLUDED.home, away = EXCLUDED.away, saved_at = NOW()",
+            (user_id, str(league_ref), season, period, matchup_id, home, away)))
+
+    def my_predictions(self, user_id, league_ref, season, period):
+        rows = self._run("SELECT matchup_id, home, away FROM league_predictions WHERE user_id = %s AND "
+                         "league_ref = %s AND season = %s AND period = %s",
+                         (user_id, str(league_ref), season, period), fetch="all") or []
+        return {r["matchup_id"]: (r["home"], r["away"]) for r in rows}
+
+    def league_predictions(self, league_ref, season):
+        return self._run("SELECT p.user_id, u.username, p.period, p.matchup_id, p.home, p.away "
+                         "FROM league_predictions p JOIN users u ON u.id = p.user_id "
+                         "WHERE p.league_ref = %s AND p.season = %s", (str(league_ref), season), fetch="all") or []
 
     # ==================== OYUN SERILERI ====================
 

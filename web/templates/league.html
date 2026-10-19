@@ -105,6 +105,7 @@
 
 {% if standings is not none or matchups %}
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
+  {% if wk %}<button class="tab" data-tab="week">This week</button>{% endif %}
   {% if insights %}<button class="tab" data-tab="insights">Insights</button>{% endif %}
   <button class="tab" data-tab="standings">Standings</button>
   <button class="tab" data-tab="matchups">Matchups</button>
@@ -112,6 +113,64 @@
   <button class="tab" data-tab="roto">Roto</button>
   {% if platform == 'yahoo' %}<button class="tab" data-tab="trade">Trade</button>{% endif %}
 </div>
+
+{% if wk %}
+<div class="tab-panel" data-panel-of="league" data-panel="week">
+  <div class="card wk-head">
+    <div><div class="eyebrow" style="margin:0">Week {{ wk.week }}</div>
+      <b>{{ wk.start.strftime('%a %d %b') }} – {{ wk.end.strftime('%a %d %b') }}</b></div>
+    {% if wk.open %}
+      <div class="wk-dead"><span class="chip chip-accent">Predictions open</span>
+        <span class="small muted">close <b>{{ wk.deadline.strftime('%a %d %b, %H:%M') }} UK</b> · <span id="wk-count" data-deadline="{{ wk.deadline.isoformat() }}"></span></span></div>
+    {% else %}
+      <div class="wk-dead"><span class="chip">Predictions closed</span></div>
+    {% endif %}
+  </div>
+  {% if wk.open and not signed_in %}
+    <div class="note note-info" style="margin-top:10px"><a href="/register?next={{ ('/league?platform=espn&league_id=' ~ league_id ~ '#week')|urlencode }}"><b>Create a free account</b></a> to predict this week's matchups and compete with your league.</div>
+  {% endif %}
+  <p class="tiny dim" style="margin:8px 2px">Expected score = projected categories won this week from each team's roster, NBA schedule (games played) and ESPN projections. Predict how many categories each side wins - exact score 3 pts, right winner 1 pt.</p>
+  <div class="wk-list">
+  {% for m in wk.matchups %}
+    {% set ph = m.pred[0] if m.pred else none %}{% set pa = m.pred[1] if m.pred else none %}
+    <section class="card wk-m {{ 'wk-mine' if m.mine }}" data-matchup="{{ m.id }}">
+      <div class="wk-teams">
+        <div class="wk-t">{% if m.home_logo %}<img src="{{ m.home_logo }}" alt="" onerror="this.style.visibility='hidden'">{% endif %}<b>{{ m.home_name }}</b><small>{{ m.games_home }} games</small></div>
+        <div class="wk-exp"><span class="tiny dim">expected</span><b>{{ '%.1f'|format(m.exp_home) }} – {{ '%.1f'|format(m.exp_away) }}</b>
+          {% if m.final %}<span class="chip">Final {{ m.actual[0] }}-{{ m.actual[1] }}</span>{% elif m.actual[0] or m.actual[1] %}<span class="tiny muted">now {{ m.actual[0] }}-{{ m.actual[1] }}</span>{% endif %}</div>
+        <div class="wk-t r">{% if m.away_logo %}<img src="{{ m.away_logo }}" alt="" onerror="this.style.visibility='hidden'">{% endif %}<b>{{ m.away_name }}</b><small>{{ m.games_away }} games</small></div>
+      </div>
+      <div class="wk-bar"><i style="width:{{ (100 * m.exp_home / wk.n_cats)|round }}%"></i></div>
+      <details class="wk-cats"><summary>Category by category</summary>
+        <table class="table small"><thead><tr><th class="l">Cat</th><th>{{ m.home_name[:14] }}</th><th>Win %</th><th>{{ m.away_name[:14] }}</th></tr></thead><tbody>
+        {% for c in m.cats %}<tr><td class="l"><b>{{ c.cat }}</b></td>
+          <td class="{{ 'good' if c.pa >= 0.6 else 'bad' if c.pa <= 0.4 else '' }}">{{ ('%.1f'|format(c.a) ~ '%') if c.pct else ('%.0f'|format(c.a)) }}</td>
+          <td><span class="wk-pill"><i style="width:{{ (100 * c.pa)|round }}%"></i><em>{{ (100 * c.pa)|round|int }}%</em></span></td>
+          <td class="{{ 'good' if c.pa <= 0.4 else 'bad' if c.pa >= 0.6 else '' }}">{{ ('%.1f'|format(c.b) ~ '%') if c.pct else ('%.0f'|format(c.b)) }}</td></tr>{% endfor %}
+        </tbody></table></details>
+      {% if signed_in %}
+      <div class="wk-pred">
+        <span class="small muted">Your prediction</span>
+        <select class="input wk-h" {{ 'disabled' if not wk.open }}>{% for n in range(wk.n_cats + 1) %}<option {{ 'selected' if ph == n or (ph is none and n == (m.exp_home|round|int)) }}>{{ n }}</option>{% endfor %}</select>
+        <span>–</span>
+        <select class="input wk-a" {{ 'disabled' if not wk.open }}>{% for n in range(wk.n_cats + 1) %}<option {{ 'selected' if pa == n or (pa is none and n == (wk.n_cats - (m.exp_home|round|int))) }}>{{ n }}</option>{% endfor %}</select>
+        {% if wk.open %}<button class="btn btn-sm {{ 'btn-primary' if not m.pred }}" type="button" data-save>{{ 'Update' if m.pred else 'Save' }}</button>{% endif %}
+        {% if m.pred %}<span class="chip chip-accent wk-saved">Saved {{ m.pred[0] }}-{{ m.pred[1] }}</span>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  {% endfor %}
+  </div>
+  <section class="card" style="margin-top:12px">
+    <div class="card-title">Prediction table</div>
+    {% if leaderboard %}
+    <table class="table small"><thead><tr><th>#</th><th class="l">Player</th><th>Points</th><th>Exact</th><th>Picks</th></tr></thead><tbody>
+      {% for r in leaderboard %}<tr><td>{{ loop.index }}</td><td class="l"><b>{{ r.name }}</b></td><td><b>{{ r.points }}</b></td><td>{{ r.exact }}</td><td>{{ r.picks }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted small">No predictions in this league yet. Send the link to your league - everyone who predicts shows up here.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
 
 {% if insights %}
 <div class="tab-panel" data-panel-of="league" data-panel="insights">
@@ -248,6 +307,32 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+{% if wk %}
+<script>
+(function () {
+  const cd = document.getElementById("wk-count");
+  if (cd) {
+    const end = new Date(cd.dataset.deadline).getTime();
+    const tick = () => { const s = Math.max(0, Math.floor((end - Date.now()) / 1000)); const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+      cd.textContent = s ? `${d ? d + "d " : ""}${h}h ${m}m left` : "closed"; };
+    tick(); setInterval(tick, 30000);
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-save]"); if (!b) return;
+    const box = b.closest("[data-matchup]");
+    const home = +box.querySelector(".wk-h").value, away = +box.querySelector(".wk-a").value;
+    b.classList.add("is-loading");
+    try {
+      await HL.api("/api/league/predict", { method: "POST", body: { league: "{{ league_id }}", season: {{ insights.season if insights else 0 }}, matchup: +box.dataset.matchup, home, away } });
+      HL.toast(`Saved ${home}-${away}.`); b.textContent = "Update"; b.classList.remove("btn-primary");
+      let chip = box.querySelector(".wk-saved"); if (!chip) { chip = document.createElement("span"); chip.className = "chip chip-accent wk-saved"; b.after(chip); }
+      chip.textContent = `Saved ${home}-${away}`;
+    } catch (err) { HL.toast(err.message, true); }
+    finally { b.classList.remove("is-loading"); }
+  });
+})();
+</script>
+{% endif %}
 {% if share_url %}
 <script>
 document.getElementById("league-share").addEventListener("click", async (e) => {
