@@ -468,3 +468,75 @@ def player_insight(p, weights_score=None):
                      "tp": f"{tpm:.1f}/{tpa:.1f} ({tp_pct:.1f}%)",
                      "ft": f"{ftm:.1f}/{fta:.1f} ({ft_pct:.1f}%)"},
     }
+
+
+# ==================== OYUNCU MAC KARTI ====================
+
+@cache_data(ttl=60, show_spinner=False)
+def _live_shots(game_id):
+    from services.espn_api import get_game_shots
+    return get_game_shots(game_id)
+
+
+def _num(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _tier(cat, v, att=0):
+    """Tek mac icin kaba fantezi degerlendirmesi: good / bad / ''."""
+    if cat == "FG%":
+        return "" if att < 6 or v is None else "good" if v >= .55 else "bad" if v < .40 else ""
+    if cat == "FT%":
+        return "" if att < 4 or v is None else "good" if v >= .85 else "bad" if v < .70 else ""
+    good, bad = {"PTS": (25, 8), "REB": (10, 3), "AST": (7, 1), "3PM": (3, None),
+                 "STL": (2, None), "BLK": (2, None), "TO": (None, 4)}[cat]
+    if cat == "TO":
+        return "bad" if v >= bad else "good" if v <= 1 else ""
+    if good is not None and v >= good:
+        return "good"
+    if bad is not None and v <= bad:
+        return "bad"
+    return ""
+
+
+def player_game_card(game_id, player_id, final=True):
+    """Box score'dan tiklanan oyuncu: o macin 9 kategori cizgisi + sut haritasi."""
+    from services.espn_api import get_cached_shots
+    rows = boxscore(game_id, final=final) or []
+    p = next((r for r in rows if str(r.get("ID")) == str(player_id)), None)
+    if not p:
+        return None
+    try:
+        shots = (get_cached_shots(game_id) if final else _live_shots(game_id)).get(str(player_id), [])
+    except Exception:
+        shots = []
+    fgm, fga, ftm, fta = _num(p.get("FGM")), _num(p.get("FGA")), _num(p.get("FTM")), _num(p.get("FTA"))
+    fg = fgm / fga if fga else None
+    ft = ftm / fta if fta else None
+    cats = [
+        ("FG%", f"{fg:.3f}".lstrip("0") if fg is not None else "-", f"{fgm}-{fga}", _tier("FG%", fg, fga)),
+        ("FT%", f"{ft:.3f}".lstrip("0") if ft is not None else "-", f"{ftm}-{fta}", _tier("FT%", ft, fta)),
+    ]
+    for cat, key in (("3PM", "3Pts"), ("PTS", "PTS"), ("REB", "REB"), ("AST", "AST"),
+                     ("STL", "STL"), ("BLK", "BLK"), ("TO", "TO")):
+        v = _num(p.get(key))
+        sub_ = f"of {_num(p.get('3PTA'))}" if cat == "3PM" else ""
+        cats.append((cat, v, sub_, _tier(cat, v)))
+
+    # Bolgeler: boya (<= 8 ft), orta mesafe, ucluk
+    zones = {"Paint": [0, 0], "Mid-range": [0, 0], "3PT": [0, 0]}
+    for sh in shots:
+        dist = ((sh["x"] - 25) ** 2 + sh["y"] ** 2) ** .5
+        z = "3PT" if sh["three"] else "Paint" if dist <= 8 else "Mid-range"
+        zones[z][1] += 1
+        zones[z][0] += sh["made"]
+        # Ekran: pota ust tarafta, saha 50 x 47 ayak
+        sh["sx"] = round(min(49.5, max(.5, sh["x"])), 2)
+        sh["sy"] = round(min(46.5, max(.5, sh["y"] + 5.25)), 2)
+    return {"id": str(player_id), "name": p.get("PLAYER"), "team": p.get("TEAM"), "min": p.get("MIN"),
+            "pm": p.get("+/-"), "oreb": p.get("OREB"), "pf": p.get("PF"), "headshot": headshot(player_id),
+            "cats": cats, "shots": shots, "zones": zones,
+            "made": sum(s["made"] for s in shots), "missed": sum(not s["made"] for s in shots)}

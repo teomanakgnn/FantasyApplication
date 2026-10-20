@@ -345,3 +345,38 @@ details.more > .more-body { padding: 0 14px 14px; }
 .faq details { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .faq summary { cursor: pointer; font-weight: 700; }
 .faq p { margin: 8px 0 0; color: var(--muted); line-height: 1.6; }
+
+/* Oyuncu mac karti (box score) */
+a.pc-link { cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 3px; }
+a.pc-link:hover { color: var(--accent); }
+.pc { max-width: 520px; margin: 0 auto; }
+.pc-back { margin-bottom: 10px; }
+.pc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.pc-head img { width: 84px; height: 62px; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
+.pc-head h2 { margin: 0 40px 2px 0; font-size: 1.3rem; }
+.pc-cats { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-bottom: 12px; }
+.pc-cat { display: flex; flex-direction: column; align-items: center; padding: 7px 2px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.pc-cat span { font-size: .62rem; font-weight: 800; color: var(--muted); letter-spacing: .04em; }
+.pc-cat b { font-size: 1.05rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.pc-cat small { font-size: .6rem; color: var(--muted); min-height: .8em; white-space: nowrap; }
+.pc-cat.good { border-color: color-mix(in srgb, var(--good) 55%, transparent); background: color-mix(in srgb, var(--good) 12%, var(--surface-2)); }
+.pc-cat.good b { color: var(--good); }
+.pc-cat.bad { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 10%, var(--surface-2)); }
+.pc-cat.bad b { color: var(--bad); }
+.pc-chart { position: relative; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, #c98b4a 16%, var(--surface-2)); border: 1px solid var(--line); }
+.pc-chart svg { display: block; width: 100%; height: auto; }
+.pc-chart .court * { stroke: color-mix(in srgb, var(--text) 35%, transparent); stroke-width: .18; }
+.pc-chart .sh-made { fill: var(--good); stroke: rgba(0,0,0,.35); stroke-width: .12; }
+.pc-chart .sh-miss path { stroke: var(--bad); stroke-width: .32; stroke-linecap: round; }
+.pc-empty { position: absolute; inset: auto 0 30% 0; text-align: center; color: var(--muted); font-weight: 700; }
+.pc-legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 2px; align-items: center; }
+.pc-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--good); vertical-align: -1px; }
+.pc-legend .x { font-style: normal; color: var(--bad); font-weight: 900; }
+.pc-zones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pc-zones div { text-align: center; padding: 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.pc-zones span { display: block; font-size: .68rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.pc-zones b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.pc-zones small { display: block; color: var(--muted); font-size: .72rem; }
+@media (max-width: 560px) {
+  .pc-cats { grid-template-columns: repeat(5, 1fr); }
+}

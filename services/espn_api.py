@@ -150,6 +150,40 @@ def get_scoreboard(date):
             continue
     return games
 
+def get_game_shots(game_id):
+    """
+    Bir macin sut haritasi: oyuncu kimligi -> [{x, y, made, pts, ...}].
+    ESPN koordinatlari ayak cinsinden, pota (25, 0); x 0-50 saha eni, y
+    potadan uzaklik (her iki yari ayni yone cevrilmis). Serbest atislar
+    gecersiz koordinatla gelir, onlar haritada yok.
+    """
+    data = espn_get(f"{SUMMARY_URL}?event={game_id}", timeout=10).json()
+    shots = {}
+    for p in data.get("plays") or []:
+        if not p.get("shootingPlay"):
+            continue
+        c = p.get("coordinate") or {}
+        x, y = c.get("x"), c.get("y")
+        if x is None or y is None or not (-5 <= x <= 55 and -10 <= y <= 94):
+            continue
+        parts = p.get("participants") or []
+        aid = str(((parts[0] if parts else {}).get("athlete") or {}).get("id") or "")
+        if not aid:
+            continue
+        text = p.get("text") or ""
+        three = p.get("pointsAttempted") == 3 or "three point" in text.lower()
+        shots.setdefault(aid, []).append({
+            "x": float(x), "y": float(y), "made": bool(p.get("scoringPlay")), "three": bool(three),
+            "q": (p.get("period") or {}).get("number"), "clock": (p.get("clock") or {}).get("displayValue", ""),
+            "text": text})
+    return shots
+
+
+@cache_data(ttl=86400)
+def get_cached_shots(game_id):
+    return get_game_shots(game_id)
+
+
 @cache_data(ttl=86400)
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
@@ -187,6 +221,7 @@ def get_boxscore(game_id):
                 stats = dict(zip(labels, raw_stats))
                 stats["PLAYER"] = player_name
                 stats["TEAM"] = team_abbr
+                stats["ID"] = str((athlete.get("athlete") or {}).get("id") or "")
 
                 stats["FGM"] = 0; stats["FGA"] = 0
                 stats["3Pts"] = 0; stats["3PTA"] = 0

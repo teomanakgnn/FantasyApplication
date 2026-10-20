@@ -133,7 +133,14 @@ def boxscore(request: Request, game_id: str, final: int = 1):
     if user:
         watch = {w["player_name"] for w in db.get_watchlist(user["id"])}
     return templates.TemplateResponse(request, "partials/boxscore.html", {
-        "teams": teams, "user": user, "watch": watch})
+        "teams": teams, "user": user, "watch": watch, "game_id": game_id, "final": final})
+
+
+@router.get("/api/player-card/{game_id}/{player_id}", response_class=HTMLResponse)
+def player_card(request: Request, game_id: str, player_id: str, final: int = 1):
+    card = stats.player_game_card(game_id, player_id, final=bool(final))
+    return templates.TemplateResponse(request, "partials/player_card.html", {
+        "c": card, "game_id": game_id, "final": final})
 
 
 def _minutes(value):
