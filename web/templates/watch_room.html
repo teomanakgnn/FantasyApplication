@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ g.away.abbr }} @ {{ g.home.abbr }} · Watch party{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/watch.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="wp-room" data-game="{{ game_id }}" data-final="{{ 1 if g.final else 0 }}" data-me="{{ user.username }}">
+  <div class="wp-top">
+    <a href="/admin/watch" class="btn btn-sm btn-ghost">&larr; Games</a>
+    <label class="wp-spoil small"><input type="checkbox" id="wp-spoiler"> Hide score</label>
+  </div>
+
+  <section class="card wp-score" id="wp-score">
+    <div class="wp-side"><img src="{{ g.away.logo }}" alt=""><b>{{ g.away.abbr }}</b></div>
+    <div class="wp-mid"><div class="wp-pts"><span id="wp-away">{{ g.away.score }}</span><i>-</i><span id="wp-home">{{ g.home.score }}</span></div>
+      <div class="wp-detail" id="wp-detail">{{ g.detail }}</div></div>
+    <div class="wp-side"><img src="{{ g.home.logo }}" alt=""><b>{{ g.home.abbr }}</b></div>
+  </section>
+
+  <div class="wp-grid">
+    <section class="card wp-chat">
+      <div class="card-title">Room chat <span class="dim small" id="wp-online"></span></div>
+      <div class="wp-msgs" id="wp-msgs"><div class="dim small wp-hint">Say something - everyone in this room sees it.</div></div>
+      <div class="wp-reacts">{% for r in reactions %}<button type="button" data-react="{{ r }}">{{ r }}</button>{% endfor %}</div>
+      <form class="wp-form" id="wp-form" autocomplete="off">
+        <input class="input" id="wp-input" maxlength="280" placeholder="Message">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+    </section>
+
+    <div class="wp-side-col">
+      <section class="card">
+        <div class="card-title">Fantasy leaders <span class="dim small">· tap for shot chart</span></div>
+        <div id="wp-leaders" class="wp-leaders"><div class="spinner"></div></div>
+        <button class="btn btn-sm btn-ghost btn-block" type="button" id="wp-box" style="margin-top:8px">Full box score</button>
+      </section>
+      <section class="card">
+        <div class="card-title">Play-by-play</div>
+        <div id="wp-plays" class="wp-plays"></div>
+      </section>
+    </div>
+  </div>
+  <div class="wp-float" id="wp-float" aria-hidden="true"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/watch.js?v={{ asset_version }}"></script>{% endblock %}

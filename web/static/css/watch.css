@@ -1,0 +1,70 @@
+/* Watch party */
+.wp-day { font-size: 1rem; margin: 18px 0 8px; }
+.wp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.wp-game { display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; transition: transform .15s; }
+.wp-game:hover { transform: translateY(-2px); border-color: var(--accent); }
+.wp-t { display: flex; align-items: center; gap: 8px; }
+.wp-t img { width: 26px; height: 26px; }
+.wp-t b { flex: 1; }
+.wp-t span { font-weight: 800; font-variant-numeric: tabular-nums; }
+.wp-st { font-size: .75rem; color: var(--muted); font-weight: 700; }
+
+.wp-room { position: relative; }
+.wp-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.wp-spoil { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+.wp-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.wp-side { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wp-side img { width: 54px; height: 54px; }
+.wp-mid { text-align: center; }
+.wp-pts { font-size: 2.4rem; font-weight: 900; font-variant-numeric: tabular-nums; display: flex; gap: 12px; justify-content: center; }
+.wp-pts i { font-style: normal; color: var(--muted); }
+.wp-detail { font-size: .8rem; color: var(--muted); font-weight: 800; }
+.wp-score.is-live .wp-detail { color: var(--bad); }
+.wp-score.is-live .wp-detail::before { content: "● "; animation: wp-blink 1.4s infinite; }
+@keyframes wp-blink { 50% { opacity: .2; } }
+
+.wp-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-top: 12px; align-items: start; }
+.wp-side-col { display: flex; flex-direction: column; gap: 12px; }
+
+.wp-chat { display: flex; flex-direction: column; height: min(70vh, 640px); }
+.wp-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px 2px 8px; }
+.wp-msg { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding: 6px 10px; border-radius: 12px; background: var(--surface-2); }
+.wp-msg b { font-size: .8rem; color: var(--accent); }
+.wp-msg.mine { background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+.wp-msg span { word-break: break-word; }
+.wp-msg time { font-size: .65rem; color: var(--muted); }
+.wp-reacts { display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--line); }
+.wp-reacts button { font-size: 1.3rem; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px 8px; cursor: pointer; transition: transform .1s; }
+.wp-reacts button:active { transform: scale(1.25); }
+.wp-form { display: flex; gap: 6px; }
+.wp-form .input { flex: 1; min-width: 0; }
+
+.wp-leaders { display: flex; flex-direction: column; }
+.wp-leader { display: flex; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.wp-leader:hover { background: var(--surface-2); }
+.wp-leader i { font-style: normal; width: 16px; color: var(--muted); font-weight: 800; font-size: .8rem; }
+.wp-leader img { width: 40px; height: 30px; object-fit: cover; border-radius: 6px; }
+.wp-leader span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wp-leader small { font-size: .72rem; color: var(--muted); }
+.wp-leader em { font-style: normal; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--accent); }
+
+.wp-plays { max-height: 360px; overflow-y: auto; }
+.wp-play { display: grid; grid-template-columns: 62px 1fr auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: .85rem; }
+.wp-play time { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.wp-play.scoring span { font-weight: 700; }
+.wp-play em { font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Spoiler: skor ve sayilar bulanik */
+.wp-room.is-spoiler .wp-pts, .wp-room.is-spoiler .spoil, .wp-room.is-spoiler .wp-plays { filter: blur(7px); user-select: none; }
+.wp-room.is-spoiler .wp-pts:hover, .wp-room.is-spoiler .wp-plays:hover { filter: none; }
+
+.wp-float { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 50; }
+.wp-float span { position: absolute; bottom: -40px; font-size: 2rem; animation: wp-up 3s ease-out forwards; }
+@keyframes wp-up { to { transform: translateY(-75vh) scale(1.3); opacity: 0; } }
+
+@media (max-width: 820px) {
+  .wp-grid { grid-template-columns: 1fr; }
+  .wp-chat { height: 52vh; }
+  .wp-pts { font-size: 2rem; }
+}

@@ -95,10 +95,10 @@ def _count_visit(request, response):
 # ==================== SAYFALAR ====================
 
 from web.routes import (account, auth, draft, games, home, injuries, league,  # noqa: E402
-                        mock, outreach, over_under, players, trade, trends, watchlist)
+                        mock, outreach, over_under, players, trade, trends, watch, watchlist)
 
 for module in (home, auth, account, watchlist, over_under, draft, mock, games,
-               injuries, trade, league, trends, outreach, players):
+               injuries, trade, league, trends, outreach, players, watch):
     app.include_router(module.router)
 
 

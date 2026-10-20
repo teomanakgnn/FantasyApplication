@@ -347,6 +347,17 @@ class Database:
                    saved_at TIMESTAMP NOT NULL DEFAULT NOW(),
                    PRIMARY KEY (user_id, league_ref, season, period, matchup_id)
                )""",
+            # Watch party sohbeti ve tepkileri (mac basina oda)
+            """CREATE TABLE IF NOT EXISTS watch_messages (
+                   id SERIAL PRIMARY KEY,
+                   game_id TEXT NOT NULL,
+                   user_id INTEGER NOT NULL,
+                   username TEXT NOT NULL,
+                   kind TEXT NOT NULL DEFAULT 'msg',
+                   body TEXT NOT NULL,
+                   created_at TIMESTAMP NOT NULL DEFAULT NOW()
+               )""",
+            "CREATE INDEX IF NOT EXISTS watch_messages_game ON watch_messages (game_id, id)",
             # Gunluk oyun serileri (giris yapan kullanici: her cihazda ayni)
             """CREATE TABLE IF NOT EXISTS game_streaks (
                    user_id INTEGER NOT NULL,
@@ -625,7 +636,7 @@ class Database:
             return False
         for table in ("sessions", "watchlists", "user_preferences",
                       "mock_drafts", "user_trivia_history", "user_trivia_streak",
-                      "season_win_picks", "promo_redemptions", "daily_stats", "game_streaks", "league_predictions",
+                      "season_win_picks", "promo_redemptions", "daily_stats", "game_streaks", "league_predictions", "watch_messages",
                       "user_leagues", "league_alert_log"):
             if self._run("SELECT to_regclass(%s)", ("public." + table,), fetch="value"):
                 self._run("DELETE FROM %s WHERE user_id = %%s" % table, (user_id,))
@@ -1055,6 +1066,19 @@ class Database:
         """E-posta linkinden gelen kayit sayisi."""
         return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
                              fetch="value") or 0)
+
+    # ==================== WATCH PARTY ====================
+
+    def add_watch_message(self, game_id, user_id, username, kind, body):
+        return self._run("INSERT INTO watch_messages (game_id, user_id, username, kind, body) "
+                         "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                         (str(game_id), user_id, username, kind, body), fetch="value")
+
+    def watch_messages(self, game_id, after=0, limit=80):
+        rows = self._run("SELECT id, user_id, username, kind, body, created_at FROM watch_messages "
+                         "WHERE game_id = %s AND id > %s ORDER BY id DESC LIMIT %s",
+                         (str(game_id), int(after), int(limit)), fetch="all") or []
+        return list(reversed(rows))
 
     # ==================== LIG TAHMINLERI ====================
 

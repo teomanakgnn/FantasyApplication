@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Watch party · HoopLife NBA{% endblock %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/watch.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head"><div class="eyebrow">Admin · beta</div><h1>Watch party</h1>
+  <p>Second-screen rooms: watch on your own stream, follow the live score, plays, fantasy leaders and chat here.</p></div>
+{% if not days %}<div class="note">No NBA games today or yesterday.</div>{% endif %}
+{% for d, games in days %}
+<h2 class="wp-day">{{ 'Today' if loop.first and d == days[0][0] else '' }} {{ d.strftime('%a %d %b') }} <span class="dim small">· US Eastern</span></h2>
+<div class="wp-games">
+  {% for g in games %}
+  <a class="card wp-game" href="/admin/watch/{{ g.game_id }}">
+    <div class="wp-t"><img src="{{ g.away_logo }}" alt=""><b>{{ g.away_team }}</b><span>{{ g.away_score }}</span></div>
+    <div class="wp-t"><img src="{{ g.home_logo }}" alt=""><b>{{ g.home_team }}</b><span>{{ g.home_score }}</span></div>
+    <div class="wp-st">{{ g.status }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}
