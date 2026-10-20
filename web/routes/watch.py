@@ -1,13 +1,20 @@
 """
-Watch party (yonetici, deneme): ikinci ekran maç odasi. Video yok; herkes
-maci kendi yayinindan izler, oda canli skor, oyunlar, fantezi liderleri,
-sohbet ve tepkiler verir.
+Watch party: mac odasi. Canli skor, oyunlar, fantezi liderleri, sohbet,
+tepkiler; ayrica sesli sohbet ve ekran paylasimi (WebRTC, kisiden kisiye -
+ses ve goruntu sunucudan gecmez, sunucu yalnizca baglanti sinyallerini
+tasir). Lobi yalnizca yonetici; odaya yonetici veya davet linki olan
+giris yapmis kullanici girer.
 """
+import hashlib
+import hmac
+import json
+import os
 import time
 from datetime import timedelta
+from itertools import count
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse, RedirectResponse
 
 import config
 from services import watch_party as wp
@@ -18,28 +25,44 @@ from web.core import current_user, login_required, redirect, render
 router = APIRouter()
 
 REACTIONS = ["🔥", "😂", "😱", "👏", "💀", "🧊", "😤", "🐐"]
+CALL_LIMIT = 8  # kisiden kisiye agda herkes herkese bagli; kalabalik oda kaldirmaz
 _last_post = {}
 
 
-def _admin(request):
-    u = current_user(request)
-    return u if u and u.get("username") in config.ADMIN_USERNAMES else None
+def _is_admin(u):
+    return bool(u and u.get("username") in config.ADMIN_USERNAMES)
 
 
-def _gate(request):
-    gate = login_required(request)
-    if gate:
-        return gate
-    if not _admin(request):
-        return redirect("/", "Not available.", "error")
-    return None
+def room_key(game_id):
+    return hmac.new(config.SECRET_KEY.encode(), f"watch:{game_id}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def _member(u, game_id, k):
+    """Odaya girebilir mi: yonetici ya da gecerli davet anahtari olan uye."""
+    if not u:
+        return False
+    return _is_admin(u) or (bool(k) and hmac.compare_digest(str(k), room_key(game_id)))
+
+
+def _ice_servers():
+    """STUN her zaman; TURN (zor aglar icin aktarma) ortam degiskeniyle eklenir."""
+    servers = [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302",
+                         "stun:stun.cloudflare.com:3478"]}]
+    turn = os.environ.get("TURN_URLS")
+    if turn:
+        servers.append({"urls": [u.strip() for u in turn.split(",") if u.strip()],
+                        "username": os.environ.get("TURN_USERNAME", ""),
+                        "credential": os.environ.get("TURN_CREDENTIAL", "")})
+    return servers
 
 
 @router.get("/admin/watch")
 def lobby(request: Request):
-    gate = _gate(request)
+    gate = login_required(request)
     if gate:
         return gate
+    if not _is_admin(current_user(request)):
+        return redirect("/", "Not available.", "error")
     day = wp.today_et()
     days = []
     for d in (day, day - timedelta(days=1)):
@@ -53,15 +76,27 @@ def lobby(request: Request):
 
 
 @router.get("/admin/watch/{game_id}")
-def room(request: Request, game_id: str):
-    gate = _gate(request)
+def old_room(game_id: str):
+    return RedirectResponse(f"/watch/{game_id}", 303)
+
+
+@router.get("/watch/{game_id}")
+def room(request: Request, game_id: str, k: str = ""):
+    gate = login_required(request, next_url=f"/watch/{game_id}" + (f"?k={k}" if k else ""))
     if gate:
         return gate
+    u = current_user(request)
+    if not _member(u, game_id, k):
+        return redirect("/", "This watch party needs an invite link.", "error")
     try:
         g = wp.game_state(game_id)
     except Exception:
-        return redirect("/admin/watch", "Game not found.", "error")
-    return render(request, "watch_room.html", active="home", game_id=game_id, g=g, reactions=REACTIONS)
+        return redirect("/", "Game not found.", "error")
+    key = room_key(game_id)
+    invite = f"{config.SITE_URL.rstrip('/')}/watch/{game_id}?k={key}"
+    return render(request, "watch_room.html", active="home", game_id=game_id, g=g, reactions=REACTIONS,
+                  room_k=key, invite=invite, is_admin=_is_admin(u),
+                  ice=json.dumps(_ice_servers()), call_limit=CALL_LIMIT)
 
 
 def _msg(r):
@@ -70,10 +105,11 @@ def _msg(r):
 
 
 @router.get("/api/watch/{game_id}/feed")
-def feed(request: Request, game_id: str, after: int = 0, board: int = 0):
-    if not _admin(request):
+def feed(request: Request, game_id: str, after: int = 0, board: int = 0, k: str = ""):
+    if not _member(current_user(request), game_id, k):
         return JSONResponse({"error": "Not available."}, 403)
-    out = {"messages": [_msg(r) for r in db.watch_messages(game_id, after)]}
+    out = {"messages": [_msg(r) for r in db.watch_messages(game_id, after)],
+           "in_call": [p["name"] for p in _rooms.get(game_id, {}).values()]}
     try:
         g = wp.game_state(game_id)
         out["game"] = g
@@ -85,9 +121,9 @@ def feed(request: Request, game_id: str, after: int = 0, board: int = 0):
 
 
 @router.post("/api/watch/{game_id}/post")
-async def post(request: Request, game_id: str):
-    u = _admin(request)
-    if not u:
+async def post(request: Request, game_id: str, k: str = ""):
+    u = current_user(request)
+    if not _member(u, game_id, k):
         return JSONResponse({"error": "Not available."}, 403)
     b = await request.json()
     kind = "react" if b.get("kind") == "react" else "msg"
@@ -102,3 +138,91 @@ async def post(request: Request, game_id: str):
     _last_post[u["id"]] = now
     mid = db.add_watch_message(game_id, u["id"], u["username"], kind, body)
     return {"id": mid}
+
+
+# ==================== SESLI SOHBET / EKRAN PAYLASIMI: SINYAL ====================
+# Oda -> {peer_id: {"ws", "name", "uid", "mic", "sharing"}}. Tek sunucu, tek
+# islem (railway.json numReplicas = 1), bellekte tutmak yeterli.
+
+_rooms = {}
+_ids = count(1)
+
+
+def _public(pid, p):
+    return {"id": pid, "name": p["name"], "mic": p["mic"], "sharing": p["sharing"]}
+
+
+async def _send(ws, msg):
+    try:
+        await ws.send_text(json.dumps(msg))
+    except Exception:
+        pass
+
+
+async def _broadcast(game_id, msg, skip=None):
+    for pid, p in list(_rooms.get(game_id, {}).items()):
+        if pid != skip:
+            await _send(p["ws"], msg)
+
+
+@router.websocket("/ws/watch/{game_id}")
+async def signal(ws: WebSocket, game_id: str, k: str = ""):
+    u = current_user(ws)
+    if not _member(u, game_id, k):
+        await ws.close(code=4403)
+        return
+    origin = ws.headers.get("origin") or ""
+    if config.PRODUCTION and origin and origin.rstrip("/") != config.SITE_URL.rstrip("/"):
+        await ws.close(code=4403)
+        return
+    room = _rooms.setdefault(game_id, {})
+    await ws.accept()
+    if len(room) >= CALL_LIMIT:
+        await _send(ws, {"type": "full", "limit": CALL_LIMIT})
+        await ws.close()
+        return
+    # Ayni kullanici ikinci sekmeden gelirse eskisini dusur
+    for pid, p in list(room.items()):
+        if p["uid"] == u["id"]:
+            room.pop(pid, None)
+            await _broadcast(game_id, {"type": "leave", "id": pid})
+            try:
+                await p["ws"].close(code=4409)
+            except Exception:
+                pass
+    me = str(next(_ids))
+    room[me] = {"ws": ws, "name": u["username"], "uid": u["id"], "mic": False, "sharing": False}
+    await _send(ws, {"type": "welcome", "id": me,
+                     "peers": [_public(pid, p) for pid, p in room.items() if pid != me]})
+    await _broadcast(game_id, {"type": "join", **_public(me, room[me])}, skip=me)
+    try:
+        while True:
+            raw = await ws.receive_text()
+            if len(raw) > 64000:
+                continue
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                continue
+            t = msg.get("type")
+            if t == "signal":
+                target = room.get(str(msg.get("to")))
+                if target:
+                    await _send(target["ws"], {"type": "signal", "from": me, "data": msg.get("data")})
+            elif t == "state":
+                p = room.get(me)
+                if p:
+                    p["mic"], p["sharing"] = bool(msg.get("mic")), bool(msg.get("sharing"))
+                    await _broadcast(game_id, {"type": "state", **_public(me, p)}, skip=me)
+            elif t == "ping":
+                await _send(ws, {"type": "pong"})
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        print(f"watch ws error: {exc}")
+    finally:
+        if room.get(me, {}).get("ws") is ws:
+            room.pop(me, None)
+            await _broadcast(game_id, {"type": "leave", "id": me})
+        if not room:
+            _rooms.pop(game_id, None)

@@ -68,3 +68,29 @@
   .wp-chat { height: 52vh; }
   .wp-pts { font-size: 2rem; }
 }
+
+/* Sesli sohbet + ekran paylasimi */
+.wp-top-r { display: flex; align-items: center; gap: 12px; }
+.wp-call { margin-top: 12px; }
+.wp-stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.wp-stage video { display: block; width: 100%; max-height: 72vh; background: #000; object-fit: contain; }
+.wp-stage:fullscreen video { max-height: none; height: 100vh; }
+.wp-stage-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; font-weight: 700; font-size: .85rem; opacity: 0; transition: opacity .2s; }
+.wp-stage:hover .wp-stage-bar, .wp-stage-bar:focus-within { opacity: 1; }
+.wp-stage-bar span { flex: 1; }
+.wp-stage-bar .btn { color: #fff; border-color: rgba(255,255,255,.35); }
+.wp-callbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.wp-people { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.wp-person { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .82rem; transition: box-shadow .12s; }
+.wp-person i { font-style: normal; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 900; font-size: .75rem; }
+.wp-person em { font-style: normal; font-size: .8rem; }
+.wp-person.speaking { box-shadow: 0 0 0 2px var(--good); border-color: var(--good); }
+.wp-person.connecting { opacity: .55; }
+.wp-ctrls { display: flex; gap: 6px; flex-wrap: wrap; }
+.wp-callnote { margin: 8px 0 0; }
+@media (max-width: 820px) {
+  .wp-ctrls { width: 100%; }
+  .wp-ctrls .btn { flex: 1; }
+  .wp-stage-bar { opacity: 1; }
+}

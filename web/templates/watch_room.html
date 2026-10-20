@@ -3,10 +3,14 @@
 {% block robots %}<meta name="robots" content="noindex">{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/watch.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
-<div class="wp-room" data-game="{{ game_id }}" data-final="{{ 1 if g.final else 0 }}" data-me="{{ user.username }}">
+<div class="wp-room" data-game="{{ game_id }}" data-k="{{ room_k }}" data-final="{{ 1 if g.final else 0 }}"
+     data-me="{{ user.username }}" data-limit="{{ call_limit }}" data-ice='{{ ice }}'>
   <div class="wp-top">
-    <a href="/admin/watch" class="btn btn-sm btn-ghost">&larr; Games</a>
-    <label class="wp-spoil small"><input type="checkbox" id="wp-spoiler"> Hide score</label>
+    {% if is_admin %}<a href="/admin/watch" class="btn btn-sm btn-ghost">&larr; Games</a>{% else %}<span></span>{% endif %}
+    <div class="wp-top-r">
+      {% if is_admin %}<button class="btn btn-sm" type="button" id="wp-invite" data-link="{{ invite }}">Copy invite link</button>{% endif %}
+      <label class="wp-spoil small"><input type="checkbox" id="wp-spoiler"> Hide score</label>
+    </div>
   </div>
 
   <section class="card wp-score" id="wp-score">
@@ -14,6 +18,25 @@
     <div class="wp-mid"><div class="wp-pts"><span id="wp-away">{{ g.away.score }}</span><i>-</i><span id="wp-home">{{ g.home.score }}</span></div>
       <div class="wp-detail" id="wp-detail">{{ g.detail }}</div></div>
     <div class="wp-side"><img src="{{ g.home.logo }}" alt=""><b>{{ g.home.abbr }}</b></div>
+  </section>
+
+  <section class="card wp-call" id="wp-call">
+    <div class="wp-stage" id="wp-stage" hidden>
+      <video id="wp-video" playsinline autoplay muted></video>
+      <div class="wp-stage-bar"><span id="wp-stage-who"></span>
+        <button type="button" class="btn btn-sm btn-ghost" id="wp-unmute-video" hidden>🔊 Tap for sound</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="wp-full">⛶ Full screen</button></div>
+    </div>
+    <div class="wp-callbar">
+      <div class="wp-people" id="wp-people"><span class="dim small">Voice room · nobody here yet</span></div>
+      <div class="wp-ctrls">
+        <button class="btn btn-primary" type="button" id="wp-join">🎧 Join voice</button>
+        <button class="btn" type="button" id="wp-mic" hidden>🎙️ Mic off</button>
+        <button class="btn" type="button" id="wp-share" hidden>🖥️ Share screen</button>
+        <button class="btn btn-ghost" type="button" id="wp-leave" hidden>Leave</button>
+      </div>
+    </div>
+    <p class="tiny dim wp-callnote">Voice and screen go straight between browsers (up to {{ call_limit }} people). To show the game, one person shares the tab or window it plays in - pick "share tab audio" so everyone hears it. Desktop Chrome or Edge works best for sharing; phones can listen, talk and watch.</p>
   </section>
 
   <div class="wp-grid">
@@ -40,6 +63,8 @@
     </div>
   </div>
   <div class="wp-float" id="wp-float" aria-hidden="true"></div>
+  <div id="wp-audio" hidden></div>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/js/watch.js?v={{ asset_version }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/watch.js?v={{ asset_version }}"></script>
+<script src="/static/js/watch_call.js?v={{ asset_version }}"></script>{% endblock %}

@@ -4,7 +4,7 @@
   const { $, api, toast, escapeHtml: h, openModalUrl } = window.HL;
   const root = $(".wp-room");
   if (!root) return;
-  const game = root.dataset.game, me = root.dataset.me;
+  const game = root.dataset.game, me = root.dataset.me, k = encodeURIComponent(root.dataset.k || "");
   let after = 0, final = root.dataset.final === "1", tick = 0, firstLoad = true, busy = false;
   const seenPlays = new Set();
 
@@ -43,7 +43,7 @@
 
   async function send(kind, body) {
     try {
-      await api(`/api/watch/${game}/post`, { method: "POST", body: { kind, body } });
+      await api(`/api/watch/${game}/post?k=${k}`, { method: "POST", body: { kind, body } });
       poll();
     } catch (e) { toast(e.message, true); }
   }
@@ -88,6 +88,15 @@
       </a>`).join("") : '<div class="dim small">No stats yet.</div>';
   }
 
+  const inv = $("#wp-invite");
+  if (inv) inv.addEventListener("click", async () => {
+    const link = inv.dataset.link;
+    try {
+      if (navigator.share && matchMedia("(pointer: coarse)").matches) await navigator.share({ title: "Watch party", url: link });
+      else { await navigator.clipboard.writeText(link); toast("Invite link copied - friends need a free account to join."); }
+    } catch (e) { prompt("Invite link", link); }
+  });
+
   $("#wp-box").addEventListener("click", () => openModalUrl(`/api/boxscore/${game}?final=${final ? 1 : 0}`));
 
   async function poll() {
@@ -95,7 +104,8 @@
     busy = true;
     try {
       const board = tick % 5 === 0 ? 1 : 0;  // liderler ~20 sn'de bir
-      const r = await api(`/api/watch/${game}/feed?after=${after}&board=${board}`);
+      const r = await api(`/api/watch/${game}/feed?after=${after}&board=${board}&k=${k}`);
+      $("#wp-online").textContent = r.in_call && r.in_call.length ? `· ${r.in_call.length} in voice` : "";
       r.messages.forEach((m) => { addMessage(m); after = Math.max(after, m.id); });
       renderGame(r.game);
       if (r.leaders) renderLeaders(r.leaders);
