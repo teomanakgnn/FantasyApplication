@@ -48,7 +48,7 @@ document.getElementById("inv-copy").addEventListener("click", async () => {
     <div class="card-title">Usage</div>
     <div class="grid grid-2">
       <div class="kpi"><div class="kpi-label">Watchlist</div><div class="kpi-value">{{ watch_count }}{% if not pro %}<span class="dim small"> / {{ watch_limit }}</span>{% endif %}</div></div>
-      <div class="kpi"><div class="kpi-label">Saved drafts</div><div class="kpi-value">{{ draft_count }}{% if not pro %}<span class="dim small"> / {{ draft_limit }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="kpi-label">Daily games</div><div class="kpi-value"><a href="/daily">Play today &rarr;</a></div></div>
     </div>
   </section>
 

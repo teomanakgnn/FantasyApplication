@@ -37,7 +37,14 @@ def player(request: Request, slug: str):
     p = by_slug.get(slug.lower())
     if not p:
         raise HTTPException(404, "Player not found")
-    return render(request, "player.html", active="rankings", p=p, cats=CATS, outlook=pp.outlook(p),
+    log = None
+    try:
+        from services.nba_pages import player_log
+        from services.nba_season import get_current_season_year
+        log = player_log(str(p["id"]), get_current_season_year())
+    except Exception as exc:
+        print(f"game log failed for {slug}: {exc}")
+    return render(request, "player.html", active="rankings", p=p, cats=CATS, outlook=pp.outlook(p), log=log,
                   similar=pp.similar(p, rows), adp=pp.adp_of(p["name"]), tier=pp.tier(p["rank"]),
                   punts=pp.PUNTS, signed_in=bool(current_user(request)))
 

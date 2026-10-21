@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -94,12 +94,20 @@ def _count_visit(request, response):
 
 # ==================== SAYFALAR ====================
 
-from web.routes import (account, auth, draft, games, home, injuries, league,  # noqa: E402
-                        mock, outreach, over_under, players, trade, trends, watch, watchlist)
+from web.routes import (account, auth, games, home, injuries, league,  # noqa: E402
+                        nba, outreach, over_under, players, trade, trends, watch, watchlist)
 
-for module in (home, auth, account, watchlist, over_under, draft, mock, games,
+for module in (home, nba, auth, account, watchlist, over_under, games,
                injuries, trade, league, trends, outreach, players, watch):
     app.include_router(module.router)
+
+
+# Kaldirilan draft sayfalari (sezon basladi): eski linkler ve Google kayitlari
+# siralamaya gitsin, 404 olmasin.
+@app.get("/mock-draft", include_in_schema=False)
+@app.get("/draft-strategy", include_in_schema=False)
+def _retired_draft_pages():
+    return RedirectResponse("/rankings", 301)
 
 
 @app.get("/healthz", include_in_schema=False)
@@ -114,7 +122,7 @@ def healthz():
     return JSONResponse({"ok": False, "warming": True}, status_code=503)
 
 
-PUBLIC_PAGES = ["/", "/over-under", "/mock-draft", "/draft-strategy", "/bracket",
+PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/over-under", "/bracket",
                 "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
@@ -144,9 +152,10 @@ def robots():
 
 
 def _extra_pages():
-    """Oyuncu sayfalari (Google'in bulmasi icin). Punt siralamalari ayni sayfanin
-    sorgulu hali (canonical /rankings), haritaya konmuyor."""
-    return players.sitemap_paths()
+    """Oyuncu sayfalari ve sezonun biten maclari (Google'in bulmasi icin). Punt
+    siralamalari ayni sayfanin sorgulu hali (canonical /rankings), haritaya konmuyor."""
+    from services.nba_pages import indexed_games
+    return players.sitemap_paths() + [path for path, _ in indexed_games()]
 
 
 @app.get("/llms.txt", include_in_schema=False)
@@ -155,29 +164,30 @@ def llms():
     base = config.SITE_URL.rstrip("/")
     return PlainTextResponse(f"""# HoopLife NBA
 
-> Free fantasy basketball and NBA fan tools: mock drafts, draft strategy by pick slot, 2026-27 rankings and
-> player outlooks, a trade analyzer for 9-cat / 8-cat / points leagues, an NBA injury report, Las Vegas
-> over/under win totals for all 30 teams, ESPN/Yahoo league tools and daily NBA games. Free to use; a free
-> account saves picks, drafts and leagues.
+> NBA scores, box scores with team and player shot charts, standings, player stats and game logs for the
+> 2026-27 season, plus fantasy basketball tools (9-cat rankings, trade analyzer, ESPN/Yahoo league tools),
+> an NBA injury report and daily NBA games. Free to use; a free account saves leagues, picks and streaks.
 
-## Fantasy basketball tools
-- [Mock draft simulator]({base}/mock-draft): free, no account; snake or auction against AI managers, 4-20 teams, live ADP.
-- [Draft strategy by pick]({base}/draft-strategy): who is likely available at each of your picks; balanced vs punt builds.
-- [Fantasy basketball rankings 2026-27]({base}/rankings): top 300 for 9-cat leagues; re-rank for punt FT%, FG%, AST, 3PM, PTS, TO.
-- [Player outlooks]({base}/players/nikola-jokic): one page per player - rank, projection, category strengths, best punt build, ADP value.
-- [Trade analyzer]({base}/trade-analyzer): who wins a trade, category by category, including 2-for-1 roster-spot math.
-- [My League]({base}/league): ESPN and Yahoo league standings, power rankings, roto, weekly expected scores and matchup predictions.
-
-## NBA
-- [NBA over/under win totals]({base}/over-under): Las Vegas season win totals for all 30 teams with odds, lean and projections; pick and share.
+## NBA scores and stats (2026-27 season)
+- [NBA scores today]({base}/nba/scores): every game of the day with live and final scores; any date via ?date=YYYY-MM-DD.
+- [Game pages]({base}/nba/scores): one page per game - box score, quarter scores, top performers, team and player shot charts, recap.
+- [NBA standings]({base}/nba/standings): Eastern and Western Conference tables with games behind, home/road, last 10, streak.
+- [Player stats and game logs]({base}/players/victor-wembanyama): 2026-27 season averages, every game this season, fantasy outlook.
 - [NBA injury report]({base}/injuries): every injured player by team, updated through the day.
-- [Box scores and fantasy scoring]({base}/): daily games scored the way your league scores them.
+- [Box scores and fantasy scoring]({base}/): yesterday's games with every player scored the way your fantasy league scores; tap a player for his shot chart.
+
+## Fantasy basketball
+- [Fantasy basketball rankings 2026-27]({base}/rankings): top 300 for 9-cat leagues; re-rank for punt FT%, FG%, AST, 3PM, PTS, TO.
+- [Trade analyzer]({base}/trade-analyzer): who wins a trade, category by category, for 9-cat, 8-cat and points leagues, including 2-for-1 roster-spot math.
+- [My League]({base}/league): ESPN and Yahoo league standings, power rankings, weekly expected scores, category projections and matchup predictions.
+- [Player trends]({base}/trends): who is rising and falling over the last weeks.
 
 ## Daily NBA games
 - [Mystery Player]({base}/daily): guess the NBA player in 8 tries (Wordle-style).
 - [Stat Match]({base}/stat-match): match two stat lines to two players.
 - [Starting Five]({base}/starting-five): name the missing starters of a real playoff game.
 - [82-0 Challenge]({base}/82-0): build a five from random teams and eras and try to go 82-0.
+- [NBA over/under win totals]({base}/over-under): preseason Las Vegas win totals for all 30 teams and how each team is tracking.
 """)
 
 
@@ -193,11 +203,13 @@ def indexnow_key(key: str):
     return PlainTextResponse(key)
 
 
-def _ping_indexnow():
-    """Bing/Yandex'e (ChatGPT arama ve Copilot Bing dizinini kullanir) tum sayfalari bildir."""
+def _ping_indexnow(paths=None):
+    """Bing/Yandex'e (ChatGPT arama ve Copilot Bing dizinini kullanir) sayfalari bildir."""
     import requests
     base = config.SITE_URL.rstrip("/")
-    urls = [base + p for p in PUBLIC_PAGES + _extra_pages()]
+    urls = [base + p for p in (paths if paths is not None else PUBLIC_PAGES + _extra_pages())]
+    if not urls:
+        return
     try:
         r = requests.post("https://api.indexnow.org/indexnow", timeout=20, json={
             "host": base.split("//", 1)[1], "key": _indexnow_key(), "keyLocation": f"{base}/{_indexnow_key()}.txt",
@@ -298,12 +310,27 @@ def _warm():
         step("trade values", lambda: trade_players("proj"))
         from services.player_pages import table as player_table
         step("player pages", player_table)
-        if config.PRODUCTION:
-            # Yeni surum trafige acildiktan sonra: Bing anahtar dosyasini yeni surumden okumali
-            def later():
-                time.sleep(240)
+        from services import nba_pages
+        step("game index", nba_pages.refresh_index)
+
+        def games_loop():
+            """
+            Sezon boyunca: biten maclarin sayfalari site haritasina girer ve
+            Bing'e (IndexNow) bildirilir; skor ve puan durumu sayfalari da.
+            Ilk bildirim yeni surum trafige acildiktan sonra (anahtar dosyasi).
+            """
+            time.sleep(240)
+            if config.PRODUCTION:
                 _ping_indexnow()
-            threading.Thread(target=later, daemon=True).start()
+            while True:
+                time.sleep(1800)
+                try:
+                    fresh = nba_pages.refresh_index()
+                    if fresh and config.PRODUCTION:
+                        _ping_indexnow(fresh + ["/nba/scores", "/nba/standings", "/"])
+                except Exception as exc:
+                    print(f"game index failed: {exc}")
+        threading.Thread(target=games_loop, daemon=True).start()
     finally:
         _WARM_DONE.set()
 

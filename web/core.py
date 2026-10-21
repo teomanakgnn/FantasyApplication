@@ -43,8 +43,8 @@ ASSET_VERSION = str(int(time.time()))
 
 NAV = [
     ("home", "/", "Home"),
-    ("mock", "/mock-draft", "Mock Draft"),
-    ("strategy", "/draft-strategy", "Draft Strategy"),
+    ("scores", "/nba/scores", "Scores"),
+    ("standings", "/nba/standings", "Standings"),
     ("rankings", "/rankings", "Rankings 2026-27"),
     ("ou", "/over-under", "Over / Under"),
     ("daily", "/daily", "Mystery Player"),

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}NBA Standings 2026-27 - East & West Conference Table · HoopLife NBA{% endblock %}
+{% block description %}2026-27 NBA standings for the Eastern and Western Conference: wins, losses, games behind, home and road records, last 10 and streak, updated through the day.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">2026-27 NBA season</div>
+  <h1>NBA Standings</h1>
+  <p>Eastern and Western Conference tables. Seeds 1-6 go straight to the playoffs, 7-10 play in the play-in tournament. Updated {{ today.strftime('%B') }} {{ today.day }}, {{ today.year }}.</p>
+</div>
+{% if not confs %}<div class="empty">Standings could not be loaded. Try again shortly.</div>{% endif %}
+<div class="nb-confs">
+{% for c in confs %}
+<section class="card">
+  <h2 class="card-title">{{ c.name }}</h2>
+  <div class="table-wrap"><table class="table small nb-stand">
+    <thead><tr><th>#</th><th class="l sticky-col">Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>Home</th><th>Road</th><th>L10</th><th>Strk</th><th>Diff</th></tr></thead>
+    <tbody>{% for r in c.rows %}<tr class="{{ 'cut-po' if loop.index == 6 else 'cut-pi' if loop.index == 10 }}">
+      <td>{{ loop.index }}</td>
+      <td class="l sticky-col"><span class="nb-tm"><img src="{{ r.logo }}" alt="" loading="lazy">{{ r.name }}</span></td>
+      <td><b>{{ r.w }}</b></td><td>{{ r.l }}</td><td>{{ r.pct }}</td><td>{{ r.gb }}</td><td>{{ r.home }}</td><td>{{ r.road }}</td><td>{{ r.l10 }}</td><td>{{ r.streak }}</td>
+      <td class="{{ 'good' if (r.diff or '0')|float > 0 else 'bad' if (r.diff or '0')|float < 0 }}">{{ r.diff }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endfor %}
+</div>
+{% from "partials/faq.html" import faq %}
+{% if confs and confs[0].rows and confs[1].rows %}
+{{ faq([
+  ("Who leads the NBA standings?",
+   confs[0].rows[0].name ~ " lead the " ~ confs[0].name ~ " at " ~ confs[0].rows[0].w ~ "-" ~ confs[0].rows[0].l ~ ", and " ~ confs[1].rows[0].name ~ " lead the " ~ confs[1].name ~ " at " ~ confs[1].rows[0].w ~ "-" ~ confs[1].rows[0].l ~ "."),
+  ("How does the NBA play-in tournament work?",
+   "In each conference the top six teams qualify for the playoffs directly. Teams seeded 7 to 10 play in the play-in tournament for the last two playoff spots."),
+  ("Where can I see last night's NBA scores?",
+   "HoopLife's NBA scores page lists every game by date with the full box score, team and player shot charts and fantasy stats.")
+], "NBA standings - questions") }}
+{% endif %}
+<p class="small muted" style="margin-top:16px">More: <a href="/nba/scores">NBA scores</a> · <a href="/over-under">preseason over/under win totals</a> · <a href="/injuries">injury report</a></p>
+{% endblock %}

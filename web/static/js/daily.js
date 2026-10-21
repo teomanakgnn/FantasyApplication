@@ -217,7 +217,7 @@
         </div>
         <div class="dp-actions">
           <button class="btn btn-primary" id="dp-share" type="button">Share result</button>
-          <a class="btn btn-ghost" href="/mock-draft">Run a mock draft</a>
+          <a class="btn btn-ghost" href="/nba/scores">Today's NBA scores</a>
         </div>
         <div class="small muted dp-next" id="dp-next"></div>
         <div class="dp-stats">

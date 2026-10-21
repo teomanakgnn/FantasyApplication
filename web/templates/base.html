@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B0F17">
   <title>{% block title %}HoopLife NBA{% endblock %}</title>
-  <meta name="description" content="{% block description %}NBA box scores, fantasy stats, mock drafts, draft strategy and trade tools.{% endblock %}">
+  <meta name="description" content="{% block description %}NBA scores, box scores with shot charts, standings, player stats and game logs, fantasy basketball tools and daily NBA games.{% endblock %}">
   {% set page_title = self.title() %}
   {% set page_desc = self.description() %}
-  <link rel="canonical" href="{{ site_url }}{{ request.url.path }}">
+  <link rel="canonical" href="{% block canonical %}{{ site_url }}{{ request.url.path }}{% endblock %}">
   {% block robots %}{% endblock %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HoopLife NBA">
@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://a.espncdn.com">
   <link rel="stylesheet" href="/static/css/app.css?v={{ asset_version }}">
   <script type="application/ld+json">{{ {"@context": "https://schema.org", "@graph": [
-    {"@type": "WebSite", "name": "HoopLife NBA", "url": site_url ~ "/", "description": "Free fantasy basketball tools: mock drafts, draft strategy by pick, trade analyzer, rankings, injury report, NBA over/under win totals and daily NBA games."},
+    {"@type": "WebSite", "name": "HoopLife NBA", "url": site_url ~ "/", "description": "NBA scores, box scores with shot charts, standings, player stats and game logs, fantasy basketball rankings and trade analyzer, injury report and daily NBA games."},
     {"@type": "Organization", "name": "HoopLife NBA", "url": site_url ~ "/", "logo": site_url ~ "/static/img/logo.png"}]}|tojson }}</script>
   {% block head %}{% endblock %}
   {% if ga_id %}

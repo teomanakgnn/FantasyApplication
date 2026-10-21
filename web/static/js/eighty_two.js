@@ -296,7 +296,7 @@
           </div>
           ${st.daily ? `<div class="dp-stats"><div><b>${stats.played}</b><span>Played</span></div><div><b>${stats.best}</b><span>Best wins</span></div><div><b>${stats.perfect}</b><span>82-0s</span></div></div>
             <p class="small muted" style="margin-top:12px">New spins every day at midnight UK time. Try another era from "Change mode".</p>` : ""}
-          ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your Mystery Player streak on every device and save mock drafts.</span></div>
+          ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your daily game streaks on every device and track players.</span></div>
             <a class="btn btn-primary btn-sm" href="/register?next=%2F82-0">Create free account</a></div>`}
         </section>
       </div>`;

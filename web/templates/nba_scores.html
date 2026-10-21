@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% set nice = day.strftime('%A, %B ') ~ day.day ~ ', ' ~ day.year %}
+{% block title %}NBA Scores{{ ' Today' if day == today }} - {{ nice }} · Box Scores & Shot Charts · HoopLife NBA{% endblock %}
+{% block description %}NBA scores for {{ nice }}: {% for g in games[:4] %}{{ g.away_nick }} {{ g.away_score }}-{{ g.home_score }} {{ g.home_nick }}{{ ', ' if not loop.last }}{% endfor %}{% if games|length > 4 %} and more{% endif %}. Full box scores, shot charts and fantasy stats for every game.{% endblock %}
+{% block canonical %}{{ site_url }}{{ canonical }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">2026-27 NBA season</div>
+  <h1>NBA Scores <span class="dim">· {{ nice }}</span></h1>
+  <p>Every game with its box score, team and player shot charts and fantasy stats. Times and dates are US Eastern.</p>
+</div>
+
+<nav class="nb-days">
+  <a class="btn btn-sm btn-ghost" href="/nba/scores?date={{ prev.isoformat() }}">&larr; {{ prev.strftime('%b') }} {{ prev.day }}</a>
+  {% if day != today %}<a class="btn btn-sm" href="/nba/scores">Today</a>{% endif %}
+  <a class="btn btn-sm btn-ghost" href="/nba/scores?date={{ next.isoformat() }}">{{ next.strftime('%b') }} {{ next.day }} &rarr;</a>
+</nav>
+
+{% if not games %}
+<div class="empty">No NBA games on {{ nice }}.</div>
+{% else %}
+<div class="nb-games">
+  {% for g in games %}
+  <a class="card nb-game {{ 'is-live' if g.live }}" href="{{ g.page }}">
+    <div class="nb-st">{% if g.live %}<i></i>{% endif %}{{ g.status }}</div>
+    {% for side in ('away', 'home') %}
+    {% set sc, other = (g.away_score, g.home_score) if side == 'away' else (g.home_score, g.away_score) %}
+    <div class="nb-row {{ 'won' if g.final and (sc|int) > (other|int) }}">
+      <img src="{{ g[side ~ '_logo'] }}" alt="" loading="lazy"><b>{{ g[side ~ '_nick'] }}</b><span>{{ sc if g.final or g.live else '' }}</span>
+    </div>
+    {% endfor %}
+    <div class="nb-cta">{{ 'Box score & shot charts' if g.final or g.live else 'Preview' }} &rarr;</div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p class="small muted" style="margin-top:16px">More: <a href="/nba/standings">NBA standings</a> · <a href="/injuries">injury report</a> · <a href="/">fantasy stats by day</a> · <a href="/rankings">fantasy rankings</a></p>
+{% endblock %}

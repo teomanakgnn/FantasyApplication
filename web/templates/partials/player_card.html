@@ -1,13 +1,14 @@
+{% from "partials/court.html" import court %}
 {% if not c %}
   <p class="bad">Player not found in this box score.</p>
   <button class="btn btn-sm" data-modal-url="/api/boxscore/{{ game_id }}?final={{ final }}">&larr; Box score</button>
 {% else %}
 <div class="pc">
-  <button class="btn btn-sm btn-ghost pc-back" data-modal-url="/api/boxscore/{{ game_id }}?final={{ final }}">&larr; Box score</button>
   <div class="pc-head">
     <img src="{{ c.headshot }}" alt="" onerror="this.style.visibility='hidden'">
-    <div><h2>{{ c.name }}</h2>
-      <div class="muted small">{{ c.team }} · {{ c.min }} min{% if c.pm not in (None, '') %} · {{ c.pm }} +/-{% endif %}{% if c.pf not in (None, '') %} · {{ c.pf }} PF{% endif %}</div></div>
+    <div class="pc-id"><h2>{{ c.name }}</h2>
+      <div class="muted tiny">{{ c.team }} · {{ c.min }} min{% if c.pm not in (None, '') %} · {{ c.pm }} +/-{% endif %}</div></div>
+    <div class="pc-fp"><b>{{ c.fp }}</b><span>fantasy</span></div>
   </div>
 
   <div class="pc-cats">
@@ -16,31 +17,25 @@
     {% endfor %}
   </div>
 
-  <div class="pc-chart">
-    <svg viewBox="0 0 50 47" role="img" aria-label="Shot chart">
-      <g class="court" fill="none">
-        <rect x="0" y="0" width="50" height="47"/>
-        <rect x="17" y="0" width="16" height="19"/>
-        <circle cx="25" cy="19" r="6"/>
-        <path d="M3 0 L3 14.2 A23.75 23.75 0 0 0 47 14.2 L47 0"/>
-        <path d="M21 5.25 A4 4 0 0 0 29 5.25"/>
-        <line x1="22" y1="4" x2="28" y2="4"/>
-        <circle cx="25" cy="5.25" r=".75"/>
-        <path d="M19 47 A6 6 0 0 1 31 47"/>
-      </g>
-      {% for s in c.shots %}
-        {% if s.made %}<circle class="sh-made" cx="{{ s.sx }}" cy="{{ s.sy }}" r=".95"><title>Q{{ s.q }} {{ s.clock }} · {{ s.text }}</title></circle>
-        {% else %}<g class="sh-miss" transform="translate({{ s.sx }} {{ s.sy }})"><title>Q{{ s.q }} {{ s.clock }} · {{ s.text }}</title><path d="M-.75 -.75 L.75 .75 M.75 -.75 L-.75 .75"/></g>{% endif %}
-      {% endfor %}
-    </svg>
-    {% if not c.shots %}<div class="pc-empty">No field goal attempts{% if c.cats[1][2] != '0-0' %} - free throws only{% endif %}.</div>{% endif %}
+  <div class="pc-body">
+    <div class="pc-chart">
+      {{ court(c.shots) }}
+      {% if not c.shots %}<div class="pc-empty">No field goal attempts</div>{% endif %}
+    </div>
+    <div class="pc-side">
+      <div class="pc-zones">
+        {% for z, (m, a) in c.zones.items() %}
+        <div><span>{{ z }}</span><b>{{ m }}/{{ a }}</b><small>{{ ((100 * m / a)|round|int ~ '%') if a else '-' }}</small></div>
+        {% endfor %}
+      </div>
+      <div class="pc-legend tiny"><span><i class="dot"></i> Made {{ c.made }}</span><span><i class="x">&times;</i> Missed {{ c.missed }}</span></div>
+    </div>
   </div>
-  <div class="pc-legend small"><span><i class="dot made"></i> Made {{ c.made }}</span><span><i class="x">&times;</i> Missed {{ c.missed }}</span><span class="muted">Free throws not shown</span></div>
 
-  <div class="pc-zones">
-    {% for z, (m, a) in c.zones.items() %}
-    <div><span>{{ z }}</span><b>{{ m }}/{{ a }}</b><small>{{ ((100 * m / a)|round|int ~ '%') if a else '-' }}</small></div>
-    {% endfor %}
+  <div class="pc-links">
+    <button class="btn btn-sm btn-ghost" data-modal-url="/api/boxscore/{{ game_id }}?final={{ final }}">&larr; Box score</button>
+    <a class="btn btn-sm btn-ghost" href="{{ c.game_page }}">Game page</a>
+    {% if c.slug %}<a class="btn btn-sm btn-ghost" href="/players/{{ c.slug }}">Stats &amp; game log</a>{% endif %}
   </div>
 </div>
 {% endif %}

@@ -144,7 +144,8 @@ def get_scoreboard(date):
                 "away_score": away.get("score", "0"),
                 "home_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{home['team']['abbreviation']}.png",
                 "away_logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{away['team']['abbreviation']}.png",
-                "status": status_desc
+                "status": status_desc,
+                "season_type": (event.get("season") or {}).get("type"),
             })
         except (KeyError, IndexError):
             continue

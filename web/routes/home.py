@@ -10,6 +10,7 @@ from services.database import FREE_WATCHLIST_LIMIT, db
 from services.espn_api import calculate_game_score, get_injuries, get_score_color
 from services.nba_season import (get_season_label, get_season_start_date,
                                  is_offseason)
+from services import nba_pages
 from web import stats
 from web.core import current_user, is_pro, render, templates
 
@@ -66,7 +67,7 @@ def home(request: Request):
         excitement = calculate_game_score(g.get("home_score"), g.get("away_score"), g.get("status"))
         game_cards.append({**g, "excitement": excitement,
                            "excite_color": get_score_color(excitement) if excitement else None,
-                           "final": stats.is_final(g.get("status"))})
+                           "final": stats.is_final(g.get("status")), "page": nba_pages.game_path(g)})
 
     # --- fantasy tablolari ---
     error = None
@@ -92,6 +93,12 @@ def home(request: Request):
         if len(pool) < 5 and "MIN_INT" in table.columns:
             pool = table[table["MIN_INT"] >= 5]
         low = stats.table_rows(pool.sort_values("SCORE", ascending=True).head(10), decimals)
+        # Tek mac gunu: oyuncuya tiklayinca o macin sut haritali karti acilir
+        finals = {str(g["game_id"]): g["final"] for g in game_cards}
+        for r in rows + low:
+            if period != "today":
+                r["game_id"] = r["espn_id"] = None
+            r["final"] = finals.get(r.get("game_id"), True)
 
     mvp, lvp, mvp_days = ([], [], 0)
     if period in ("week", "month") and not daily.empty:

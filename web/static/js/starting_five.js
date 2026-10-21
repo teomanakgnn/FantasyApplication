@@ -261,7 +261,7 @@
         </div>
         ${mode === "daily" ? `<div class="dp-stats"><div><b>${stats.played}</b><span>Played</span></div><div><b>${avg}</b><span>Average</span></div><div><b>${stats.perfect}</b><span>Perfect</span></div></div>
         <p class="small muted" style="margin-top:12px">A new game every day at midnight UK time. Also try <a href="/stat-match">Stat Match</a> and <a href="/daily">Mystery Player</a>.</p>` : ""}
-        ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your Mystery Player streak on every device and save mock drafts.</span></div>
+        ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your daily game streaks on every device and track players.</span></div>
           <a class="btn btn-primary btn-sm" href="/register?next=%2Fstarting-five">Create free account</a></div>`}
       </div>`;
   }

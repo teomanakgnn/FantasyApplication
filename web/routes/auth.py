@@ -59,8 +59,6 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     if not session:
         return render(request, "login.html", mode="login", next=target, form=form,
                       error="Could not start a session. Try again.", status_code=500)
-    from web.routes.mock import claim_guest_drafts
-    claim_guest_drafts(request, user["id"])
     response = redirect(target, f"Welcome back, {user['username']}.")
     set_session_cookie(response, session["token"], remember=bool(remember))
     return response
@@ -149,8 +147,6 @@ def register(request: Request, username: str = Form(""), email: str = Form(""),
         db.extend_pro(inviter["id"], REFERRAL_DAYS)
         forget_user_cache()
         message += f" You and {inviter['username']} both got {REFERRAL_DAYS} days of Pro."
-    from web.routes.mock import claim_guest_drafts
-    claim_guest_drafts(request, user["id"])
     response = redirect(target, message)
     response.delete_cookie(INVITE_COOKIE, path="/")
     response.delete_cookie(CODE_COOKIE, path="/")

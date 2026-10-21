@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% from "macros.html" import player_table %}
-{% block title %}HoopLife NBA · Box scores and fantasy stats{% endblock %}
+{% block title %}NBA Box Scores, Scores & Fantasy Stats 2026-27 · HoopLife NBA{% endblock %}
 {% block content %}
 <div class="page-head row-between">
   <div>
-    <div class="eyebrow">Fantasy basketball</div>
-    <h1>NBA Player Stats &amp; Analysis</h1>
-    <p>Box score based performance, scored the way your league scores it.</p>
+    <div class="eyebrow">2026-27 NBA season</div>
+    <h1>NBA Box Scores &amp; Fantasy Stats</h1>
+    <p>Every game's box score and shot chart, and every player scored the way your league scores it. Tap a player for his card.</p>
   </div>
-  <a class="btn btn-ghost hide-mobile" href="/bracket">Playoff bracket</a>
+  <a class="btn btn-ghost hide-mobile" href="/nba/scores">All scores &amp; game pages &rarr;</a>
 </div>
 
 {% if offseason_note %}<div class="note note-info" style="margin-bottom:16px">{{ offseason_note }}</div>{% endif %}
@@ -57,7 +57,10 @@
       <div class="game-score{{ ' hidden-score' if spoiler and g.final }}" {% if spoiler and g.final %}title="Tap to reveal" role="button" tabindex="0"{% endif %}>{{ g.away_score }} – {{ g.home_score }}</div>
       <div class="team home">{{ g.home_team }}<img src="{{ g.home_logo }}" alt="" loading="lazy"></div>
     </div>
-    <button class="btn btn-sm btn-ghost" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}">Box score</button>
+    <div class="game-actions">
+      <button class="btn btn-sm btn-ghost" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}">Box score</button>
+      <a class="btn btn-sm btn-ghost" href="{{ g.page }}">Game page</a>
+    </div>
   </div>
   {% endfor %}
 </div>
@@ -154,7 +157,12 @@
   // Oyuncu satiri / lider karti -> analiz penceresi
   document.addEventListener("click", async (e) => {
     const el = e.target.closest("[data-row]");
-    if (!el || e.target.closest("th")) return;
+    if (!el || e.target.closest("th") || e.target.closest("[data-insight]")) return;
+    const row = JSON.parse(el.dataset.row);
+    if (row.game_id && row.espn_id) {
+      window.HL.openModalUrl(`/api/player-card/${row.game_id}/${row.espn_id}?final=${row.final ? 1 : 0}&from=home`);
+      return;
+    }
     openModal('<div class="spinner"></div>');
     try {
       openModal(await api("/api/insight", { method: "POST", body: JSON.parse(el.dataset.row) }));

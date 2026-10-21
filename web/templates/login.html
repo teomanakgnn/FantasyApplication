@@ -5,7 +5,7 @@
 <div class="auth">
   <div class="auth-card card">
     <img class="auth-logo" src="/static/img/logo.png" alt="HoopLife NBA" width="120" height="120">
-    <p class="muted center">Daily box scores, mock drafts and trade math.</p>
+    <p class="muted center">NBA scores, box scores with shot charts, fantasy stats and daily games.</p>
     <div class="seg seg-block" style="margin-bottom:18px">
       <a href="/login{% if next and next != '/' %}?next={{ next|urlencode }}{% endif %}" class="{{ 'is-on' if mode == 'login' }}">Sign in</a>
       <a href="/register{% if next and next != '/' %}?next={{ next|urlencode }}{% endif %}" class="{{ 'is-on' if mode == 'register' }}">Create account</a>
@@ -47,7 +47,7 @@
       <button class="btn btn-primary btn-block" type="submit">Create free account</button>
     </form>
     <div class="grid grid-2" style="margin-top:16px">
-      <div class="note"><b>Free</b><br>Scores, stats, mock drafts, over/under picks, a {{ 10 }}-player watchlist.</div>
+      <div class="note"><b>Free</b><br>Scores, stats, shot charts, league tools, daily game streaks, a {{ 10 }}-player watchlist.</div>
       <div class="note"><b>Pro</b> <span class="chip chip-pro">INVITE</span><br>Player trends, extra punt builds, unlimited watchlist and saved drafts. Got an invite code? Add it above.</div>
     </div>
     {% endif %}

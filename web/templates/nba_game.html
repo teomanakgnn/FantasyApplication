@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "partials/court.html" import court %}
+{% set a, h = g.away, g.home %}
+{% set nice = (g.when.strftime('%B ') ~ g.when.day ~ ', ' ~ g.when.year) if g.when else '' %}
+{% block title %}{{ a.nick }} vs {{ h.nick }}{% if g.final %} {{ a.score }}-{{ h.score }}{% endif %} Box Score{% if nice %} - {{ nice }}{% endif %} · Shot Charts & Stats · HoopLife NBA{% endblock %}
+{% block description %}{{ g.recap }} Full box score, team and player shot charts and fantasy stats.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<nav class="tiny dim" style="margin-bottom:8px"><a href="/nba/scores{% if g.when %}?date={{ g.when.date().isoformat() }}{% endif %}">NBA scores</a> › {{ a.nick }} vs {{ h.nick }}</nav>
+
+<section class="card nb-head">
+  <div class="nb-team {{ 'won' if g.final and a.winner }}"><img src="{{ a.logo }}" alt="{{ a.name }}"><b>{{ a.name }}</b><small>{{ a.record }}</small></div>
+  <div class="nb-score">
+    {% if g.started %}<div class="nb-big"><span>{{ a.score }}</span><i>-</i><span>{{ h.score }}</span></div>{% endif %}
+    <div class="nb-detail {{ 'live' if g.state == 'in' }}">{{ g.detail }}</div>
+    <div class="tiny dim">{{ nice }}{% if g.venue %} · {{ g.venue }}{% endif %}</div>
+  </div>
+  <div class="nb-team {{ 'won' if g.final and h.winner }}"><img src="{{ h.logo }}" alt="{{ h.name }}"><b>{{ h.name }}</b><small>{{ h.record }}</small></div>
+</section>
+
+<h1 class="nb-h1">{{ a.name }} vs {{ h.name }}{% if nice %} <span class="dim">· {{ nice }}</span>{% endif %}</h1>
+<p class="nb-recap">{{ g.recap }}</p>
+
+{% if a.quarters %}
+<div class="table-wrap nb-lines"><table class="table small">
+  <thead><tr><th class="l">Team</th>{% for q in a.quarters %}<th>{{ loop.index if loop.index <= 4 else 'OT' ~ (loop.index - 4 if loop.index > 5 else '') }}</th>{% endfor %}<th>T</th></tr></thead>
+  <tbody>{% for t in (a, h) %}<tr><td class="l"><b>{{ t.abbr }}</b></td>{% for q in t.quarters %}<td>{{ q }}</td>{% endfor %}<td><b>{{ t.score }}</b></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+{% if g.leaders %}
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">Top performers <span class="dim small">· fantasy points · tap for shot chart</span></h2>
+  <div class="nb-leaders">
+    {% for r in g.leaders %}
+    <a href="#" class="nb-leader" data-modal-url="/api/player-card/{{ g.id }}/{{ r.ID }}?final={{ 1 if g.final else 0 }}">
+      <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ r.ID }}.png&w=96&h=70" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <span><b>{{ r.PLAYER }}</b><small>{{ r.TEAM }} · {{ r.PTS }} pts · {{ r.REB }} reb · {{ r.AST }} ast</small></span><em>{{ r.FP }}</em>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if g.charts %}
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">Shot charts</h2>
+  <div class="nb-charts">
+    {% for abbr, _ in g.box %}{% set ch = g.charts.get(abbr) %}{% if ch %}
+    <div>
+      <h3>{{ (a if abbr == a.abbr else h).nick }} <span class="dim small">· {{ ch.shots|selectattr('made')|list|length }}/{{ ch.shots|length }} FG</span></h3>
+      <div class="pc-chart">{{ court(ch.shots, (a if abbr == a.abbr else h).name ~ " shot chart") }}</div>
+      <div class="nb-zones">{% for z, (m, n) in ch.zones.items() %}<span><small>{{ z }}</small><b>{{ m }}/{{ n }}</b><em>{{ ((100 * m / n)|round|int ~ '%') if n else '-' }}</em></span>{% endfor %}</div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+  <p class="tiny dim" style="margin:8px 0 0">Green = made, red × = missed. Free throws are not shown.</p>
+</section>
+{% endif %}
+
+{% for abbr, rows in g.box %}{% if rows %}{% set t = a if abbr == a.abbr else h %}
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">{{ t.name }} box score</h2>
+  <div class="table-wrap"><table class="table small nb-box">
+    <thead><tr><th class="l sticky-col">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th><th>FP</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td class="l sticky-col">{% if r.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ g.id }}/{{ r.ID }}?final={{ 1 if g.final else 0 }}">{{ r.PLAYER }}</a>{% else %}{{ r.PLAYER }}{% endif %}{% set sl = player_slug(r.PLAYER) %}{% if sl %} <a class="nb-plink" href="/players/{{ sl }}" title="{{ r.PLAYER }} stats and game log">›</a>{% endif %}</td>
+      <td>{{ r.MIN }}</td><td><b>{{ r.PTS }}</b></td><td>{{ r.REB }}</td><td>{{ r.AST }}</td><td>{{ r.STL }}</td><td>{{ r.BLK }}</td><td>{{ r.TO }}</td>
+      <td>{{ r.FGM }}-{{ r.FGA }}</td><td>{{ r['3Pts'] }}-{{ r['3PTA'] }}</td><td>{{ r.FTM }}-{{ r.FTA }}</td><td>{{ r['+/-'] }}</td><td><b>{{ r.FP }}</b></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}{% endfor %}
+
+{% if not g.started %}<div class="empty" style="margin-top:12px">The box score and shot charts appear here once the game tips off.</div>{% endif %}
+
+<p class="small muted" style="margin-top:16px">More: <a href="/nba/scores">today's NBA scores</a> · <a href="/nba/standings">standings</a> · <a href="/injuries">injury report</a> · <a href="/rankings">fantasy rankings</a></p>
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "SportsEvent",
+  "name": a.name ~ " vs " ~ h.name, "sport": "Basketball",
+  "startDate": g.when.isoformat() if g.when else None,
+  "eventStatus": "https://schema.org/EventScheduled",
+  "location": {"@type": "Place", "name": g.venue or h.name, "address": g.city or None},
+  "awayTeam": {"@type": "SportsTeam", "name": a.name}, "homeTeam": {"@type": "SportsTeam", "name": h.name},
+  "description": g.recap, "url": site_url ~ g.path}|tojson }}</script>
+{% endblock %}

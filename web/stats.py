@@ -351,6 +351,8 @@ def table_rows(df, decimals):
             "fgm": num("FGM"), "fga": num("FGA"), "tpm": num("3Pts"),
             "tpa": num("3PTA"), "ftm": num("FTM"), "fta": num("FTA"),
             "pm": num("+/-"), "traded": r.get("TRADED", "") or "",
+            "game_id": (str(r.get("GAME_ID")) if isinstance(r.get("GAME_ID"), str) and r.get("GAME_ID") else None),
+            "espn_id": (str(r.get("ID")) if isinstance(r.get("ID"), str) and r.get("ID") else None),
             "decimals": decimals,
         })
     return out
@@ -535,8 +537,20 @@ def player_game_card(game_id, player_id, final=True):
         zones[z][0] += sh["made"]
         # Ekran: pota ust tarafta, saha 50 x 47 ayak
         sh["sx"] = round(min(49.5, max(.5, sh["x"])), 2)
-        sh["sy"] = round(min(46.5, max(.5, sh["y"] + 5.25)), 2)
+        sh["sy"] = round(min(35.5, max(.5, sh["y"] + 5.25)), 2)
+    from services import nba_pages, player_pages
+    try:
+        _, by_slug = player_pages.table()
+        slug = player_pages.slugify(p.get("PLAYER") or "")
+        slug = slug if slug in by_slug else None
+    except Exception:
+        slug = None
+    try:
+        page = nba_pages.path_for(game_id)
+    except Exception:
+        page = f"/nba/game/{game_id}"
     return {"id": str(player_id), "name": p.get("PLAYER"), "team": p.get("TEAM"), "min": p.get("MIN"),
+            "fp": round(fantasy_score(p, BASE_WEIGHTS), 1), "slug": slug, "game_page": page,
             "pm": p.get("+/-"), "oreb": p.get("OREB"), "pf": p.get("PF"), "headshot": headshot(player_id),
             "cats": cats, "shots": shots, "zones": zones,
             "made": sum(s["made"] for s in shots), "missed": sum(not s["made"] for s in shots)}

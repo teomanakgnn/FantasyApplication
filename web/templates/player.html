@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ p.name }} Fantasy Outlook 2026-27 - Rank #{{ p.rank }}, Projections · HoopLife NBA{% endblock %}
-{% block description %}{{ p.name }} fantasy basketball outlook for 2026-27: No. {{ p.rank }} in 9-cat, projected {{ '%.1f'|format(p.s.pts) }} pts, {{ '%.1f'|format(p.s.reb) }} reb, {{ '%.1f'|format(p.s.ast) }} ast. Category strengths, best punt build, ADP value and similar players.{% endblock %}
+{% set av = log.avg if log else None %}
+{% block title %}{{ p.name }} Stats & Game Log 2026-27, Fantasy Outlook · HoopLife NBA{% endblock %}
+{% block description %}{% if av %}{{ p.name }} 2026-27 stats: {{ '%.1f'|format(av.pts) }} points, {{ '%.1f'|format(av.reb) }} rebounds, {{ '%.1f'|format(av.ast) }} assists in {{ av.gp }} game{{ 's' if av.gp != 1 }}. Game log with shot charts, {% else %}{{ p.name }} 2026-27 projection: {{ '%.1f'|format(p.s.pts) }} pts, {{ '%.1f'|format(p.s.reb) }} reb, {{ '%.1f'|format(p.s.ast) }} ast. {% endif %}No. {{ p.rank }} in 9-cat fantasy, category strengths and best punt build.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <nav class="tiny dim" style="margin-bottom:8px"><a href="/rankings">Rankings</a> › {{ p.name }}</nav>
@@ -12,6 +13,28 @@
     <div class="pl-chips"><span class="chip chip-accent">#{{ p.rank }} overall</span><span class="chip">{{ tier }}</span>{% if adp %}<span class="chip">ADP {{ '%.0f'|format(adp) }}</span>{% endif %}<span class="chip">~{{ (p.avail * 82)|round|int }} games</span>{% if p.injury != 'ACTIVE' %}<span class="chip chip-bad">{{ p.injury|replace('_', ' ')|lower }}</span>{% endif %}</div>
   </div>
 </div>
+
+{% if log and log.games %}
+<section class="card pl-season">
+  <h2 class="card-title">2026-27 season stats <span class="dim small">· {{ av.gp }} game{{ 's' if av.gp != 1 }}</span></h2>
+  <div class="pl-stats">
+    {% for k, label in [('pts', 'PTS'), ('reb', 'REB'), ('ast', 'AST'), ('stl', 'STL'), ('blk', 'BLK'), ('tpm', '3PM'), ('to', 'TO'), ('min', 'MIN')] %}<div><b>{{ '%.1f'|format(av[k]) }}</b><span>{{ label }}</span></div>{% endfor %}
+    <div><b>{{ '%.1f'|format(av.fg) if av.fg is not none else '-' }}%</b><span>FG%</span></div>
+    <div><b>{{ '%.1f'|format(av.ft) if av.ft is not none else '-' }}%</b><span>FT%</span></div>
+  </div>
+  <h3 class="pl-h3">Game log</h3>
+  <div class="table-wrap"><table class="table small">
+    <thead><tr><th class="l">Date</th><th class="l">Opp</th><th>Result</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th></tr></thead>
+    <tbody>{% for g in log.games[:15] %}<tr>
+      <td class="l">{% if g.when %}{{ g.when.strftime('%b') }} {{ g.when.day }}{% endif %}</td>
+      <td class="l">{{ g.at }} {{ g.opp }}</td>
+      <td><a href="{{ g.path }}" class="{{ 'good' if g.result == 'W' else 'bad' if g.result == 'L' }}">{{ g.result }} {{ g.score }}</a></td>
+      <td>{{ g.s.MIN }}</td><td><b>{{ g.s.PTS }}</b></td><td>{{ g.s.REB }}</td><td>{{ g.s.AST }}</td><td>{{ g.s.STL }}</td><td>{{ g.s.BLK }}</td><td>{{ g.s.TO }}</td><td>{{ g.s.FG }}</td><td>{{ g.s['3PT'] }}</td><td>{{ g.s.FT }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="tiny dim" style="margin:6px 0 0">Tap a result for the full box score and shot charts.</p>
+</section>
+{% endif %}
 
 <div class="pl-grid">
   <section class="card">
@@ -40,10 +63,10 @@
 </section>
 
 <section class="card pl-cta">
-  <div><b>Is {{ p.name.split(' ')[-1] }} worth it for your team?</b><span>Put him in a trade, see who is there at your pick, or track him all season.</span></div>
+  <div><b>Is {{ p.name.split(' ')[-1] }} worth it for your team?</b><span>Put him in a trade, check his latest games, or track him all season.</span></div>
   <div class="pl-cta-actions">
     <a class="btn btn-primary" href="/trade-analyzer?b={{ p.name|urlencode }}">Test a trade</a>
-    <a class="btn" href="/draft-strategy">Draft strategy by pick</a>
+    <a class="btn" href="/nba/scores">Today's scores</a>
     {% if not signed_in %}<a class="btn" href="/register?next={{ ('/players/' ~ p.slug)|urlencode }}">Free account - watchlist</a>{% endif %}
   </div>
 </section>
