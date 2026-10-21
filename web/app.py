@@ -122,7 +122,7 @@ def healthz():
     return JSONResponse({"ok": False, "warming": True}, status_code=503)
 
 
-PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/over-under", "/bracket",
+PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/waiver-wire", "/over-under", "/bracket",
                 "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
@@ -177,6 +177,7 @@ def llms():
 - [Box scores and fantasy scoring]({base}/): yesterday's games with every player scored the way your fantasy league scores; tap a player for his shot chart.
 
 ## Fantasy basketball
+- [Fantasy basketball waiver wire]({base}/waiver-wire): best pickups this week - players owned in under 50% of ESPN leagues ranked by 9-cat value over the last 7 / 15 days or season, with the hottest adds and per-category filters (STL, BLK, 3PM...).
 - [Fantasy basketball rankings 2026-27]({base}/rankings): top 300 for 9-cat leagues; re-rank for punt FT%, FG%, AST, 3PM, PTS, TO.
 - [Trade analyzer]({base}/trade-analyzer): who wins a trade, category by category, for 9-cat, 8-cat and points leagues, including 2-for-1 roster-spot math.
 - [My League]({base}/league): ESPN and Yahoo league standings, power rankings, weekly expected scores, category projections and matchup predictions.
@@ -310,8 +311,9 @@ def _warm():
         step("trade values", lambda: trade_players("proj"))
         from services.player_pages import table as player_table
         step("player pages", player_table)
-        from services import nba_pages
+        from services import nba_pages, waiver
         step("game index", nba_pages.refresh_index)
+        step("waiver wire", lambda: waiver.board("15"))
 
         def games_loop():
             """
@@ -327,7 +329,7 @@ def _warm():
                 try:
                     fresh = nba_pages.refresh_index()
                     if fresh and config.PRODUCTION:
-                        _ping_indexnow(fresh + ["/nba/scores", "/nba/standings", "/"])
+                        _ping_indexnow(fresh + ["/nba/scores", "/nba/standings", "/waiver-wire", "/"])
                 except Exception as exc:
                     print(f"game index failed: {exc}")
         threading.Thread(target=games_loop, daemon=True).start()

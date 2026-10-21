@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set wk = ('Week ' ~ week) if week else 'This Week' %}
+{% block title %}Fantasy Basketball Waiver Wire {{ wk }}: Best Pickups 2026-27 · HoopLife NBA{% endblock %}
+{% block description %}Best fantasy basketball waiver wire pickups for {{ wk|lower }} of 2026-27: {% for r in rows[:5] %}{{ r.name }}{{ ', ' if not loop.last }}{% endfor %}. Players owned in under {{ owned }}% of ESPN leagues, ranked by 9-cat value over the {{ windows[window][0]|lower }}.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+{% macro q(w=window, o=owned, c=cat) -%}
+/waiver-wire?window={{ w }}&owned={{ o }}{% if c %}&cat={{ c|urlencode }}{% endif %}
+{%- endmacro %}
+<div class="page-head">
+  <div class="eyebrow">2026-27 fantasy basketball · {{ wk }}</div>
+  <h1>Waiver Wire: Best Pickups {{ wk }}</h1>
+  <p>Players available in most ESPN leagues (owned in under {{ owned }}%) who are producing in 9-category leagues over the {{ windows[window][0]|lower }}. Updated {{ today.strftime('%B') }} {{ today.day }}, {{ today.year }}.</p>
+</div>
+
+<div class="card sr-filters">
+  <nav class="seg">{% for k, (label, _) in windows.items() %}<a href="{{ q(w=k) }}" rel="nofollow" class="{{ 'is-on' if k == window }}">{{ label }}</a>{% endfor %}</nav>
+  <nav class="seg">{% for o in (50, 25, 10) %}<a href="{{ q(o=o) }}" rel="nofollow" class="{{ 'is-on' if o == owned }}">Under {{ o }}% owned</a>{% endfor %}</nav>
+  <nav class="seg"><a href="{{ q(c='') }}" rel="nofollow" class="{{ 'is-on' if not cat }}">Best overall</a>{% for c in cats %}<a href="{{ q(c=c) }}" rel="nofollow" class="{{ 'is-on' if c == cat }}">{{ 'Low TO' if c == 'TO' else c }}</a>{% endfor %}</nav>
+</div>
+
+{% if hot %}
+<section class="card ww-hot">
+  <h2 class="card-title">Hottest adds this week <span class="dim small">· change in ESPN leagues owning him</span></h2>
+  <div class="ww-chips">{% for r in hot %}{% set sl = slug(r.name) %}<a {% if sl %}href="/players/{{ sl }}"{% endif %}><b>{{ r.name }}</b><span class="good">+{{ r.change }}%</span><small>{{ r.owned }}% owned</small></a>{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if not rows %}
+<div class="empty">No waiver data right now - ESPN may be updating. Try again shortly.</div>
+{% else %}
+<div class="ww-list">
+  {% for r in rows[:10] %}{% set sl = slug(r.name) %}{% set s = r.s %}
+  <article class="card ww-card">
+    <div class="ww-rank">{{ loop.index }}</div>
+    <img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ r.id }}.png&w=110&h=80" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div class="ww-main">
+      <h3>{% if sl %}<a href="/players/{{ sl }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %} <span class="dim small">{{ r.team }} · {{ r.pos }}</span></h3>
+      <div class="ww-meta"><span class="chip">{{ r.owned }}% owned</span>{% if r.change %}<span class="chip {{ 'chip-good' if r.change > 0 }}">{{ '%+.1f'|format(r.change) }}% this week</span>{% endif %}{% for c in r.best %}<span class="chip chip-accent">{{ 'Low TO' if c == 'TO' else c }}</span>{% endfor %}</div>
+      <div class="ww-line">{{ '%.1f'|format(s.pts) }} pts · {{ '%.1f'|format(s.reb) }} reb · {{ '%.1f'|format(s.ast) }} ast · {{ '%.1f'|format(s.stl) }} stl · {{ '%.1f'|format(s.blk) }} blk · {{ '%.1f'|format(s.tpm) }} 3pm · {{ '%.0f'|format(100 * s.fgm / s.fga) if s.fga else '-' }}% FG · {{ '%.0f'|format(s.min) }} min · {{ r.gp }} GP</div>
+      {% if r.reasons %}<p class="ww-why">{{ r.reasons|join(' ') }}</p>{% endif %}
+    </div>
+    <div class="ww-val"><b class="{{ 'good' if r.total > 0 else 'bad' }}">{{ '%+.1f'|format(r.total) }}</b><span>9-cat value</span></div>
+  </article>
+  {% endfor %}
+</div>
+
+{% if rows|length > 10 %}
+<h2 style="margin:22px 0 8px;font-size:1.05rem">More pickups</h2>
+<div class="table-wrap sr-table">
+  <table class="table">
+    <thead><tr><th>#</th><th class="l">Player</th><th>Owned</th><th>GP</th><th>MIN</th>{% for c in cats %}<th>{{ c }}</th>{% endfor %}<th>Value</th></tr></thead>
+    <tbody>
+    {% for r in rows[10:] %}{% set sl = slug(r.name) %}
+      <tr><td>{{ loop.index + 10 }}</td>
+        <td class="l">{% if sl %}<a class="sr-name" href="/players/{{ sl }}">{% else %}<span class="sr-name">{% endif %}<img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ r.id }}.png&w=96&h=70" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span><b>{{ r.name }}</b><small>{{ r.team }} · {{ r.pos }}</small></span>{% if sl %}</a>{% else %}</span>{% endif %}</td>
+        <td>{{ r.owned }}%</td><td>{{ r.gp }}</td><td>{{ '%.0f'|format(r.s.min) }}</td>
+        {% for c in cats %}{% set v = r.z[c] %}<td class="sr-z {{ 'pos' if v >= 1 else 'neg' if v <= -1 else '' }}">{{ '%.1f'|format(v) }}</td>{% endfor %}
+        <td><b>{{ '%+.1f'|format(r.total) }}</b></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+<p class="tiny dim" style="margin-top:8px">Value = sum of 9-category z-scores against the drafted player pool over the selected window (FG%/FT% volume-weighted, turnovers inverted). Ownership from ESPN leagues. Early in the season samples are small - recheck after a few games.</p>
+{% endif %}
+
+{% from "partials/faq.html" import faq %}
+{% if rows %}
+{{ faq([
+  ("Who should I pick up on the fantasy basketball waiver wire " ~ wk|lower ~ "?",
+   "The top waiver wire adds for " ~ wk|lower ~ " are " ~ (rows[:5]|map(attribute='name')|join(", ")) ~ " - each is owned in under " ~ owned ~ "% of ESPN leagues and is producing in 9-category leagues over the " ~ windows[window][0]|lower ~ "."),
+  ("Who are the most added players in fantasy basketball this week?",
+   ("The fastest-rising adds in ESPN leagues this week are " ~ (hot[:4]|map(attribute='name')|join(", ")) ~ ".") if hot else "See the hottest adds list at the top of this page."),
+  ("How is this waiver wire list ranked?",
+   "Every available player gets a z-score in each of the nine categories (FG%, FT%, 3PM, PTS, REB, AST, STL, BLK, TO) against the drafted player pool, using his per-game stats over the chosen window. One-game samples count less, and players being added quickly get a small boost."),
+  ("Can I find pickups for one category, like steals or threes?",
+   "Yes - use the category buttons to rank available players by a single category, such as STL, BLK, 3PM or low turnovers.")
+], "Waiver wire - questions") }}
+{% endif %}
+<p class="small muted" style="margin-top:16px">More: <a href="/rankings">rest-of-season rankings</a> · <a href="/trade-analyzer">trade analyzer</a> · <a href="/nba/scores">NBA box scores</a> · <a href="/injuries">injury report</a></p>
+{% endblock %}

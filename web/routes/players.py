@@ -1,4 +1,4 @@
-"""Arama motoru sayfalari: /rankings ve /players/{slug}."""
+"""Arama motoru sayfalari: /rankings, /players/{slug} ve /waiver-wire."""
 from fastapi import APIRouter, Request
 from fastapi.exceptions import HTTPException
 
@@ -55,3 +55,22 @@ def sitemap_paths():
     except Exception:
         return []
     return [f"/players/{p['slug']}" for p in rows[:400]]
+
+
+@router.get("/waiver-wire")
+def waiver_wire(request: Request, window: str = "15", owned: int = 50, cat: str = ""):
+    from services import waiver
+    window = window if window in waiver.WINDOWS else "15"
+    owned = owned if owned in (10, 25, 50) else 50
+    cat = cat if cat in CATS else ""
+    try:
+        rows, hot = waiver.pickups(window, owned, cat or None), waiver.risers()
+    except Exception as exc:
+        print(f"waiver wire failed: {exc}")
+        rows, hot = [], []
+    _, by_slug = pp.table()
+    slug = lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None
+    from services.nba_pages import today_et
+    return render(request, "waiver.html", active="waiver", rows=rows, hot=hot, cats=CATS, window=window,
+                  windows=waiver.WINDOWS, owned=owned, cat=cat, week=waiver.week_number(), slug=slug,
+                  today=today_et(), signed_in=bool(current_user(request)))

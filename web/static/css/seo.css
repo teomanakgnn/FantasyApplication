@@ -52,3 +52,33 @@
 .pl-season { margin-bottom: 12px; }
 .pl-season .pl-stats { grid-template-columns: repeat(10, minmax(0, 1fr)); }
 @media (max-width: 640px) { .pl-season .pl-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* Waiver wire */
+.ww-hot { margin-bottom: 12px; }
+.ww-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.ww-chips a { display: flex; align-items: baseline; gap: 6px; padding: 6px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: .85rem; }
+.ww-chips a[href]:hover { border-color: var(--accent); }
+.ww-chips small { color: var(--muted); font-size: .72rem; }
+.ww-list { display: flex; flex-direction: column; gap: 8px; }
+.ww-card { display: grid; grid-template-columns: 28px 74px 1fr auto; gap: 12px; align-items: center; }
+.ww-rank { font-weight: 900; font-size: 1.1rem; color: var(--muted); text-align: center; }
+.ww-card img { width: 74px; height: 54px; object-fit: cover; border-radius: 10px; background: var(--surface-2); }
+.ww-main { min-width: 0; }
+.ww-main h3 { margin: 0 0 4px; font-size: 1rem; }
+.ww-main h3 a { color: var(--text); }
+.ww-meta { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.ww-line { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ww-why { margin: 6px 0 0; font-size: .85rem; line-height: 1.5; }
+.ww-val { text-align: center; }
+.ww-val b { display: block; font-size: 1.35rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ww-val span { font-size: .6rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 640px) {
+  .ww-card { grid-template-columns: 22px 56px 1fr; gap: 8px; }
+  .ww-card img { width: 56px; height: 41px; }
+  .ww-val { grid-column: 3; text-align: left; display: flex; align-items: baseline; gap: 6px; }
+  .ww-val b { display: inline; font-size: 1.05rem; }
+}
+@media (max-width: 640px) {
+  .ww-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .ww-chips a { flex: none; }
+}
