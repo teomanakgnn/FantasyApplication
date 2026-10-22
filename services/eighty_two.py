@@ -32,8 +32,9 @@ ROSTER_LIMIT = 15
 WEIGHTS = [0.30, 0.25, 0.20, 0.15, 0.10]
 # (agirlikli OVR, galibiyet) noktalari; aradaki degerler dogrusal.
 # Ornekler: iki 95 + uc 60 -> ~79 -> 32 galibiyet; her takimin en iyisini
-# secen tipik kadro ~90 -> 55; bes efsane (98-99) -> 82-0.
-CURVE = [(55, 2), (60, 6), (70, 15), (79, 32), (85, 45), (90, 55), (94, 66), (96.5, 75), (98, 80), (98.8, 82)]
+# secen tipik kadro ~90 -> 55; agirlikli 96 ve ustu -> 82-0 (eskiden 98.8
+# gerekiyordu, kimse ulasamiyordu).
+CURVE = [(55, 2), (60, 6), (70, 15), (79, 32), (85, 45), (90, 55), (92, 63), (94, 72), (95, 77), (96, 82)]
 
 SLOTS = ["PG", "SG", "SF", "PF", "C"]
 FITS = {"PG": {"PG", "G"}, "SG": {"SG", "G", "GF"}, "SF": {"SF", "F", "GF"}, "PF": {"PF", "F"}, "C": {"C"}}
