@@ -22,7 +22,7 @@
 {% if hot %}
 <section class="card ww-hot">
   <h2 class="card-title">Hottest adds this week <span class="dim small">· change in ESPN leagues owning him</span></h2>
-  <div class="ww-chips">{% for r in hot %}{% set sl = slug(r.name) %}<a {% if sl %}href="/players/{{ sl }}"{% endif %}><img class="pface" src="{{ face(r.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"><b>{{ r.name }}</b><span class="good">+{{ r.change }}%</span><small>{{ r.owned }}% owned</small></a>{% endfor %}</div>
+  <div class="ww-chips">{% for r in hot %}{% set sl = slug(r.name) %}<a {% if sl %}href="/players/{{ sl }}"{% endif %}><span class="pface"><img src="{{ face(r.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><b>{{ r.name }}</b><span class="good">+{{ r.change }}%</span><small>{{ r.owned }}% owned</small></a>{% endfor %}</div>
 </section>
 {% endif %}
 
