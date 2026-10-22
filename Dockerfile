@@ -1,4 +1,4 @@
-# HoopLife NBA - Railway (veya herhangi bir Docker sunucusu) icin.
+# HoopLife NBA - Fly.io (veya herhangi bir Docker sunucusu) icin.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

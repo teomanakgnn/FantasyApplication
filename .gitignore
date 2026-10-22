@@ -22,8 +22,9 @@ yahoo_token.json
 # Selenium'un birakktigi tarayici profili (onbellek, model dosyalari)
 bot_chrome_profile/
 
-# Railway ortam degiskenleri (sirlar) - depoya girmez
+# Sunucu sirlari - depoya girmez
 railway.env
+secrets.env
 
 # Wrangler yerel onbellegi
 .wrangler/
@@ -36,3 +37,5 @@ mobile/android/keystore.properties
 
 # IP -> ulke veritabani (kurulumda indirilir)
 data/
+
+fly-deploy-token.txt

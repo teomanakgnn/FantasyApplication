@@ -142,7 +142,7 @@ async def post(request: Request, game_id: str, k: str = ""):
 
 # ==================== SESLI SOHBET / EKRAN PAYLASIMI: SINYAL ====================
 # Oda -> {peer_id: {"ws", "name", "uid", "mic", "sharing"}}. Tek sunucu, tek
-# islem (railway.json numReplicas = 1), bellekte tutmak yeterli.
+# islem (fly.toml: tek makine, --ha=false), bellekte tutmak yeterli.
 
 _rooms = {}
 _ids = count(1)

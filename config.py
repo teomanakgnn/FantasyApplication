@@ -1,7 +1,7 @@
 """
 Uygulama ayarlari.
 
-Sunucuda (Railway) ayarlar ortam degiskenlerinden gelir. Yerel
+Sunucuda (Fly.io) ayarlar ortam degiskenlerinden gelir. Yerel
 gelistirmede ortam degiskeni tanimli degilse eski Streamlit dosyasi
 (.streamlit/secrets.toml) okunur; boylece makinedeki mevcut sirlar
 tasinmadan calisir. Bu dosya depoya girmez (.gitignore).

@@ -113,7 +113,7 @@ def _retired_draft_pages():
 @app.get("/healthz", include_in_schema=False)
 def healthz():
     """
-    Railway yeni surume trafigi ancak burasi 200 donunce verir. Isinma
+    Sunucu (Fly.io) yeni surume trafigi ancak burasi 200 donunce verir. Isinma
     bitene kadar (en fazla 100 sn) 503: boylece her yayindan sonraki ilk
     ziyaretci ESPN verisinin cekilmesini beklemek zorunda kalmiyor.
     """
