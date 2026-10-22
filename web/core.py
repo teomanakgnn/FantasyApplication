@@ -288,6 +288,6 @@ templates.env.filters["faq_entity"] = lambda qa: {"@type": "Question", "name": q
                                                   "acceptedAnswer": {"@type": "Answer", "text": qa[1]}}
 templates.env.globals["min"] = min
 # Oyuncu fotografi: kimlikten (ESPN) ESPN headshot adresi
-templates.env.globals["face"] = lambda pid, w=64, h=47: (
+templates.env.globals["face"] = lambda pid, w=110, h=80: (
     f"https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{pid}.png&w={w}&h={h}" if pid else "/static/img/player.svg")
 templates.env.globals["max"] = max

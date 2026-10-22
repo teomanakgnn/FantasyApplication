@@ -378,7 +378,10 @@ def get_draft_board(weights=None):
         return board
     _ = BOARD_VERSION  # onbellek anahtarina girsin diye govdede geciyor
 
-    stats = get_nba_season_stats_official()
+    # Her zaman SON TAMAMLANMIS sezon: sezon basinda "en son verisi olan
+    # sezon" bu sezona (1-2 mac) geciyordu; Stat Match'te 25+ macli kimse
+    # kalmiyor, ipuclari ve tier list sifirlaniyordu.
+    stats = get_nba_season_stats_official(get_current_season_year() - 1)
     stat_columns = ["GP", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO",
                     "FGM", "FGA", "FTM", "FTA", "3Pts", "3PTA", "FG%", "FT%", "3P%"]
 
