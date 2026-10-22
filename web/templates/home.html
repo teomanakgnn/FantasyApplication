@@ -3,6 +3,12 @@
 {% from "partials/gate.html" import gate with context %}
 {% block title %}NBA Box Scores, Scores & Fantasy Stats 2026-27 · HoopLife NBA{% endblock %}
 {% block content %}
+<div class="card install-card" id="install-card" hidden>
+  <img src="/static/img/logo.png" alt="" width="52" height="52">
+  <div class="install-txt"><b>Get HoopLife on your home screen</b><span>One tap - opens like an app, full screen, no App Store needed.</span></div>
+  <button class="btn btn-primary" type="button" data-install>Add to Home Screen</button>
+  <button class="install-x" type="button" aria-label="Dismiss" data-install-dismiss>&times;</button>
+</div>
 <div class="page-head row-between">
   <div>
     <div class="eyebrow">2026-27 NBA season</div>

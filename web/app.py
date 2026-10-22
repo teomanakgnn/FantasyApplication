@@ -136,6 +136,40 @@ def terms(request: Request):
     return render(request, "legal.html", page="terms")
 
 
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest():
+    """Ana ekrana ekle (PWA): uygulama gibi tam ekran acilir."""
+    return JSONResponse({
+        "name": "HoopLife NBA", "short_name": "HoopLife", "id": "/", "start_url": "/?ref=pwa", "scope": "/",
+        "display": "standalone", "background_color": "#0B0F17", "theme_color": "#0B0F17",
+        "description": "NBA scores, box scores with shot charts, fantasy stats and daily NBA games.",
+        "icons": [
+            {"src": "/static/img/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/logo-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+        "shortcuts": [
+            {"name": "Scores", "url": "/nba/scores?ref=pwa"},
+            {"name": "Mystery Player", "url": "/daily?ref=pwa"},
+            {"name": "My League", "url": "/league?ref=pwa"},
+        ],
+    }, media_type="application/manifest+json")
+
+
+# Bilerek hicbir seyi onbellege almiyor: skorlar hep taze. Gorevi sitenin
+# "yuklenebilir uygulama" sayilmasi (bazi tarayicilar fetch dinleyicisi istiyor).
+_SW = """self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', () => {});
+"""
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return PlainTextResponse(_SW, media_type="application/javascript",
+                             headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/robots.txt", include_in_schema=False)
 def robots():
     base = config.SITE_URL.rstrip("/")

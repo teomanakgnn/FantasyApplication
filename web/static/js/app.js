@@ -341,5 +341,54 @@
 
   // Paylasim linklerine paylasanin davet kodu: linkle gelen uye olursa ikisi de Pro kazanir
   const inv = () => (window.HL_INV ? `&inv=${window.HL_INV}` : "");
+  // ---------------- ana ekrana ekle (PWA) ----------------
+  // Android / Chrome / Edge: tarayicinin kendi kurulum penceresi (tek dokunus).
+  // iPhone / iPad: Apple programla kuruluma izin vermiyor; adim adim yol gosterilir.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  let deferredInstall = null;
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ua = navigator.userAgent;
+  const ios = /iphone|ipad|ipod/i.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+  const inApp = /FBAN|FBAV|Instagram|Line\/|Twitter|TikTok|Snapchat/i.test(ua);
+  const dismissed = () => { try { return +localStorage.getItem("hl_install_x") > Date.now(); } catch (e) { return false; } };
+  function showInstall(on) {
+    $$("[data-install]").forEach((b) => { b.hidden = !on; });
+    const card = $("#install-card");
+    if (card) card.hidden = !on || dismissed();
+  }
+  if (!standalone) {
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; showInstall(true); });
+    if (ios) showInstall(true);
+  }
+  window.addEventListener("appinstalled", () => { showInstall(false); if (window.gtag) gtag("event", "pwa_installed"); });
+  const shareIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  document.addEventListener("click", async (e) => {
+    if (e.target.closest("[data-install-dismiss]")) {
+      try { localStorage.setItem("hl_install_x", String(Date.now() + 14 * 864e5)); } catch (err) { /* yok */ }
+      const card = $("#install-card"); if (card) card.hidden = true;
+      return;
+    }
+    if (!e.target.closest("[data-install]")) return;
+    if (window.gtag) gtag("event", "pwa_install_click", { ios });
+    if (deferredInstall) {
+      deferredInstall.prompt();
+      const choice = await deferredInstall.userChoice.catch(() => null);
+      deferredInstall = null;
+      if (choice && choice.outcome === "accepted") showInstall(false);
+      return;
+    }
+    openModal(inApp ? `
+      <div class="install-steps"><h2>Open in Safari first</h2>
+        <p>This app's browser can't add sites to your home screen. Tap <b>•••</b> and choose <b>Open in Safari</b> (or Chrome), then tap <b>Add to Home Screen</b> again.</p></div>` : ios ? `
+      <div class="install-steps"><h2>Add HoopLife to your home screen</h2>
+        <ol>
+          <li>Tap the <b>Share</b> button ${shareIcon} at the bottom of Safari (top right on iPad).</li>
+          <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+          <li>Tap <b>Add</b>. HoopLife opens like an app from your home screen.</li>
+        </ol></div>` : `
+      <div class="install-steps"><h2>Add HoopLife to your device</h2>
+        <p>Open your browser menu (<b>⋮</b> or <b>•••</b>) and choose <b>Install app</b> or <b>Add to Home Screen</b>.</p></div>`);
+  });
+
   window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate, inv, gate };
 })();

@@ -23,7 +23,12 @@
   <meta name="twitter:description" content="{{ page_desc|trim }}">
   <meta name="twitter:image" content="{{ site_url }}/static/img/social.png?v=2">
   <link rel="icon" href="/static/img/logo.png">
-  <link rel="apple-touch-icon" href="/static/img/logo.png">
+  <link rel="apple-touch-icon" href="/static/img/apple-touch-180.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="HoopLife">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -94,6 +99,7 @@
           <span class="chip {{ 'chip-pro' if pro else 'chip-free' }}">{{ 'PRO' if pro else 'FREE' }}</span>
         </div>
         <a href="/account#invite" class="nav-link nav-invite">Invite friends · get Pro</a>
+        <button type="button" class="nav-link nav-button" data-install hidden>Add to Home Screen</button>
         <a href="/watchlist" class="nav-link{% if active == 'watchlist' %} is-active{% endif %}">Watchlist</a>
         <a href="/account" class="nav-link{% if active == 'account' %} is-active{% endif %}">Account</a>
         <form method="post" action="/logout"><button class="nav-link nav-button" type="submit">Sign out</button></form>
