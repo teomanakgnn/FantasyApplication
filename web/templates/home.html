@@ -99,10 +99,10 @@
   {% endfor %}
 </div>
 
-<h3>Top 10</h3>
+<h3 class="share-h3"><span>Top 10</span><button class="btn btn-sm" type="button" data-share-board="top">📸 Share Top 10</button></h3>
 {{ player_table(top, decimals, show_games=period != 'today') }}
 {% if low %}
-<h3 style="margin-top:22px">Lowest 10 <span class="muted small" style="font-weight:500">· 20+ minutes</span></h3>
+<h3 class="share-h3" style="margin-top:22px"><span>Lowest 10 <span class="muted small" style="font-weight:500">· 20+ minutes</span></span><span class="row-gap"><button class="btn btn-sm" type="button" data-share-board="low">📸 Share Worst 10</button>{% if is_admin %} <button class="btn btn-sm" type="button" data-reddit-board="low" title="Admin only">Post to Reddit</button>{% endif %}</span></h3>
 {{ player_table(low, decimals, show_games=period != 'today') }}
 {% endif %}
 
@@ -150,6 +150,16 @@
 {% endblock %}
 
 {% block scripts %}
+{% if top %}
+<script>
+window.HL_BOARD = {{ {"top": top[:10], "low": low[:10], "period": period, "label": periods[period],
+  "day": (resolved.strftime('%A, %B ') ~ resolved.day) if resolved and period == 'today' else '',
+  "range": ((range_start.strftime('%b ') ~ range_start.day ~ ' - ' ~ range_end.strftime('%b ') ~ range_end.day) if range_start and range_end and period != 'today' else ''),
+  "build": (builds.get(build) or pro_builds.get(build) or ['Default'])[0]}|tojson }};
+</script>
+<script src="/static/js/share_card.js?v={{ asset_version }}"></script>
+<script src="/static/js/home_share.js?v={{ asset_version }}"></script>
+{% endif %}
 <script>
 (function () {
   const { api, toast, openModal, escapeHtml } = window.HL;

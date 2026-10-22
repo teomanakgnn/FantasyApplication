@@ -12,6 +12,7 @@ from services.nba_season import (get_season_label, get_season_start_date,
                                  is_offseason)
 from services import nba_pages
 from web import stats
+import config
 from web.core import current_user, is_pro, render, templates
 
 router = APIRouter()
@@ -120,6 +121,7 @@ def home(request: Request):
         builds=stats.PUNT_BUILDS, pro_builds=stats.PRO_PUNT_BUILDS,
         weights=weights, base_weights=stats.BASE_WEIGHTS, overrides=overrides,
         requested=requested, resolved=resolved, games=game_cards, spoiler=spoiler,
+        is_admin=bool(user and user.get("username") in config.ADMIN_USERNAMES),
         top=top, low=low, rows=rows, mvp=mvp, lvp=lvp, mvp_days=mvp_days,
         range_start=range_start, range_end=range_end, error=error,
         offseason_note=offseason_note, decimals=decimals,

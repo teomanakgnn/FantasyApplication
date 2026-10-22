@@ -400,3 +400,9 @@ a.pc-link:hover { color: var(--accent); }
 /* Oyuncu karti acikken pencere karta gore daralir */
 .modal:has(.pc) { max-width: min(600px, 100vw); }
 h2.card-title, h3.card-title { margin-top: 0; font-size: 1.05rem; }
+
+/* Paylasim onizlemesi (oyunlar ve ana sayfa) */
+.share-preview { text-align: center; }
+.share-preview img { width: 100%; max-width: 380px; border-radius: 14px; box-shadow: var(--shadow); }
+.share-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
+.share-h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

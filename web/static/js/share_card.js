@@ -61,9 +61,9 @@
     return { cv, g };
   }
 
-  function footer(g, path) {
+  function footer(g, path, tagline = "Can you beat it?") {
     g.fillStyle = "rgba(255,255,255,.06)"; g.fillRect(0, H - 110, W, 110);
-    text(g, "Can you beat it?", 60, H - 46, { weight: 800, size: 34 });
+    text(g, tagline, 60, H - 46, { weight: 800, size: 34 });
     text(g, `app.hooplifenba.com${path}`, W - 60, H - 46, { weight: 700, size: 30, color: C.muted, align: "right" });
   }
 
@@ -81,9 +81,10 @@
         <img src="${url}" alt="Share image">
         <div class="share-actions">
           <a class="btn btn-primary" href="${url}" download="${filename}">Download image</a>
+          <a class="btn" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Post on X</a>
           <button class="btn" type="button" data-copy>Copy link text</button>
         </div>
-        <p class="tiny dim">Post the image with the text so friends can play too.</p>
+        <p class="tiny dim">Download the image, then attach it to your post.</p>
       </div>`);
     const btn = document.querySelector("[data-copy]");
     if (btn) btn.addEventListener("click", async () => {
