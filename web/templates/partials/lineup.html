@@ -1,0 +1,40 @@
+{% if not p %}
+  <p class="muted">Pick your team above to see today's lineup.</p>
+{% else %}
+<section class="card lu-head">
+  <div>
+    <div class="eyebrow" style="margin:0">Today · {{ p.date }}</div>
+    <b>{{ p.team_name }}</b>
+    <div class="small muted">{{ p.playing }} of your players have a game today · starting {{ p.active_now }} of {{ p.starters }} spots with a game{% if p.active_best > p.active_now %} - best possible <b class="good">{{ p.active_best }}</b>{% endif %}</div>
+  </div>
+  <div class="lu-actions">
+    {% if is_admin and p.moves %}
+      {% if can_write %}<button class="btn btn-primary" type="button" data-set-lineup data-league="{{ league_id }}" data-team="{{ team }}">Set on ESPN ({{ p.moves|length }} move{{ 's' if p.moves|length != 1 }})</button>
+      {% else %}<span class="tiny dim">Admin: add ESPN_WRITE_S2 / ESPN_WRITE_SWID to enable one-click lineup.</span>{% endif %}
+    {% endif %}
+    <a class="btn" href="https://fantasy.espn.com/basketball/team?leagueId={{ league_id }}&teamId={{ team }}" target="_blank" rel="noopener">Open lineup on ESPN</a>
+  </div>
+</section>
+
+{% if p.warnings %}
+<div class="lu-notes">{% for w in p.warnings %}<div class="lu-note {{ 'go' if w.startswith('Start') else 'out' if w.startswith('Bench') else '' }}">{{ w }}</div>{% endfor %}</div>
+{% elif p.playing %}
+<div class="lu-notes"><div class="lu-note go">Your lineup is already the best one for today.</div></div>
+{% endif %}
+
+<div class="table-wrap" style="margin-top:10px"><table class="table small lu-table">
+  <thead><tr><th class="l">Slot</th><th class="l sticky-col">Player</th><th>Game today</th><th>Value</th></tr></thead>
+  <tbody>
+  {% for x in p.players %}{% set moved = x.slot != x.target %}
+    <tr class="{{ 'lu-idle' if not x.plays }} {{ 'lu-moved' if moved }}">
+      <td class="l"><b>{{ x.target_name }}</b>{% if moved %}<div class="tiny dim">now {{ x.slot_name }}</div>{% endif %}</td>
+      <td class="l sticky-col"><span class="pface"><img src="{{ face(x.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><span class="player-name">{{ x.name }}</span>
+        <div class="tiny dim">{{ x.team }}{% if x.injury not in ('ACTIVE', 'NORMAL') %} · <span class="bad">{{ x.injury|replace('_', ' ')|lower }}</span>{% endif %}</div></td>
+      <td>{% if x.game %}<b>{{ x.opp }}</b> <span class="dim small">{% if x.locked %}started{% elif x.tip %}<span data-tip="{{ x.tip }}"></span>{% endif %}</span>{% else %}<span class="dim">-</span>{% endif %}</td>
+      <td>{{ x.value }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="tiny dim" style="margin-top:6px">Suggested lineup: every player with a game today gets a starting spot he is eligible for, best projected value first (ESPN projection + last 15 days). Players whose game has started stay where they are. Times are your local time.</p>
+{% endif %}

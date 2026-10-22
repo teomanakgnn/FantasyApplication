@@ -66,3 +66,13 @@
 .wk-pred { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 .wk-pred .input { width: auto; min-height: 36px; padding: 4px 30px 4px 10px; }
 @media (max-width: 480px) { .wk-list { grid-template-columns: 1fr; } }
+
+/* Gunun kadrosu (My League) */
+.lu-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.lu-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.lu-note { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: .9rem; }
+.lu-note.go { border-color: color-mix(in srgb, var(--good) 50%, transparent); }
+.lu-note.out { border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.lu-table tr.lu-idle td { opacity: .5; }
+.lu-table tr.lu-moved td:first-child b { color: var(--accent); }

@@ -68,6 +68,10 @@ YAHOO_CLIENT_SECRET = get("YAHOO_CLIENT_SECRET")
 
 ESPN_S2 = get("ESPN_S2") or get("espn_s2")
 ESPN_SWID = get("ESPN_SWID") or get("swid")
+# Yalnizca yoneticinin kadrosunu ESPN'de dizmek icin (okuma cerezlerinden ayri:
+# boylece yoneticinin ozel ligleri baskalarinin sorgularinda acilmaz)
+ESPN_WRITE_S2 = get("ESPN_WRITE_S2")
+ESPN_WRITE_SWID = get("ESPN_WRITE_SWID")
 
 # E-posta (Resend). Anahtar yoksa sifre sifirlama ve hata bildirimi kapali.
 RESEND_API_KEY = get("RESEND_API_KEY")

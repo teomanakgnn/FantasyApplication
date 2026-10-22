@@ -449,6 +449,44 @@ def _dashboard(request, user):
     return render(request, "league_home.html", active="league", cards=cards, yahoo_ready=_yahoo_ready())
 
 
+# ==================== GUNUN KADROSU ====================
+
+@router.get("/api/league/{league_id}/today")
+def league_today(request: Request, league_id: int, team: int = 0):
+    from fastapi.responses import HTMLResponse
+    from services import lineup
+    from services.league_insights import league_data
+    from web.core import templates
+    try:
+        _, season, _ = league_data(int(league_id))
+        plan = lineup.plan(league_id, season, team) if team else None
+    except Exception as exc:
+        print(f"today lineup failed: {exc}")
+        return HTMLResponse('<p class="muted">Today\'s lineup could not be loaded. Try again shortly.</p>')
+    return templates.TemplateResponse(request, "partials/lineup.html", {
+        "p": plan, "league_id": league_id, "team": team, "is_admin": _is_admin(request),
+        "can_write": bool(config.ESPN_WRITE_S2 and config.ESPN_WRITE_SWID)})
+
+
+@router.post("/api/league/{league_id}/set-lineup")
+async def league_set_lineup(request: Request, league_id: int):
+    from fastapi.responses import JSONResponse
+    if not _is_admin(request):
+        return JSONResponse({"error": "Not available."}, 403)
+    if not (config.ESPN_WRITE_S2 and config.ESPN_WRITE_SWID):
+        return JSONResponse({"error": "ESPN cookies are not set on the server."}, 400)
+    b = await request.json()
+    from services import lineup
+    from services.league_insights import league_data
+    try:
+        _, season, _ = league_data(int(league_id))
+        ok, message, n = lineup.apply(league_id, season, int(b["team"]), config.ESPN_WRITE_S2, config.ESPN_WRITE_SWID)
+    except Exception as exc:
+        print(f"set lineup failed: {exc}")
+        return JSONResponse({"error": f"Could not set the lineup: {exc}"[:200]}, 502)
+    return {"ok": ok, "message": message, "moves": n} if ok else JSONResponse({"error": message}, 502)
+
+
 @router.get("/league/my/{league_id}")
 def my_league(request: Request, league_id: int):
     gate = login_required(request)

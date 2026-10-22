@@ -105,6 +105,7 @@
 
 {% if standings is not none or matchups %}
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
+  {% if platform == 'espn' and team %}<button class="tab" data-tab="today">Today</button>{% endif %}
   {% if wk %}<button class="tab" data-tab="week">This week</button>{% endif %}
   {% if insights %}<button class="tab" data-tab="insights">Insights</button>{% endif %}
   <button class="tab" data-tab="standings">Standings</button>
@@ -113,6 +114,12 @@
   <button class="tab" data-tab="roto">Roto</button>
   {% if platform == 'yahoo' %}<button class="tab" data-tab="trade">Trade</button>{% endif %}
 </div>
+
+{% if platform == 'espn' and team %}
+<div class="tab-panel" data-panel-of="league" data-panel="today">
+  <div id="lu-box" data-src="/api/league/{{ league_id }}/today?team={{ team }}"><div class="spinner"></div></div>
+</div>
+{% endif %}
 
 {% if wk %}
 <div class="tab-panel" data-panel-of="league" data-panel="week">
@@ -307,6 +314,34 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script>
+(function () {
+  // Gunun kadrosu: sayfa acildiktan sonra yuklenir (ESPN cagrisi sayfayi bekletmesin)
+  const box = document.getElementById("lu-box");
+  if (!box) return;
+  const { api, toast } = window.HL;
+  const load = async () => {
+    try { box.innerHTML = await api(box.dataset.src); } catch (e) { box.innerHTML = `<p class="muted">${window.HL.escapeHtml(e.message)}</p>`; }
+    box.querySelectorAll("[data-tip]").forEach((el) => {
+      const d = new Date(el.dataset.tip);
+      el.textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    });
+  };
+  box.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-set-lineup]");
+    if (!btn) return;
+    if (!confirm("Set this lineup on ESPN now?")) return;
+    btn.classList.add("is-loading");
+    try {
+      const r = await api(`/api/league/${btn.dataset.league}/set-lineup`, { method: "POST", body: { team: +btn.dataset.team } });
+      toast(r.message);
+      load();
+    } catch (err) { toast(err.message, true); }
+    finally { btn.classList.remove("is-loading"); }
+  });
+  load();
+})();
+</script>
 {% if wk %}
 <script>
 (function () {
