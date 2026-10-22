@@ -18,7 +18,7 @@
         <tbody>
         {% for p in players %}
           <tr>
-            <td class="l sticky-col">{% if p.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ game_id }}/{{ p.ID }}?final={{ final }}" title="Shot chart and stat card">{{ p.PLAYER }}</a>{% else %}<span class="player-name">{{ p.PLAYER }}</span>{% endif %}{% if p.PLAYER in watch %} <span class="chip chip-good">Watching</span>{% endif %}</td>
+            <td class="l sticky-col"><img class="pface" src="{{ face(p.ID) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">{% if p.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ game_id }}/{{ p.ID }}?final={{ final }}" title="Shot chart and stat card">{{ p.PLAYER }}</a>{% else %}<span class="player-name">{{ p.PLAYER }}</span>{% endif %}{% if p.PLAYER in watch %} <span class="chip chip-good">Watching</span>{% endif %}</td>
             <td>{{ p.MIN }}</td><td><b>{{ p.PTS }}</b></td><td>{{ p.REB }}</td><td>{{ p.AST }}</td>
             <td>{{ p.STL }}</td><td>{{ p.BLK }}</td><td>{{ p.TO }}</td>
             <td>{{ p.FGM }}-{{ p.FGA }}</td><td>{{ p['3Pts'] }}-{{ p['3PTA'] }}</td><td>{{ p.FTM }}-{{ p.FTA }}</td>

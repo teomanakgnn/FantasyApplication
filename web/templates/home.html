@@ -40,14 +40,21 @@
 
 <div class="row-between" style="margin:22px 0 10px">
   <h2 style="margin:0">Games{% if resolved %} <span class="muted small" style="font-weight:600">· {{ resolved.strftime('%A, %B %d, %Y') }}</span>{% endif %}</h2>
-  {% if user %}
-  <span class="small muted">{{ 'Scores hidden until you tap' if spoiler else '' }}</span>
-  {% endif %}
+  <div class="row-between" style="gap:10px">
+    {% if user and spoiler %}<span class="small muted">Scores hidden until you tap</span>{% endif %}
+    {% if games %}<div class="seg seg-sm" id="games-view" role="group" aria-label="Game layout"><button type="button" data-view="list" class="is-on">List</button><button type="button" data-view="grid">Grid</button></div>{% endif %}
+  </div>
 </div>
 {% if games %}
 <div class="games" id="games">
   {% for g in games %}
   <div class="game">
+    <div class="game-mini" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}" role="button" tabindex="0">
+      <div class="gm-st">{{ g.status }}</div>
+      {% for side in ('away', 'home') %}{% set sc, other = (g.away_score, g.home_score) if side == 'away' else (g.home_score, g.away_score) %}
+      <div class="gm-r {{ 'won' if g.final and (sc|int) > (other|int) }}"><img src="{{ g[side ~ '_logo'] }}" alt="" loading="lazy"><span>{{ g[side ~ '_team'] }}</span><b class="{{ 'gm-hide' if spoiler and g.final }}">{{ sc }}</b></div>
+      {% endfor %}
+    </div>
     <div class="game-top">
       <span>{{ g.status }}</span>
       {% if g.excitement %}<span class="excite" style="background:{{ g.excite_color }}" title="Excitement score">{{ g.excitement }}</span>{% endif %}
@@ -179,6 +186,20 @@ window.HL_BOARD = {{ {"top": top[:10], "low": low[:10], "period": period, "label
       openModal(await api("/api/insight", { method: "POST", body: JSON.parse(el.dataset.row) }));
     } catch (err) { openModal(`<p class="bad">${escapeHtml(err.message)}</p>`); }
   });
+
+  // Mac listesi: liste / izgara (tercih tarayicida kalir)
+  const gv = document.getElementById("games-view"), gl = document.getElementById("games");
+  if (gv && gl) {
+    const setView = (v) => {
+      gl.classList.toggle("is-grid", v === "grid");
+      gv.querySelectorAll("button").forEach((b) => b.classList.toggle("is-on", b.dataset.view === v));
+      try { localStorage.setItem("hl_games_view", v); } catch (e) { /* yok */ }
+    };
+    let saved = "list";
+    try { saved = localStorage.getItem("hl_games_view") || "list"; } catch (e) { /* yok */ }
+    setView(saved);
+    gv.addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
+  }
 
   // Spoiler: dokununca skoru ac
   document.querySelectorAll(".hidden-score").forEach((el) => {

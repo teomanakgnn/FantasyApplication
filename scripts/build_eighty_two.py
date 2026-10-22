@@ -42,12 +42,39 @@ def season(year):
     return year, rows
 
 
+def _base_fg(pos):
+    """Mevkiye gore beklenen FG% (uzunlar pota dibinden atar)."""
+    pos = pos or ""
+    if "C" in pos or pos == "PF":
+        return 51
+    return 44 if ("G" in pos and "F" not in pos) else 47
+
+
 def value(p):
-    # Kaba bir "mac basi etki": skor, ribaund, asist ve savunma; az mac
-    # oynayan biraz geriye duser.
-    base = p["pts"] + 1.1 * p["reb"] + 1.6 * p["ast"] + 2.2 * p["stl"] + 2.0 * p["blk"]
-    base += max(0.0, p["fg"] - 45) * 0.15 * p["pts"] / 10
+    # Kaba bir "mac basi etki": skor, ribaund, asist ve savunma. Verim iki
+    # yonlu: mevkisine gore isabetli atan kazanir, cok atip az sokan kaybeder
+    # (eski formul hacmi ve ribaundu odullendiriyordu: Drummond = MVP Curry).
+    # Az mac oynayan biraz geriye duser.
+    base = p["pts"] + 0.85 * p["reb"] + 1.5 * p["ast"] + 2.0 * p["stl"] + 1.6 * p["blk"]
+    base += (p["fg"] - _base_fg(p.get("pos"))) * 0.25 * p["pts"] / 10
     return base * (0.8 + 0.2 * min(p["gp"], 70) / 70)
+
+
+EXPONENT = 4.5   # buyudukce ust dilim seyreklesir (90+ ve 95+ daha az)
+
+
+def rescore():
+    """Mevcut veri dosyasindaki istatistiklerden OVR'leri yeniden hesapla (ESPN'e gitmeden)."""
+    import bisect
+    with open(OUT, encoding="utf-8") as fh:
+        data = json.load(fh)
+    allp = [p for t in data["teams"] for p in t["players"]]
+    vals = sorted(value(p) for p in allp)
+    for p in allp:
+        p["ovr"] = int(round(55 + 44 * (bisect.bisect_left(vals, value(p)) / len(vals)) ** EXPONENT))
+    with open(OUT, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, separators=(",", ":"))
+    print("rescored", len(allp), "player-seasons")
 
 
 def main():
@@ -62,7 +89,7 @@ def main():
         # yuzdelik -> 55..99; ust dilim seyrek: %90 = 84, %99 = 97, 99 yalniz en tepe
         import bisect
         q = bisect.bisect_left(vals, v) / n
-        return int(round(55 + 44 * q ** 4))
+        return int(round(55 + 44 * q ** EXPONENT))
 
     teams = []
     for year, rows in sorted(seasons.items()):
@@ -84,4 +111,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    rescore() if "--rescore" in sys.argv else main()

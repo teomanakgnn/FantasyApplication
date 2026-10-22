@@ -153,6 +153,7 @@
 
   <script>window.HL_INV = {{ (invite or '')|tojson }}; window.HL_PUZZLES = {{ (puzzles or {})|tojson }}; window.HL_STREAKS = {{ streaks|tojson }};</script>
   <script src="/static/js/app.js?v={{ asset_version }}"></script>
+  <script src="/static/js/player_share.js?v={{ asset_version }}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

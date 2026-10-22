@@ -90,6 +90,22 @@ def path_for(game_id):
     return f"/nba/game/{game_id}/{game_slug(side.get('away'), side.get('home'))}"
 
 
+def game_meta(game_id):
+    """Kart ve paylasim icin kisa mac bilgisi: takimlar, skor, tarih, sayfa."""
+    comp = ((_summary(game_id).get("header") or {}).get("competitions") or [{}])[0]
+    side = {}
+    for c in comp.get("competitors") or []:
+        side[c.get("homeAway")] = {"abbr": (c.get("team") or {}).get("abbreviation"), "score": c.get("score") or ""}
+    try:
+        when = datetime.fromisoformat(comp["date"].replace("Z", "+00:00")).astimezone(EASTERN)
+        day = f"{when:%b} {when.day}, {when.year}"
+    except (KeyError, ValueError):
+        day = ""
+    a, h = side.get("away") or {}, side.get("home") or {}
+    return {"away": a.get("abbr"), "home": h.get("abbr"), "away_score": a.get("score"), "home_score": h.get("score"),
+            "date": day, "path": f"/nba/game/{game_id}/{game_slug(a.get('abbr'), h.get('abbr'))}"}
+
+
 def game(game_id):
     """Mac sayfasi verisi: takimlar, ceyrekler, liderler, kutu skor, takim sut haritalari, ozet."""
     from web import stats

@@ -406,3 +406,30 @@ h2.card-title, h3.card-title { margin-top: 0; font-size: 1.05rem; }
 .share-preview img { width: 100%; max-width: 380px; border-radius: 14px; box-shadow: var(--shadow); }
 .share-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
 .share-h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+/* Mac listesi: izgara gorunumu (daha cok skor ayni anda) */
+.seg-sm button { padding: 5px 12px; font-size: .8rem; }
+.game-mini { display: none; }
+.games.is-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.games.is-grid .game { padding: 8px 10px; gap: 0; }
+.games.is-grid .game > :not(.game-mini) { display: none; }
+.games.is-grid .game-mini { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
+.games.is-grid .game:hover { border-color: var(--line-strong); }
+.gm-st { font-size: .66rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-r { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+.gm-r img { width: 20px; height: 20px; object-fit: contain; }
+.gm-r span { flex: 1; font-weight: 700; }
+.gm-r b { font-variant-numeric: tabular-nums; font-weight: 800; }
+.gm-r.won { color: var(--text); }
+.gm-r.won b { font-weight: 900; }
+.gm-hide { filter: blur(6px); }
+@media (max-width: 640px) {
+  .games.is-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  .games.is-grid .game { padding: 7px 8px; }
+  .gm-r { font-size: .8rem; gap: 4px; }
+  .gm-r img { width: 17px; height: 17px; }
+}
+
+/* Tablolarda isim yaninda kucuk oyuncu fotografi */
+.pface { width: 30px; height: 22px; object-fit: cover; border-radius: 6px; background: var(--surface-2); vertical-align: middle; margin-right: 7px; flex: none; }
+.ww-chips a .pface { align-self: center; }

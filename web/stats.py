@@ -550,11 +550,12 @@ def player_game_card(game_id, player_id, final=True):
     except Exception:
         slug = None
     try:
-        page = nba_pages.path_for(game_id)
+        meta = nba_pages.game_meta(game_id)
+        page = meta["path"]
     except Exception:
-        page = f"/nba/game/{game_id}"
+        meta, page = {}, f"/nba/game/{game_id}"
     return {"id": str(player_id), "name": p.get("PLAYER"), "team": p.get("TEAM"), "min": p.get("MIN"),
-            "fp": round(fantasy_score(p, BASE_WEIGHTS), 1), "slug": slug, "game_page": page,
+            "fp": round(fantasy_score(p, BASE_WEIGHTS), 1), "slug": slug, "game_page": page, "meta": meta,
             "pm": p.get("+/-"), "oreb": p.get("OREB"), "pf": p.get("PF"), "headshot": headshot(player_id),
             "cats": cats, "shots": shots, "zones": zones,
             "made": sum(s["made"] for s in shots), "missed": sum(not s["made"] for s in shots)}

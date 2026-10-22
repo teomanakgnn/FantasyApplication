@@ -64,7 +64,7 @@
   <div class="table-wrap"><table class="table small nb-box">
     <thead><tr><th class="l sticky-col">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th><th>FP</th></tr></thead>
     <tbody>{% for r in rows %}<tr>
-      <td class="l sticky-col">{% if r.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ g.id }}/{{ r.ID }}?final={{ 1 if g.final else 0 }}">{{ r.PLAYER }}</a>{% else %}{{ r.PLAYER }}{% endif %}{% set sl = player_slug(r.PLAYER) %}{% if sl %} <a class="nb-plink" href="/players/{{ sl }}" title="{{ r.PLAYER }} stats and game log">›</a>{% endif %}</td>
+      <td class="l sticky-col"><img class="pface" src="{{ face(r.ID) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'">{% if r.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ g.id }}/{{ r.ID }}?final={{ 1 if g.final else 0 }}">{{ r.PLAYER }}</a>{% else %}{{ r.PLAYER }}{% endif %}{% set sl = player_slug(r.PLAYER) %}{% if sl %} <a class="nb-plink" href="/players/{{ sl }}" title="{{ r.PLAYER }} stats and game log">›</a>{% endif %}</td>
       <td>{{ r.MIN }}</td><td><b>{{ r.PTS }}</b></td><td>{{ r.REB }}</td><td>{{ r.AST }}</td><td>{{ r.STL }}</td><td>{{ r.BLK }}</td><td>{{ r.TO }}</td>
       <td>{{ r.FGM }}-{{ r.FGA }}</td><td>{{ r['3Pts'] }}-{{ r['3PTA'] }}</td><td>{{ r.FTM }}-{{ r.FTA }}</td><td>{{ r['+/-'] }}</td><td><b>{{ r.FP }}</b></td>
     </tr>{% endfor %}</tbody>
