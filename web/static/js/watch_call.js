@@ -191,7 +191,7 @@
     const meMic = !!(mic && mic.getAudioTracks()[0]?.enabled);
     const chip = (id, name, micOn, sharing, state) => `
       <span class="wp-person ${state === "connecting" ? "connecting" : ""}" data-id="${id}" title="${state || ""}">
-        <i>${h(name.slice(0, 1).toUpperCase())}</i><b>${h(name)}</b><em>${micOn ? "🎙️" : "🔇"}${sharing ? " 🖥️" : ""}</em></span>`;
+        <i>${h(name.slice(0, 1).toUpperCase())}</i><b>${h(name)}</b><em>${micOn ? "mic" : "muted"}${sharing ? " · sharing" : ""}</em></span>`;
     box.innerHTML = chip("me", "You", meMic, !!screen) +
       [...peers.entries()].map(([id, p]) => {
         const st = p.pc.connectionState;
@@ -228,7 +228,7 @@
 
   function renderMic() {
     const on = !!(mic && mic.getAudioTracks()[0]?.enabled);
-    btn("wp-mic").textContent = on ? "🎙️ Mic on" : "🔇 Mic off";
+    btn("wp-mic").textContent = on ? "Mic on" : "Mic off";
     btn("wp-mic").classList.toggle("btn-primary", on);
   }
 
@@ -258,7 +258,7 @@
   }
 
   function renderShare() {
-    btn("wp-share").textContent = screen ? "⏹️ Stop sharing" : "🖥️ Share screen";
+    btn("wp-share").textContent = screen ? "Stop sharing" : "Share screen";
     btn("wp-share").classList.toggle("btn-primary", !!screen);
   }
 

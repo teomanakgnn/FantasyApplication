@@ -50,30 +50,57 @@
   function shareText(kind) {
     const list = (kind === "low" ? B.low : B.top).slice(0, 3);
     const when = B.period === "today" ? (B.day || "last night") : B.label.toLowerCase();
-    const head = kind === "low" ? `Worst fantasy nights - ${when} 📉` : `Top fantasy performances - ${when} 🔥`;
+    const head = kind === "low" ? `Worst fantasy nights - ${when}` : `Top fantasy performances - ${when}`;
     const lines = list.map((p, i) => `${i + 1}. ${p.player} ${num(p.score, 1)}`);
     return `${head}\n${lines.join("\n")}\n\nFull list: ${location.origin}/?ref=top10-share${window.HL.inv()}`;
   }
 
-  // Yonetici: en kotu 10'u r/fantasybball'a hazir metin gonderisi olarak ac
-  // (Reddit linkle resim eklemeye izin vermiyor; tablo + site linki).
+  // Yonetici: listeyi r/fantasybball'in "Player Discussion" bicimiyle hazir
+  // tablo gonderisi olarak acar (Reddit linkle resim eklemeye izin vermiyor).
+  const espnScore = (p) => p.pts + p.tpm + 2 * p.fgm - p.fga + p.ftm - p.fta + p.reb + 2 * p.ast + 4 * p.stl + 4 * p.blk - 2 * p.to;
+
+  function longDate() {
+    if (!B.date) return B.label;
+    const d = new Date(B.date + "T12:00:00");
+    const n = d.getDate(), sfx = (n % 100 >= 11 && n % 100 <= 13) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th");
+    return `${d.toLocaleDateString("en-US", { month: "long" })} ${n}${sfx}, ${d.getFullYear()}`;
+  }
+
+  // Ust liste: buyuk sayilara alev; alt liste: kotu sayilara buz / kafatasi
+  function hot(v, cat) {
+    const t = { pts: [30, 40], reb: [12, 15], ast: [10, 13], stl: [3, 5], blk: [3, 5], tpm: [5, 8] }[cat];
+    if (!t || v < t[0]) return "";
+    if (cat === "tpm" && v >= t[1]) return "🚀🔥";
+    return v >= t[1] ? "🔥🔥" : "🔥";
+  }
+
   function redditPost(kind) {
     const low = kind === "low";
     const list = (low ? B.low : B.top).slice(0, 10);
-    const d = B.period === "today" ? 0 : 1;
-    const when = B.period === "today" ? (B.day || "last night") : `${B.label}${B.range ? " (" + B.range + ")" : ""}`;
-    const title = low ? `Worst fantasy nights - ${when} (20+ min)` : `Best fantasy nights - ${when}`;
-    const rows = list.map((p, i) => `| ${i + 1} | ${p.player} | ${p.team} | ${num(p.pts, d)} | ${num(p.reb, d)} | ${num(p.ast, d)} | ` +
-      `${num(p.stl, d)} | ${num(p.blk, d)} | ${num(p.tpm, d)} | ${num(p.to, d)} | ${num(p.fgm, d)}-${num(p.fga, d)} | **${num(p.score, 1)}** |`);
+    const avg = B.period !== "today";
+    const f = (v) => (avg ? num(v, 1) : String(Math.round(v)));
+    const when = avg ? `${B.label}${B.range ? " (" + B.range + ")" : ""}` : longDate();
+    const star = list[0] ? list[0].player : "";
+    const title = low ? `🧊 📉 Bottom 10 Player Discussion - ${star} Night 📉 🧊 - ${when}`
+                      : `🔥 🚀 Top 10 Player Discussion - ${star} Night 🚀 🔥 - ${when}`;
+    const rows = list.map((p, i) => {
+      const fgBad = low && p.fga >= 8 && p.fgm / p.fga < 0.3 ? " 🧊" : "";
+      const toBad = low && p.to >= 5 ? " 💀" : "";
+      const ptsBad = low && p.pts <= 4 ? " 🧊" : "";
+      const ftBad = low && p.fta - p.ftm >= 3 ? " 🧱" : "";
+      const h = (v, c) => (low ? "" : hot(v, c));
+      return `| ${i + 1} | ${p.player} | ${p.pos || "-"} | ${f(p.min)} mins | ${f(p.fgm)}-${f(p.fga)}${fgBad} | ${f(p.ftm)}-${f(p.fta)}${ftBad} | ` +
+        `${f(p.tpm)}${h(p.tpm, "tpm")} | ${f(p.reb)}${h(p.reb, "reb")} | ${f(p.ast)}${h(p.ast, "ast")} | ${f(p.stl)}${h(p.stl, "stl")} | ` +
+        `${f(p.blk)}${h(p.blk, "blk")} | ${f(p.to)}${toBad} | ${f(p.pts)}${h(p.pts, "pts")}${ptsBad} | ${num(p.score, 1)} | ${f(espnScore(p))} |`;
+    });
     const body = [
-      low ? `The ten worst fantasy lines${B.period === "today" ? "" : " (per game)"} among players with 20+ minutes:` :
-            `The ten best fantasy lines${B.period === "today" ? "" : " (per game)"}:`,
+      `Hello r/fantasybball! Here are the ${low ? "bottom" : "top"} 10 performing players for ${when}${low ? " (20+ minutes)" : ""}${avg ? ", per game" : ""}!`,
       "",
-      "| # | Player | Team | PTS | REB | AST | STL | BLK | 3PM | TO | FG | Score |",
-      "|---|---|---|---|---|---|---|---|---|---|---|---|",
+      "| Rank | Player | Pos | Time | FG | FT | 3PT | REB | AST | STL | BLK | TOV | PTS | Night Score | ESPN Score |",
+      "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
       ...rows,
       "",
-      "Score = HoopLife 9-cat weighted fantasy points (makes and misses count, turnovers cost).",
+      "Night Score = 9-cat weighted value (makes and misses count, turnovers cost). ESPN Score = ESPN standard points scoring.",
       "",
       `Full list, box scores and shot charts: ${location.origin}/?ref=reddit`,
     ].join("\n");

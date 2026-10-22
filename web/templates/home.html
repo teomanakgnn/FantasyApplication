@@ -99,10 +99,10 @@
   {% endfor %}
 </div>
 
-<h3 class="share-h3"><span>Top 10</span><button class="btn btn-sm" type="button" data-share-board="top">📸 Share Top 10</button></h3>
+<h3 class="share-h3"><span>Top 10</span><span><button class="btn btn-sm" type="button" data-share-board="top">Share Top 10</button>{% if is_admin %} <button class="btn btn-sm" type="button" data-reddit-board="top" title="Admin only">Post to Reddit</button>{% endif %}</span></h3>
 {{ player_table(top, decimals, show_games=period != 'today') }}
 {% if low %}
-<h3 class="share-h3" style="margin-top:22px"><span>Lowest 10 <span class="muted small" style="font-weight:500">· 20+ minutes</span></span><span class="row-gap"><button class="btn btn-sm" type="button" data-share-board="low">📸 Share Worst 10</button>{% if is_admin %} <button class="btn btn-sm" type="button" data-reddit-board="low" title="Admin only">Post to Reddit</button>{% endif %}</span></h3>
+<h3 class="share-h3" style="margin-top:22px"><span>Lowest 10 <span class="muted small" style="font-weight:500">· 20+ minutes</span></span><span class="row-gap"><button class="btn btn-sm" type="button" data-share-board="low">Share Worst 10</button>{% if is_admin %} <button class="btn btn-sm" type="button" data-reddit-board="low" title="Admin only">Post to Reddit</button>{% endif %}</span></h3>
 {{ player_table(low, decimals, show_games=period != 'today') }}
 {% endif %}
 
@@ -154,6 +154,7 @@
 <script>
 window.HL_BOARD = {{ {"top": top[:10], "low": low[:10], "period": period, "label": periods[period],
   "day": (resolved.strftime('%A, %B ') ~ resolved.day) if resolved and period == 'today' else '',
+  "date": resolved.isoformat() if resolved else '',
   "range": ((range_start.strftime('%b ') ~ range_start.day ~ ' - ' ~ range_end.strftime('%b ') ~ range_end.day) if range_start and range_end and period != 'today' else ''),
   "build": (builds.get(build) or pro_builds.get(build) or ['Default'])[0]}|tojson }};
 </script>
@@ -245,8 +246,8 @@ window.HL_BOARD = {{ {"top": top[:10], "low": low[:10], "period": period, "label
         // Spoiler'siz paylasim: soru ve cevap yok, yalnizca sonuc ve seri
         document.getElementById("trivia-share").addEventListener("click", async () => {
           const day = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          const streakTxt = res.streak ? ` - ${res.streak} day streak 🔥` : "";
-          const text = `HoopLife Daily Trivia (${day}) ${res.correct ? "✅" : "❌"}${streakTxt}\n${location.origin}/?ref=trivia-share${window.HL.inv()}`;
+          const streakTxt = res.streak ? ` - ${res.streak} day streak` : "";
+          const text = `HoopLife Daily Trivia (${day}) ${res.correct ? "- got it" : "- missed it"}${streakTxt}\n${location.origin}/?ref=trivia-share${window.HL.inv()}`;
           if (window.gtag) gtag("event", "trivia_share");
           if (navigator.share && matchMedia("(pointer: coarse)").matches) {
             try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }

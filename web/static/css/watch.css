@@ -84,7 +84,7 @@
 .wp-people { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 0; }
 .wp-person { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .82rem; transition: box-shadow .12s; }
 .wp-person i { font-style: normal; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 900; font-size: .75rem; }
-.wp-person em { font-style: normal; font-size: .8rem; }
+.wp-person em { font-style: normal; font-size: .7rem; color: var(--muted); font-weight: 700; }
 .wp-person.speaking { box-shadow: 0 0 0 2px var(--good); border-color: var(--good); }
 .wp-person.connecting { opacity: .55; }
 .wp-ctrls { display: flex; gap: 6px; flex-wrap: wrap; }

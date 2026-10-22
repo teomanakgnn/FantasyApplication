@@ -110,7 +110,7 @@ def _roster_index():
     for name, info in (rosters or {}).items():
         if isinstance(info, dict):
             index[_norm(name)] = {"team": info.get("team"), "id": info.get("id"),
-                                  "name": name}
+                                  "name": name, "pos": info.get("pos")}
         else:
             index[_norm(name)] = {"team": info, "id": None, "name": name}
     return index
@@ -332,6 +332,9 @@ def mvp_lvp(daily, weights, top=10, min_minutes=20):
 def table_rows(df, decimals):
     """DataFrame -> sablonun kullandigi sade sozlukler."""
     out = []
+    index = _roster_index()
+    # ESPN mevkisi -> kisa grup (Reddit tablosu ve kartlar icin)
+    group = {"PG": "G", "SG": "G", "G": "G", "SF": "F", "PF": "F", "F": "F", "C": "C"}
     for _, r in df.iterrows():
         def num(key):
             try:
@@ -340,6 +343,7 @@ def table_rows(df, decimals):
                 return 0.0
         out.append({
             "player": r.get("PLAYER", ""),
+            "pos": group.get((index.get(_norm(r.get("PLAYER", ""))) or {}).get("pos") or "", ""),
             "team": r.get("TEAM", "") if not isinstance(r.get("TEAM"), dict) else r["TEAM"].get("team", ""),
             "id": None if pd.isna(r.get("PLAYER_ID")) else r.get("PLAYER_ID"),
             "photo": headshot(None if pd.isna(r.get("PLAYER_ID")) else r.get("PLAYER_ID")),
