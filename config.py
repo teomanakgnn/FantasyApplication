@@ -91,6 +91,9 @@ SECRET_KEY = get("SECRET_KEY") or ("hl-" + (get("DB_PASSWORD") or "dev"))
 # Kayit formunda bot korumasi (Cloudflare Turnstile). Anahtarlar yoksa kapali.
 TURNSTILE_SITE_KEY = get("TURNSTILE_SITE_KEY")
 TURNSTILE_SECRET_KEY = get("TURNSTILE_SECRET_KEY")
+# Google ile giris (Google Cloud Console > OAuth client, Web application)
+GOOGLE_CLIENT_ID = get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = get("GOOGLE_CLIENT_SECRET")
 
 # Hesap panelinde "Grant Pro" formunu gorebilen kullanici adlari.
 ADMIN_USERNAMES = {u.strip() for u in (get("ADMIN_USERNAMES", "admin") or "").split(",")

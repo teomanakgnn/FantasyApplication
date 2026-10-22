@@ -7,7 +7,8 @@ from fastapi.responses import RedirectResponse
 
 from services import nba_pages as nb
 from services import player_pages as pp
-from web.core import render
+from web import stats
+from web.core import current_user, render
 
 router = APIRouter()
 
@@ -60,7 +61,9 @@ def game_page(request: Request, game_id: str, slug: str):
     if request.url.path != g["path"]:
         return RedirectResponse(g["path"], 301)
     _, by_slug = pp.table()
+    rows = [r for _, lst in g["box"] for r in lst]
     return render(request, "nba_game.html", active="scores", g=g,
+                  open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
 
 

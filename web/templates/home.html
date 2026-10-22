@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import player_table %}
+{% from "partials/gate.html" import gate with context %}
 {% block title %}NBA Box Scores, Scores & Fantasy Stats 2026-27 · HoopLife NBA{% endblock %}
 {% block content %}
 <div class="page-head row-between">
@@ -116,8 +117,12 @@
 <details class="more" style="margin-top:16px">
   <summary>Every player ({{ rows|length }})</summary>
   <div class="more-body">
+    {% if user %}
     <input class="input" type="search" placeholder="Search players or teams" id="player-search" style="margin-bottom:10px">
     {{ player_table(rows, decimals, show_games=period != 'today', rank=True, id='all-players') }}
+    {% else %}
+    {{ gate("See every player (" ~ rows|length ~ ")", "Search and sort every player's fantasy line, scored your way - free with an account.", "home-all") }}
+    {% endif %}
   </div>
 </details>
 {% elif not error %}

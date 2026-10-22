@@ -1,3 +1,4 @@
+{% from "partials/gate.html" import gate with context %}
 <h2 style="margin:0 40px 4px 0">Box score</h2>
 <p class="tiny muted" style="margin:0 0 10px">Tap a player for his shot chart and 9-cat line.</p>
 {% if not teams %}
@@ -16,9 +17,9 @@
           {% if user %}<th></th>{% endif %}
         </tr></thead>
         <tbody>
-        {% for p in players %}
-          <tr>
-            <td class="l sticky-col"><span class="pface"><img src="{{ face(p.ID) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span>{% if p.ID %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ game_id }}/{{ p.ID }}?final={{ final }}" title="Shot chart and stat card">{{ p.PLAYER }}</a>{% else %}<span class="player-name">{{ p.PLAYER }}</span>{% endif %}{% if p.PLAYER in watch %} <span class="chip chip-good">Watching</span>{% endif %}</td>
+        {% for p in players %}{% set locked = open_ids is not none and (p.ID or p.PLAYER)|string not in open_ids %}
+          <tr class="{{ 'is-gated' if locked }}"{% if locked %} aria-hidden="true"{% endif %}>
+            <td class="l sticky-col"><span class="pface"><img src="{{ face(p.ID) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span>{% if p.ID and not locked %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ game_id }}/{{ p.ID }}?final={{ final }}" title="Shot chart and stat card">{{ p.PLAYER }}</a>{% else %}<span class="player-name">{{ p.PLAYER }}</span>{% endif %}{% if p.PLAYER in watch %} <span class="chip chip-good">Watching</span>{% endif %}</td>
             <td>{{ p.MIN }}</td><td><b>{{ p.PTS }}</b></td><td>{{ p.REB }}</td><td>{{ p.AST }}</td>
             <td>{{ p.STL }}</td><td>{{ p.BLK }}</td><td>{{ p.TO }}</td>
             <td>{{ p.FGM }}-{{ p.FGA }}</td><td>{{ p['3Pts'] }}-{{ p['3PTA'] }}</td><td>{{ p.FTM }}-{{ p.FTA }}</td>
@@ -29,6 +30,7 @@
         </tbody>
       </table>
     </div>
+    {% if open_ids is not none and players|length > 3 %}{{ gate("See the full box score", "Every player, every stat and shot charts for each game - free with an account.", "box-modal", next) }}{% endif %}
   </div>
   {% endfor %}
   {% if not user %}<p class="small muted" style="margin-top:10px"><a href="/login">Sign in</a> to add players to your watchlist.</p>{% endif %}

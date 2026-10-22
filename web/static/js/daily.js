@@ -93,8 +93,12 @@
   });
 
   // ---------------- tahmin ----------------
+  // Uye olmayan: 3 tahmin hakki, sonrasi icin ucretsiz hesap
+  const FREE_GUESSES = 3;
+  const locked = () => !window.HL_USER && !game.done && game.rows.length >= FREE_GUESSES;
+
   async function guess(id) {
-    if (busy || game.done) return;
+    if (busy || game.done || locked()) return;
     busy = true;
     input.disabled = true;
     try {
@@ -162,7 +166,19 @@
     const left = data.max - game.rows.length;
     countEl.textContent = game.done ? "" : `Guess ${game.rows.length + 1} of ${data.max} · ${left} left`;
     input.disabled = game.done;
-    $("#dp-search").hidden = game.done;
+    $("#dp-search").hidden = game.done || locked();
+    let gateEl = document.getElementById("dp-gate");
+    if (locked()) {
+      if (!gateEl) {
+        gateEl = document.createElement("div");
+        gateEl.id = "dp-gate";
+        gateEl.innerHTML = window.HL.gate({ title: `${data.max - game.rows.length} guesses left`,
+          text: "Create a free account to finish today's Mystery Player - your guesses so far are kept.", ref: "mystery-3" });
+        $("#dp-search").before(gateEl);
+      }
+    } else if (gateEl) {
+      gateEl.remove();
+    }
     renderResult();
   }
 

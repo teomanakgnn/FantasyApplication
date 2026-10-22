@@ -347,6 +347,9 @@ class Database:
                    saved_at TIMESTAMP NOT NULL DEFAULT NOW(),
                    PRIMARY KEY (user_id, league_ref, season, period, matchup_id)
                )""",
+            # Google ile giris: hesabin Google kimligi (sub)
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub)",
             # Watch party sohbeti ve tepkileri (mac basina oda)
             """CREATE TABLE IF NOT EXISTS watch_messages (
                    id SERIAL PRIMARY KEY,
@@ -1146,6 +1149,24 @@ class Database:
             except pg_errors.UniqueViolation:
                 continue
         return self._run("SELECT invite_code FROM users WHERE id = %s", (user_id,), fetch="value")
+
+    def user_by_google(self, sub):
+        if not sub:
+            return None
+        return self._run("SELECT id, username, email FROM users WHERE google_sub = %s", (str(sub),), fetch="one")
+
+    def user_by_email(self, email):
+        if not email:
+            return None
+        return self._run("SELECT id, username, email, google_sub FROM users WHERE LOWER(email) = LOWER(%s)",
+                         (email.strip(),), fetch="one")
+
+    def username_taken(self, username):
+        return bool(self._run("SELECT 1 FROM users WHERE LOWER(username) = LOWER(%s)", (username,), fetch="value"))
+
+    def set_google_sub(self, user_id, sub):
+        return bool(self._run("UPDATE users SET google_sub = %s WHERE id = %s AND (google_sub IS NULL OR google_sub = %s)",
+                              (str(sub), user_id, str(sub))))
 
     def user_by_invite(self, code):
         if not code:

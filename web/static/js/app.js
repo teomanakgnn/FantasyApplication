@@ -198,12 +198,29 @@
   }
 
   hydrate();
-  // ---------------- gunluk oyun rozetleri ----------------
-  // Bugunun oyunu bu cihazda oynanmadiysa menude "!" , bittiyse tik.
-  function dailyBadges() {
+  // ---------------- uyelik karti ----------------
+  // Uye olmayan ziyaretci bir sinira gelince (ikinci oyun, 3. tahmin, kutu
+  // skorun devami...) gosterilir. Sunucu tarafindaki karsiligi partials/gate.html.
+  function gate({ title, text, ref }) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    const google = window.HL_GOOGLE ? `<a class="btn btn-google" href="/auth/google?next=${next}" rel="nofollow">Continue with Google</a>` : "";
+    if (window.gtag) gtag("event", "gate_view", { gate: ref });
+    return `<div class="gate card" data-gate="${escapeHtml(ref)}">
+      <div class="gate-title">${escapeHtml(title)}</div>
+      <p>${escapeHtml(text)}</p>
+      <div class="gate-actions">${google}<a class="btn btn-primary" href="/register?next=${next}">Create free account</a>
+        <a class="btn btn-ghost" href="/login?next=${next}">Sign in</a></div>
+      <div class="tiny dim">Free forever. Keeps your streaks on every device.</div>
+    </div>`;
+  }
+
+  const getJSON = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+
+  // Bugun bu cihazda bitirilen gunluk oyunlar
+  function gamesDone() {
     const P = window.HL_PUZZLES || {};
-    const get = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
-    const done = {
+    const get = getJSON;
+    return {
       daily: () => {
         const g = get("hl_daily_game"); if (g && g.puzzle === P.daily && g.done) return true;
         const n = window.HL_STREAKS && window.HL_STREAKS.daily_native; return !!(n && n.last === P.daily);
@@ -220,6 +237,41 @@
         return false;
       },
     };
+  }
+
+  // Uye olmayan ziyaretci gunde bir oyun oynar; baska bir oyuna gecince uyelik karti
+  function oneGameGate() {
+    const games = { daily: "Mystery Player", statmatch: "Stat Match", starting5: "Starting Five", eightytwo: "82-0 Challenge" };
+    const here = window.HL_ACTIVE;
+    if (window.HL_USER || !games[here]) return;
+    const done = gamesDone();
+    const played = Object.keys(games).find((k) => k !== here && (window.HL_PUZZLES || {})[k] && done[k]());
+    if (!played) return;
+    const main = document.querySelector("#main");
+    if (!main) return;
+    const head = main.querySelector(".page-head");
+    const box = document.createElement("div");
+    box.innerHTML = gate({ title: `You played ${games[played]} today`,
+      text: `Create a free account to play ${games[here]} and every other daily game - and keep all your streaks.`, ref: "second-game" });
+    if (!head) {
+      [...main.children].forEach((el) => { el.hidden = true; });
+      main.prepend(box);
+      return;
+    }
+    // Basliktan #main'e kadar her seviyede kardesleri gizle (oyun kapsayici icinde olabilir)
+    for (let node = head; node && node !== main; node = node.parentElement) {
+      [...node.parentElement.children].forEach((el) => { if (el !== node) el.hidden = true; });
+    }
+    head.querySelectorAll("p").forEach((el) => { el.hidden = true; });
+    head.after(box);
+  }
+
+  // ---------------- gunluk oyun rozetleri ----------------
+  // Bugunun oyunu bu cihazda oynanmadiysa menude "!" , bittiyse tik.
+  function dailyBadges() {
+    const P = window.HL_PUZZLES || {};
+    const get = getJSON;
+    const done = gamesDone();
     // Seri: cihazdaki kayit + (giris yaptiysa) sunucudaki kayit; Mystery
     // Player kendi istatistiginden (galibiyet serisi, sunucuyla esitleniyor).
     const SRV = window.HL_STREAKS || null;
@@ -282,11 +334,12 @@
     if (burger) burger.classList.toggle("has-todo", pending > 0);
   }
   dailyBadges();
+  oneGameGate();
   window.addEventListener("storage", dailyBadges);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) dailyBadges(); });
   setInterval(dailyBadges, 5000);
 
   // Paylasim linklerine paylasanin davet kodu: linkle gelen uye olursa ikisi de Pro kazanir
   const inv = () => (window.HL_INV ? `&inv=${window.HL_INV}` : "");
-  window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate, inv };
+  window.HL = { $, $$, api, toast, openModal, openModalUrl, closeModal, escapeHtml, hydrate, inv, gate };
 })();

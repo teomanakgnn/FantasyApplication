@@ -476,6 +476,23 @@ def player_insight(p, weights_score=None):
     }
 
 
+# ==================== UYELIK SINIRI ====================
+
+FREE_BOX_ROWS = 3
+
+
+def top_scorer_ids(rows, n=FREE_BOX_ROWS):
+    """Uye olmayana acik satirlar: her takimin en cok sayi atan n oyuncusu."""
+    by_team = {}
+    for r in rows or []:
+        by_team.setdefault(r.get("TEAM"), []).append(r)
+    keep = set()
+    for lst in by_team.values():
+        lst = sorted(lst, key=lambda r: -_num(r.get("PTS")))
+        keep.update(str(r.get("ID") or r.get("PLAYER")) for r in lst[:n])
+    return keep
+
+
 # ==================== OYUNCU MAC KARTI ====================
 
 @cache_data(ttl=60, show_spinner=False)

@@ -1,0 +1,14 @@
+{#- Uyelik karti: uye olmayan ziyaretci bir sinira gelince (JS karsiligi: HL.gate) -#}
+{% macro gate(title, text, ref, next=None) -%}
+{% set nxt = (next or (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')))|urlencode %}
+<div class="gate card" data-gate="{{ ref }}">
+  <div class="gate-title">{{ title }}</div>
+  <p>{{ text }}</p>
+  <div class="gate-actions">
+    {% if google_enabled %}<a class="btn btn-google" href="/auth/google?next={{ nxt }}" rel="nofollow">Continue with Google</a>{% endif %}
+    <a class="btn btn-primary" href="/register?next={{ nxt }}" rel="nofollow">Create free account</a>
+    <a class="btn btn-ghost" href="/login?next={{ nxt }}" rel="nofollow">Sign in</a>
+  </div>
+  <div class="tiny dim">Free forever. Keeps your streaks and leagues on every device.</div>
+</div>
+{%- endmacro %}

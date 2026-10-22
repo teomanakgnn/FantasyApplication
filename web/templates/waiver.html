@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/gate.html" import gate with context %}
 {% set wk = ('Week ' ~ week) if week else 'This Week' %}
 {% block title %}Fantasy Basketball Waiver Wire {{ wk }}: Best Pickups 2026-27 · HoopLife NBA{% endblock %}
 {% block description %}Best fantasy basketball waiver wire pickups for {{ wk|lower }} of 2026-27: {% for r in rows[:5] %}{{ r.name }}{{ ', ' if not loop.last }}{% endfor %}. Players owned in under {{ owned }}% of ESPN leagues, ranked by 9-cat value over the {{ windows[window][0]|lower }}.{% endblock %}
@@ -47,7 +48,8 @@
 
 {% if rows|length > 10 %}
 <h2 style="margin:22px 0 8px;font-size:1.05rem">More pickups</h2>
-<div class="table-wrap sr-table">
+{% if not signed_in %}{{ gate("See all " ~ rows|length ~ " pickups", "The full waiver list with every category, plus filters for your league - free with an account.", "waiver-more") }}{% endif %}
+<div class="table-wrap sr-table {{ 'is-gated' if not signed_in }}"{% if not signed_in %} aria-hidden="true"{% endif %}>
   <table class="table">
     <thead><tr><th>#</th><th class="l">Player</th><th>Owned</th><th>GP</th><th>MIN</th>{% for c in cats %}<th>{{ c }}</th>{% endfor %}<th>Value</th></tr></thead>
     <tbody>

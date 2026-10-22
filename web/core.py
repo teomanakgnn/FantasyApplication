@@ -228,6 +228,7 @@ def render(request: Request, template, active=None, status_code=200, **context):
         "site_url": config.SITE_URL.rstrip("/"),
         "puzzles": _puzzles(),
         "streaks": _streaks(user),
+        "google_enabled": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET),
         "invite": ((user.get("invite_code") or db.invite_code(user["id"])) if user and db.available else None),
     })
     response = templates.TemplateResponse(request, template, context, status_code=status_code)

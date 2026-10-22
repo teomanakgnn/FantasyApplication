@@ -141,8 +141,13 @@ def boxscore(request: Request, game_id: str, final: int = 1):
     watch = set()
     if user:
         watch = {w["player_name"] for w in db.get_watchlist(user["id"])}
+    # Uye olmayan: her takimin en skorer 3 oyuncusu acik, gerisi uyelikle
+    from urllib.parse import urlparse
+    ref = urlparse(request.headers.get("referer") or "").path or "/"
     return templates.TemplateResponse(request, "partials/boxscore.html", {
-        "teams": teams, "user": user, "watch": watch, "game_id": game_id, "final": final})
+        "teams": teams, "user": user, "watch": watch, "game_id": game_id, "final": final,
+        "open_ids": None if user else stats.top_scorer_ids(players), "next": ref if ref.startswith("/") else "/",
+        "google_enabled": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET)})
 
 
 @router.get("/api/player-card/{game_id}/{player_id}", response_class=HTMLResponse)
