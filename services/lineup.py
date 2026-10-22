@@ -2,8 +2,8 @@
 Gunun kadrosu (My League, ESPN): bugun maci olan oyuncular, rakip ve saat,
 mevki uygunluguna gore en iyi ilk bes/on ve gereken degisiklikler.
 
-Oneri: baslangic yerleri x oyuncular atama problemi (scipy
-linear_sum_assignment). Agirlik = oyuncunun mac basi degeri (ESPN
+Oneri: baslangic yerleri x oyuncular atama problemi (Hungarian
+algoritmasi, _assign; kadro kucuk, scipy'a gerek yok). Agirlik = oyuncunun mac basi degeri (ESPN
 projeksiyonu + son 15 gun), bugun maci yoksa / OUT ise 0 (yedege). Maci
 baslamis oyuncu kilitli: ESPN degistirmeye izin vermez, yerinde kalir.
 Mevcut yerine kucuk bir bonus: esit secenekte gereksiz hareket olmaz.
@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import requests
-from scipy.optimize import linear_sum_assignment
 
 from services import league_week as lw
 from services.cache import cache_data
@@ -27,6 +26,51 @@ SLOT_NAMES = {0: "PG", 1: "SG", 2: "SF", 3: "PF", 4: "C", 5: "G", 6: "F", 7: "SG
 WRITE_URL = ("https://lm-api-writes.fantasy.espn.com/apis/v3/games/fba/seasons/{season}"
              "/segments/0/leagues/{league_id}/transactions/")
 SKIP = ("OUT", "INJURY_RESERVE", "SUSPENSION")
+
+
+def _assign(w):
+    """
+    En yuksek toplam agirlikli atama (Hungarian / Kuhn-Munkres, O(n^3)).
+    w: satir = oyuncu, sutun = yer. (satirlar, sutunlar) dondurur - scipy'in
+    linear_sum_assignment(maximize=True) ile ayni sonuc.
+    """
+    n_r, n_c = w.shape
+    n = max(n_r, n_c)
+    cost = np.zeros((n, n))
+    cost[:n_r, :n_c] = w.max() - w          # kare matris, en kucugu bul
+    u, v = np.zeros(n + 1), np.zeros(n + 1)
+    p, way = np.zeros(n + 1, dtype=int), np.zeros(n + 1, dtype=int)
+    for i in range(1, n + 1):
+        p[0], j0 = i, 0
+        minv, used = np.full(n + 1, np.inf), np.zeros(n + 1, dtype=bool)
+        while True:
+            used[j0] = True
+            i0, delta, j1 = p[j0], np.inf, 0
+            for j in range(1, n + 1):
+                if not used[j]:
+                    cur = cost[i0 - 1, j - 1] - u[i0] - v[j]
+                    if cur < minv[j]:
+                        minv[j], way[j] = cur, j0
+                    if minv[j] < delta:
+                        delta, j1 = minv[j], j
+            for j in range(n + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+            j0 = j1
+            if p[j0] == 0:
+                break
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+    pairs = [(p[j] - 1, j - 1) for j in range(1, n + 1) if p[j] and p[j] - 1 < n_r and j - 1 < n_c]
+    pairs.sort()
+    return [r for r, _ in pairs], [c for _, c in pairs]
 
 
 @cache_data(ttl=6 * 3600, show_spinner=False, copy_result=False)
@@ -95,7 +139,7 @@ def plan(league_id, season, team_id, sp=None):
             for j, s in enumerate(free_slots):
                 if s in p["eligible"]:
                     w[i, j] = (p["value"] if p["plays"] else 0.0) + (0.05 if p["slot"] == s else 0.0)
-        rows, cols = linear_sum_assignment(w, maximize=True)
+        rows, cols = _assign(w)
         for i, j in zip(rows, cols):
             p = pool[i]
             if w[i, j] > 0:   # oynayan ya da zaten orada duran (hareket gerekmez)

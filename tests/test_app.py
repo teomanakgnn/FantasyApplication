@@ -301,3 +301,13 @@ def test_player_slug_and_outlook():
          "punt_rank": {"FT%": 50, "FG%": 22, "AST": 41, "3PM": 60, "PTS": 70, "TO": 35}}
     text = " ".join(outlook(p))
     assert "No. 40" in text and "punt FG%" in text and "57 games" in text
+
+
+def test_lineup_assignment_picks_best_eligible_spots():
+    """Gunun kadrosu: atama en yuksek toplam degeri verir, uygun olmayan yere koymaz (scipy'siz)."""
+    import numpy as np
+    from services.lineup import _assign
+    w = np.array([[10.0, -1e6, 3.0], [9.0, 8.0, -1e6], [-1e6, 7.0, 6.0], [1.0, 1.0, 1.0]])
+    rows, cols = _assign(w)
+    assert sum(w[r, c] for r, c in zip(rows, cols)) == 10 + 8 + 6
+    assert all(w[r, c] > -1 for r, c in zip(rows, cols))
