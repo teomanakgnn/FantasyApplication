@@ -101,7 +101,8 @@ def _profiles(team_abbr, season):
                "pft": (tot["fm"] + 30 * LG["pft"]) / (tot["fa"] + 30)}
         st = status.get(_norm(name), "")
         play = next((p for k, p in PLAY_PROB.items() if k in st), 1.0)
-        out.append({"id": pid, "name": name, "pos": info.get("pos") or "", "min": mins, "rates": rates,
+        out.append({"id": pid, "name": name, "pos": info.get("pos") or "", "jersey": str(info.get("jersey") or ""),
+                    "min": mins, "rates": rates,
                     "pct": pct, "play": play, "status": st})
     out.sort(key=lambda p: -p["min"])
     return out[:15]
@@ -262,7 +263,8 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None):
         for i, p in enumerate(teams[side]):
             if b["min"][t, i] < 1:
                 continue
-            rows.append({"id": p["id"], "name": p["name"], "min": int(round(b["min"][t, i])),
+            rows.append({"id": p["id"], "name": p["name"], "pos": p["pos"], "jersey": p["jersey"],
+                         "min": int(round(b["min"][t, i])),
                          **{k: int(b[k][t, i]) for k in ("pts", "reb", "ast", "stl", "blk", "to", "fgm", "fga", "tpm", "tpa", "ftm", "fta")}})
         rows.sort(key=lambda r: -r["min"])
         return rows

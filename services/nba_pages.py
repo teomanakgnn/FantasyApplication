@@ -121,6 +121,7 @@ def game(game_id):
         abbr = t.get("abbreviation")
         teams[c.get("homeAway")] = {
             "abbr": abbr, "name": t.get("displayName"), "nick": t.get("name") or nick(abbr), "record": rec,
+            "color": "#" + (t.get("color") or "9AA6BD"), "alt": "#" + (t.get("alternateColor") or "ffffff"),
             "score": int(c.get("score") or 0) if str(c.get("score") or "").isdigit() else None,
             "winner": bool(c.get("winner")), "logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr}.png",
             "quarters": [l.get("displayValue") for l in c.get("linescores") or []]}

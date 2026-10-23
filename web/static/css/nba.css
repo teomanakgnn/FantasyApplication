@@ -131,3 +131,21 @@
   .sa-t span { font-size: 1.2rem; min-width: 1.8em; }
   .sa-clock { font-size: .72rem; padding: 3px 6px; }
 }
+
+/* 2D oyun gorunumu */
+.sa-court { overflow: visible; }
+.sa-p circle { filter: drop-shadow(0 .25px .5px rgba(0,0,0,.6)); }
+.sa-num { font: 900 1.25px Inter, sans-serif; text-anchor: middle; }
+.sa-name { font: 800 1.25px Inter, sans-serif; text-anchor: middle; fill: #E8ECF4; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: .35px; }
+.sa-ball { fill: #F28C28; stroke: #3a1d05; stroke-width: .15; }
+.sa-ball-shadow { fill: rgba(0,0,0,.45); }
+.sa-rim { fill: none; stroke: #F28C28; stroke-width: .25; transition: stroke-width .15s; }
+.sa-rim.flash { stroke: #FFD24C; stroke-width: .7; }
+.sa-pop { font: 900 2.2px Inter, sans-serif; text-anchor: middle; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.8); stroke-width: .4px; animation: sa-pop 1.2s ease-out forwards; }
+.sa-pop.hot { fill: #FFD24C; }
+.sa-pop.cold { fill: #EF6464; font-size: 1.6px; }
+.sa-pop.ast { fill: #9AD8FF; font-size: 1.4px; }
+@keyframes sa-pop { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-3px); } }
+
+.sa-p { transition: opacity .35s; }
+.sa-p.bench { opacity: 0; }
