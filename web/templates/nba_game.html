@@ -4,7 +4,7 @@
 {% set a, h = g.away, g.home %}
 {% set nice = (g.when.strftime('%B ') ~ g.when.day ~ ', ' ~ g.when.year) if g.when else '' %}
 {% block title %}{% if sim and not g.started %}{{ a.nick }} vs {{ h.nick }} Prediction: 5,000 Simulations & Projected Box Score{% if nice %} - {{ nice }}{% endif %}{% else %}{{ a.nick }} vs {{ h.nick }}{% if g.final %} {{ a.score }}-{{ h.score }}{% endif %} Box Score{% if nice %} - {{ nice }}{% endif %} · Shot Charts & Stats{% endif %} · HoopLife NBA{% endblock %}
-{% block description %}{% if sim and not g.started %}{% set fh = sim.p_home >= 0.5 %}We simulated {{ a.name }} at {{ h.name }} 5,000 times: the {{ (h if fh else a).nick }} win {{ (100 * (sim.p_home if fh else sim.p_away))|round|int }}% of games, most likely score {{ sim.score.away.median|int }}-{{ sim.score.home.median|int }}. Projected box score and player lines.{% else %}{{ g.recap }} Full box score, team and player shot charts and fantasy stats.{% endif %}{% endblock %}
+{% block description %}{% if sim and not g.started %}{% set fh = sim.p_home >= 0.5 %}We simulated {{ a.name }} at {{ h.name }} 5,000 times: the {{ (h if fh else a).nick }} win {{ (100 * (sim.p_home if fh else sim.p_away))|round|int }}% of games, most typical game {{ sim.typical.score.away }}-{{ sim.typical.score.home }}. Projected box score and player lines.{% else %}{{ g.recap }} Full box score, team and player shot charts and fantasy stats.{% endif %}{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <nav class="tiny dim" style="margin-bottom:8px"><a href="/nba/scores{% if g.when %}?date={{ g.when.date().isoformat() }}{% endif %}">NBA scores</a> › {{ a.nick }} vs {{ h.nick }}</nav>

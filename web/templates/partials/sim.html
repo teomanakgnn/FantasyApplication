@@ -16,7 +16,7 @@
   <div class="sim-result {{ 'good' if p_winner >= 0.5 else 'bad' }}">
     <b>{{ 'Called it.' if p_winner >= 0.5 else 'Upset.' }}</b>
     The simulations gave the {{ (h if winner_home else a).nick }} a {{ (100 * p_winner)|round|int }}% chance. Final: {{ a.abbr }} {{ a.score }} - {{ h.score }} {{ h.abbr }}
-    (most likely score was {{ s.score.away.median|int }}-{{ s.score.home.median|int }}).
+    (most typical simulated game: {{ s.typical.score.away }}-{{ s.typical.score.home }}).
   </div>
   {% endif %}
 
@@ -27,7 +27,7 @@
   </div>
 
   <div class="sim-kpis">
-    <div><span>Most likely score</span><b>{{ s.score.away.median|int }} - {{ s.score.home.median|int }}</b><small>{{ a.abbr }} - {{ h.abbr }}</small></div>
+    <div><span>Most typical game</span><b>{{ s.typical.score.away }} - {{ s.typical.score.home }}</b><small>{{ a.abbr }} - {{ h.abbr }}</small></div>
     <div><span>Total points</span><b>{{ s.total_median|int }}</b><small>80% of games: {{ s.total_lo|int }}-{{ s.total_hi|int }}</small></div>
     <div><span>Within 5 points</span><b>{{ (100 * s.p_close)|round|int }}%</b><small>overtime {{ (100 * s.p_ot)|round(1) }}%</small></div>
     <div><span>Top scorer</span><b class="sim-ell">{{ s.leaders[0].name }}</b><small>in {{ (100 * s.leaders[0].p)|round|int }}% of games</small></div>
