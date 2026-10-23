@@ -1022,9 +1022,23 @@ class Database:
         devices = self._run(
             f"SELECT device, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE {where} "
             f"GROUP BY 1 ORDER BY visitors DESC", p, fetch="all") or []
+        # "Gercek" ziyaretci tahmini: tek sayfada kalip kaynaksiz gelen masaustu ziyaretleri
+        # cogunlukla tarayici / bot (veri merkezi IP'leri, onizleme servisleri). 2+ sayfa,
+        # mobil ya da bir kaynaktan (paylasim, arama, ChatGPT) gelenler insan sayilir.
         daily = self._run(
-            f"SELECT DATE(ts) AS day, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views "
-            f"FROM page_views WHERE {where} GROUP BY 1 ORDER BY 1 DESC", p, fetch="all") or []
+            f"""WITH v AS (SELECT DATE(ts) AS day, visitor, COUNT(*) AS n, bool_or(device = 'mobile') AS mob,
+                                  bool_or(COALESCE(source, '') <> '') AS src
+                           FROM page_views WHERE {where} GROUP BY 1, 2),
+                   s AS (SELECT DATE(created_at) AS day, COUNT(*) AS signups FROM users
+                         WHERE created_at >= NOW() - %s * INTERVAL '1 day' GROUP BY 1)
+                SELECT v.day, COUNT(*) AS visitors, SUM(v.n) AS views,
+                       SUM(CASE WHEN v.n >= 2 OR v.mob OR v.src THEN 1 ELSE 0 END) AS humans,
+                       COALESCE(MAX(s.signups), 0) AS signups
+                FROM v LEFT JOIN s ON s.day = v.day GROUP BY v.day ORDER BY v.day DESC""", (days, days), fetch="all") or []
+        totals["humans"] = sum(int(d["humans"] or 0) for d in daily)
+        totals["signups"] = int(self._run("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - %s * INTERVAL '1 day'",
+                                          (days,), fetch="value") or 0)
+        totals["conversion"] = round(100 * totals["signups"] / totals["humans"], 1) if totals["humans"] else 0
         recent = self._run(
             "SELECT ts, country_name, path, source, device FROM page_views ORDER BY ts DESC LIMIT 60",
             fetch="all") or []

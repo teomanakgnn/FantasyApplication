@@ -15,7 +15,12 @@
 </nav>
 
 <div class="grid grid-3" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px">
-  <div class="kpi card"><div class="kpi-label">Visitors</div><div class="kpi-value">{{ r.totals.visitors or 0 }}</div></div>
+  <div class="kpi card"><div class="kpi-label">Likely real visitors</div><div class="kpi-value">{{ r.totals.humans or 0 }}</div><div class="tiny dim">2+ pages, mobile or from a link</div></div>
+  <div class="kpi card"><div class="kpi-label">New members</div><div class="kpi-value">{{ r.totals.signups or 0 }}</div></div>
+  <div class="kpi card"><div class="kpi-label">Sign-up rate</div><div class="kpi-value">{{ r.totals.conversion }}%</div><div class="tiny dim">of likely real visitors</div></div>
+</div>
+<div class="grid grid-3" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px">
+  <div class="kpi card"><div class="kpi-label">All visitors (incl. crawlers)</div><div class="kpi-value">{{ r.totals.visitors or 0 }}</div></div>
   <div class="kpi card"><div class="kpi-label">Page views</div><div class="kpi-value">{{ r.totals.views or 0 }}</div></div>
   <div class="kpi card"><div class="kpi-label">Countries</div><div class="kpi-value">{{ r.countries|length }}</div></div>
 </div>
@@ -52,7 +57,7 @@
       <div class="card-title">Devices and days</div>
       <p class="small">{% for d in r.devices %}{{ d.device }}: <b>{{ d.visitors }}</b>{{ ' · ' if not loop.last }}{% endfor %}</p>
       <table class="table small"><tbody>
-        {% for d in r.daily %}<tr><td style="text-align:left">{{ d.day.strftime('%a %d %b') }}</td><td><b>{{ d.visitors }}</b> visitors</td><td class="dim">{{ d.views }} views</td></tr>{% endfor %}
+        {% for d in r.daily %}<tr><td style="text-align:left">{{ d.day.strftime('%a %d %b') }}</td><td><b>{{ d.humans }}</b> real <span class="dim">/ {{ d.visitors }}</span></td><td>{% if d.signups %}<b class="good">+{{ d.signups }}</b> members{% else %}<span class="dim">0 members</span>{% endif %}</td><td class="dim">{{ d.views }} views</td></tr>{% endfor %}
       </tbody></table>
     </section>
   </div>

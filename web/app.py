@@ -39,6 +39,16 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 @app.middleware("http")
+async def canonical_host(request: Request, call_next):
+    """Fly'in kendi adresi (hooplife-nba.fly.dev) ana alan adina kalici yonlenir: Google'da kopya icerik olmasin."""
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    if config.PRODUCTION and host.endswith(".fly.dev") and request.url.path != "/healthz":
+        target = config.SITE_URL.rstrip("/") + request.url.path + (f"?{request.url.query}" if request.url.query else "")
+        return RedirectResponse(target, 301)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def security(request: Request, call_next):
     """
     Durum degistiren isteklerde koken kontrolu (CSRF).
