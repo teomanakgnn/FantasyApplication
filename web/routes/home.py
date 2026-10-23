@@ -64,11 +64,13 @@ def home(request: Request):
         spoiler = mode in ("spoiler_protected", "hidden")
 
     game_cards = []
+    simmed = db.sim_ids([g["game_id"] for g in games]) if db.available and games else set()
     for g in games:
         excitement = calculate_game_score(g.get("home_score"), g.get("away_score"), g.get("status"))
         game_cards.append({**g, "excitement": excitement,
                            "excite_color": get_score_color(excitement) if excitement else None,
-                           "final": stats.is_final(g.get("status")), "page": nba_pages.game_path(g)})
+                           "final": stats.is_final(g.get("status")), "page": nba_pages.game_path(g),
+                           "sim": g["game_id"] in simmed})
 
     # --- fantasy tablolari ---
     error = None

@@ -3,8 +3,8 @@
 {% from "partials/gate.html" import gate with context %}
 {% set a, h = g.away, g.home %}
 {% set nice = (g.when.strftime('%B ') ~ g.when.day ~ ', ' ~ g.when.year) if g.when else '' %}
-{% block title %}{{ a.nick }} vs {{ h.nick }}{% if g.final %} {{ a.score }}-{{ h.score }}{% endif %} Box Score{% if nice %} - {{ nice }}{% endif %} · Shot Charts & Stats · HoopLife NBA{% endblock %}
-{% block description %}{{ g.recap }} Full box score, team and player shot charts and fantasy stats.{% endblock %}
+{% block title %}{% if sim and not g.started %}{{ a.nick }} vs {{ h.nick }} Prediction: 5,000 Simulations & Projected Box Score{% if nice %} - {{ nice }}{% endif %}{% else %}{{ a.nick }} vs {{ h.nick }}{% if g.final %} {{ a.score }}-{{ h.score }}{% endif %} Box Score{% if nice %} - {{ nice }}{% endif %} · Shot Charts & Stats{% endif %} · HoopLife NBA{% endblock %}
+{% block description %}{% if sim and not g.started %}{% set fh = sim.p_home >= 0.5 %}We simulated {{ a.name }} at {{ h.name }} 5,000 times: the {{ (h if fh else a).nick }} win {{ (100 * (sim.p_home if fh else sim.p_away))|round|int }}% of games, most likely score {{ sim.score.away.median|int }}-{{ sim.score.home.median|int }}. Projected box score and player lines.{% else %}{{ g.recap }} Full box score, team and player shot charts and fantasy stats.{% endif %}{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <nav class="tiny dim" style="margin-bottom:8px"><a href="/nba/scores{% if g.when %}?date={{ g.when.date().isoformat() }}{% endif %}">NBA scores</a> › {{ a.nick }} vs {{ h.nick }}</nav>
@@ -21,6 +21,8 @@
 
 <h1 class="nb-h1">{{ a.name }} vs {{ h.name }}{% if nice %} <span class="dim">· {{ nice }}</span>{% endif %}</h1>
 <p class="nb-recap">{{ g.recap }}</p>
+{% if is_admin %}<p class="tiny"><button class="btn btn-sm btn-ghost" type="button" id="sim-run" data-game="{{ g.id }}">{{ 'Re-run' if sim else 'Run' }} 5,000 simulations (admin)</button></p>{% endif %}
+{% if sim and not g.started %}{% with s = sim %}{% include "partials/sim.html" %}{% endwith %}{% endif %}
 
 {% if a.quarters %}
 <div class="table-wrap nb-lines"><table class="table small">
@@ -74,6 +76,8 @@
 </section>
 {% endif %}{% endfor %}
 
+{% if sim and g.started %}<div style="margin-top:12px">{% with s = sim %}{% include "partials/sim.html" %}{% endwith %}</div>{% endif %}
+
 {% if not g.started %}<div class="empty" style="margin-top:12px">The box score and shot charts appear here once the game tips off.</div>{% endif %}
 
 <p class="small muted" style="margin-top:16px">More: <a href="/nba/scores">today's NBA scores</a> · <a href="/nba/standings">standings</a> · <a href="/injuries">injury report</a> · <a href="/rankings">fantasy rankings</a></p>
@@ -87,3 +91,10 @@
 {% if open_ids is not none %}<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "WebPage", "name": a.name ~ " vs " ~ h.name ~ " box score",
   "isAccessibleForFree": false, "hasPart": {"@type": "WebPageElement", "isAccessibleForFree": false, "cssSelector": ".hl-gated"}}|tojson }}</script>{% endif %}
 {% endblock %}
+{% block scripts %}{% if is_admin %}<script>
+document.getElementById("sim-run")?.addEventListener("click", async (e) => {
+  const b = e.currentTarget; b.classList.add("is-loading");
+  try { await window.HL.api(`/api/admin/sim/${b.dataset.game}`, { method: "POST" }); location.hash = "simulation"; location.reload(); }
+  catch (err) { window.HL.toast(err.message, true); b.classList.remove("is-loading"); }
+});
+</script>{% endif %}{% endblock %}

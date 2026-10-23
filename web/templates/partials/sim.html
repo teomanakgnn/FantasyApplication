@@ -1,0 +1,75 @@
+{#- Mac simulasyonu (services/game_sim.py): 5.000 senaryo. s = sonuc, a/h = takimlar, g = mac -#}
+{% set fav_home = s.p_home >= 0.5 %}
+<section class="card sim" id="simulation">
+  <div class="sim-head">
+    <div>
+      <div class="eyebrow" style="margin:0">{{ '{:,}'.format(s.n) }} simulations</div>
+      <h2>We played {{ a.nick }} @ {{ h.nick }} {{ '{:,}'.format(s.n) }} times</h2>
+      <p class="small muted">Every simulation draws who plays, minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 per-minute numbers and today's injury report.</p>
+    </div>
+  </div>
+
+  {% if g.final and a.score is not none %}
+  {% set winner_home = h.score > a.score %}
+  {% set p_winner = s.p_home if winner_home else s.p_away %}
+  <div class="sim-result {{ 'good' if p_winner >= 0.5 else 'bad' }}">
+    <b>{{ 'Called it.' if p_winner >= 0.5 else 'Upset.' }}</b>
+    The simulations gave the {{ (h if winner_home else a).nick }} a {{ (100 * p_winner)|round|int }}% chance. Final: {{ a.abbr }} {{ a.score }} - {{ h.score }} {{ h.abbr }}
+    (most likely score was {{ s.score.away.median|int }}-{{ s.score.home.median|int }}).
+  </div>
+  {% endif %}
+
+  <div class="sim-win">
+    <div class="sim-team"><img src="{{ a.logo }}" alt=""><b>{{ a.abbr }}</b><span>{{ (100 * s.p_away)|round|int }}%</span></div>
+    <div class="sim-bar"><i style="width:{{ (100 * s.p_away)|round(1) }}%"></i></div>
+    <div class="sim-team r"><span>{{ (100 * s.p_home)|round|int }}%</span><b>{{ h.abbr }}</b><img src="{{ h.logo }}" alt=""></div>
+  </div>
+
+  <div class="sim-kpis">
+    <div><span>Most likely score</span><b>{{ s.score.away.median|int }} - {{ s.score.home.median|int }}</b><small>{{ a.abbr }} - {{ h.abbr }}</small></div>
+    <div><span>Total points</span><b>{{ s.total_median|int }}</b><small>80% of games: {{ s.total_lo|int }}-{{ s.total_hi|int }}</small></div>
+    <div><span>Within 5 points</span><b>{{ (100 * s.p_close)|round|int }}%</b><small>overtime {{ (100 * s.p_ot)|round(1) }}%</small></div>
+    <div><span>Top scorer</span><b class="sim-ell">{{ s.leaders[0].name }}</b><small>in {{ (100 * s.leaders[0].p)|round|int }}% of games</small></div>
+  </div>
+
+  <h3 class="sim-h3">Final margin <span class="dim small">· share of the {{ '{:,}'.format(s.n) }} games</span></h3>
+  {% set top = s.hist|map(attribute='p')|max %}
+  <div class="sim-hist">
+    {% for b in s.hist %}
+    <div class="sim-col {{ 'home' if b.from >= 0 else 'away' }}" title="{{ (100 * b.p)|round(1) }}%">
+      <i style="height:{{ (100 * b.p / top)|round(1) if top else 0 }}%"></i>
+      <span>{% if b.from >= 0 %}{{ h.abbr }} {{ b.from + 1 if b.from > 0 else 1 }}{{ '+' if loop.last else '-' ~ b.to }}{% else %}{{ a.abbr }} {{ -b.to + 1 if b.to < 0 else 1 }}{{ '+' if loop.first else '-' ~ (-b.from) }}{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <h3 class="sim-h3">The most typical game <span class="dim small">· {{ a.abbr }} {{ s.typical.score.away }} - {{ s.typical.score.home }} {{ h.abbr }}{% if s.typical.ot %} (OT){% endif %}</span></h3>
+  <div class="sim-typ">
+    {% for side, t in (('away', a), ('home', h)) %}
+    <div class="table-wrap"><table class="table small">
+      <thead><tr><th class="l sticky-col">{{ t.abbr }}</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG</th></tr></thead>
+      <tbody>{% for r in s.typical[side] %}<tr>
+        <td class="l sticky-col"><span class="pface"><img src="{{ face(r.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><span class="player-name">{{ r.name }}</span></td>
+        <td>{{ r.min }}</td><td><b>{{ r.pts }}</b></td><td>{{ r.reb }}</td><td>{{ r.ast }}</td><td>{{ r.stl }}</td><td>{{ r.blk }}</td><td>{{ r.tpm }}</td><td>{{ r.fgm }}-{{ r.fga }}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% endfor %}
+  </div>
+
+  <h3 class="sim-h3">Player projections <span class="dim small">· median line, points range (80% of games), chances</span></h3>
+  <div class="sim-typ">
+    {% for side, t in (('away', a), ('home', h)) %}
+    <div class="table-wrap"><table class="table small">
+      <thead><tr><th class="l sticky-col">{{ t.abbr }}</th><th>PTS</th><th>Range</th><th>REB</th><th>AST</th><th>30+</th><th>DD</th><th>FP</th></tr></thead>
+      <tbody>{% for r in s.players[side][:9] %}<tr>
+        <td class="l sticky-col"><span class="pface"><img src="{{ face(r.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><span class="player-name">{{ r.name }}</span>{% if r.play < 0.95 %}<div class="tiny bad">{{ (100 * r.play)|round|int }}% to play</div>{% endif %}</td>
+        <td><b>{{ r.pts|int }}</b></td><td class="dim">{{ r.pts_lo|int }}-{{ r.pts_hi|int }}</td><td>{{ r.reb|int }}</td><td>{{ r.ast|int }}</td>
+        <td>{{ (100 * r.p30)|round|int }}%</td><td>{{ (100 * r.p_dd)|round|int }}%</td><td>{{ r.fp }}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% endfor %}
+  </div>
+
+  {% if s.out.away or s.out.home %}<p class="small muted" style="margin:10px 0 0">Out: {{ (s.out.away + s.out.home)|join(', ') }}.</p>{% endif %}
+  <p class="tiny dim" style="margin:8px 0 0">FP = HoopLife fantasy points. Simulated {{ s.created[:10] }} from ESPN stats and injury report. For fun and fantasy decisions - not betting advice.</p>
+</section>

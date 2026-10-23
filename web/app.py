@@ -358,7 +358,15 @@ def _warm():
             time.sleep(240)
             if config.PRODUCTION:
                 _ping_indexnow()
+            from services import game_sim
             while True:
+                # Sabah: gunun iki maci 5.000 kez simule edilir (mac baslamadan)
+                try:
+                    sims = game_sim.daily_run()
+                    if sims and config.PRODUCTION:
+                        _ping_indexnow(sims)
+                except Exception as exc:
+                    print(f"game sim failed: {exc}")
                 time.sleep(1800)
                 try:
                     fresh = nba_pages.refresh_index()

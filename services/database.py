@@ -350,6 +350,13 @@ class Database:
             # Google ile giris: hesabin Google kimligi (sub)
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT",
             "CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub)",
+            # Mac simulasyonlari (gunde 2 mac, 5.000 senaryo; JSON)
+            """CREATE TABLE IF NOT EXISTS game_sims (
+                   game_id TEXT PRIMARY KEY,
+                   day DATE NOT NULL,
+                   payload TEXT NOT NULL,
+                   created_at TIMESTAMP NOT NULL DEFAULT NOW()
+               )""",
             # Watch party sohbeti ve tepkileri (mac basina oda)
             """CREATE TABLE IF NOT EXISTS watch_messages (
                    id SERIAL PRIMARY KEY,
@@ -1069,6 +1076,28 @@ class Database:
         """E-posta linkinden gelen kayit sayisi."""
         return int(self._run("SELECT COUNT(*) FROM users WHERE signup_source LIKE 'email%%'",
                              fetch="value") or 0)
+
+    # ==================== MAC SIMULASYONLARI ====================
+
+    def save_sim(self, game_id, day, payload):
+        return bool(self._run("INSERT INTO game_sims (game_id, day, payload) VALUES (%s, %s, %s) "
+                              "ON CONFLICT (game_id) DO UPDATE SET payload = EXCLUDED.payload, day = EXCLUDED.day, "
+                              "created_at = NOW()", (str(game_id), day, payload)))
+
+    def get_sim(self, game_id):
+        import json
+        raw = self._run("SELECT payload FROM game_sims WHERE game_id = %s", (str(game_id),), fetch="value")
+        return json.loads(raw) if raw else None
+
+    def sims_for_day(self, day):
+        rows = self._run("SELECT game_id FROM game_sims WHERE day = %s", (day,), fetch="all") or []
+        return {r["game_id"] for r in rows}
+
+    def sim_ids(self, game_ids):
+        if not game_ids:
+            return set()
+        rows = self._run("SELECT game_id FROM game_sims WHERE game_id = ANY(%s)", (list(map(str, game_ids)),), fetch="all") or []
+        return {r["game_id"] for r in rows}
 
     # ==================== WATCH PARTY ====================
 

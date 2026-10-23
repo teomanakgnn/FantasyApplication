@@ -30,7 +30,8 @@
       <img src="{{ g[side ~ '_logo'] }}" alt="" loading="lazy"><b>{{ g[side ~ '_nick'] }}</b><span>{{ sc if g.final or g.live else '' }}</span>
     </div>
     {% endfor %}
-    <div class="nb-cta">{{ 'Box score & shot charts' if g.final or g.live else 'Preview' }} &rarr;</div>
+    <div class="nb-cta">{% if g.sim and not g.final %}5,000 simulations &rarr;{% else %}{{ 'Box score & shot charts' if g.final or g.live else 'Preview' }} &rarr;{% endif %}</div>
+    {% if g.sim %}<span class="sim-chip">5,000 sims</span>{% endif %}
   </a>
   {% endfor %}
 </div>

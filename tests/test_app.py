@@ -311,3 +311,15 @@ def test_lineup_assignment_picks_best_eligible_spots():
     rows, cols = _assign(w)
     assert sum(w[r, c] for r, c in zip(rows, cols)) == 10 + 8 + 6
     assert all(w[r, c] > -1 for r, c in zip(rows, cols))
+
+
+def test_game_sim_minutes_rotation():
+    """Simulasyon dakikalari: takim 240, yildiz dakikasini korur, sakat oynamaz."""
+    import numpy as np
+    from services import game_sim
+    players = [{"min": m, "play": 1.0} for m in (36, 34, 32, 30, 28, 24, 20, 18, 14, 10, 8, 6)]
+    players[1]["play"] = 0.0
+    m = game_sim._minutes(np.random.default_rng(0), players, 500)
+    assert np.allclose(m.sum(axis=1), 240, atol=1e-6)
+    assert m[:, 1].max() == 0
+    assert m[:, 0].mean() > 32 and m[:, -1].mean() < 6

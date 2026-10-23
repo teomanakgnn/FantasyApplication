@@ -32,6 +32,10 @@ def scores(request: Request, date: str = ""):
             if games:
                 day = today - timedelta(days=back)
                 break
+    from services.database import db
+    simmed = db.sim_ids([g["game_id"] for g in games]) if db.available and games else set()
+    for g in games:
+        g["sim"] = g["game_id"] in simmed
     return render(request, "nba_scores.html", active="scores", day=day, today=today, games=games,
                   prev=day - timedelta(days=1), next=day + timedelta(days=1),
                   canonical="/nba/scores" if day == today or not date else f"/nba/scores?date={day.isoformat()}")
@@ -62,9 +66,36 @@ def game_page(request: Request, game_id: str, slug: str):
         return RedirectResponse(g["path"], 301)
     _, by_slug = pp.table()
     rows = [r for _, lst in g["box"] for r in lst]
-    return render(request, "nba_game.html", active="scores", g=g,
+    from services.database import db
+    sim = db.get_sim(game_id) if db.available else None
+    u = current_user(request)
+    return render(request, "nba_game.html", active="scores", g=g, sim=sim,
+                  is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
+
+
+@router.post("/api/admin/sim/{game_id}")
+def admin_sim(request: Request, game_id: str):
+    """Yonetici: herhangi bir maci simdi simule et (gunluk secimden bagimsiz)."""
+    import json
+
+    import config
+    from fastapi.responses import JSONResponse
+
+    from services import game_sim
+    from services.database import db
+    from services.nba_season import get_current_season_year
+    u = current_user(request)
+    if not (u and u.get("username") in config.ADMIN_USERNAMES):
+        return JSONResponse({"error": "Not available."}, 403)
+    g = _game(game_id)
+    res = game_sim.simulate(game_id, g["away"]["abbr"], g["home"]["abbr"], get_current_season_year())
+    if not res:
+        return JSONResponse({"error": "Not enough roster data to simulate."}, 400)
+    day = g["when"].date() if g["when"] else nb.today_et()
+    db.save_sim(game_id, day, json.dumps(res))
+    return {"ok": True, "p_home": res["p_home"]}
 
 
 @router.get("/nba/standings")

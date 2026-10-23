@@ -57,7 +57,7 @@
   {% for g in games %}
   <div class="game">
     <div class="game-mini" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}" role="button" tabindex="0">
-      <div class="gm-st">{{ g.status }}</div>
+      <div class="gm-st">{{ g.status }}{% if g.sim %} · sim{% endif %}</div>
       {% for side in ('away', 'home') %}{% set sc, other = (g.away_score, g.home_score) if side == 'away' else (g.home_score, g.away_score) %}
       <div class="gm-r {{ 'won' if g.final and (sc|int) > (other|int) }}"><img src="{{ g[side ~ '_logo'] }}" alt="" loading="lazy"><span>{{ g[side ~ '_team'] }}</span><b class="{{ 'gm-hide' if spoiler and g.final }}">{{ sc }}</b></div>
       {% endfor %}
@@ -73,7 +73,7 @@
     </div>
     <div class="game-actions">
       <button class="btn btn-sm btn-ghost" data-modal-url="/api/boxscore/{{ g.game_id }}?final={{ 1 if g.final else 0 }}">Box score</button>
-      <a class="btn btn-sm btn-ghost" href="{{ g.page }}">Game page</a>
+      <a class="btn btn-sm btn-ghost" href="{{ g.page }}">{{ '5,000 sims' if g.sim and not g.final else 'Game page' }}</a>
     </div>
   </div>
   {% endfor %}

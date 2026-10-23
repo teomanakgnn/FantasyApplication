@@ -59,3 +59,37 @@
   .nb-team b { font-size: .8rem; }
   .nb-big { font-size: 1.9rem; }
 }
+
+/* Mac simulasyonu */
+.sim { margin-top: 12px; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.sim h2 { margin: 2px 0 4px; font-size: 1.2rem; }
+.sim-result { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); margin: 10px 0; font-size: .92rem; border: 1px solid var(--line); }
+.sim-result.good { border-color: color-mix(in srgb, var(--good) 50%, transparent); }
+.sim-result.bad { border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.sim-win { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin: 14px 0; }
+.sim-team { display: flex; align-items: center; gap: 8px; }
+.sim-team img { width: 34px; height: 34px; }
+.sim-team span { font-size: 1.5rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.sim-bar { height: 14px; border-radius: 999px; background: var(--accent); overflow: hidden; }
+.sim-bar i { display: block; height: 100%; background: #9AA6BD; }
+.sim-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sim-kpis div { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; min-width: 0; }
+.sim-kpis span { font-size: .66rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.sim-kpis b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.sim-kpis small { font-size: .72rem; color: var(--dim); }
+.sim-ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 1rem !important; }
+.sim-h3 { font-size: .95rem; margin: 18px 0 8px; }
+.sim-hist { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; align-items: end; height: 150px; }
+.sim-col { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.sim-col i { width: 100%; border-radius: 6px 6px 0 0; background: #9AA6BD; min-height: 2px; }
+.sim-col.home i { background: var(--accent); }
+.sim-col span { font-size: .58rem; color: var(--muted); white-space: nowrap; transform: rotate(-35deg); transform-origin: top center; height: 22px; }
+.sim-typ { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nb-game .sim-chip, .sim-chip { display: inline-block; align-self: flex-start; font-size: .66rem; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 900px) { .sim-typ { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .sim-kpis { grid-template-columns: 1fr 1fr; }
+  .sim-team span { font-size: 1.2rem; }
+  .sim-hist { height: 120px; gap: 2px; }
+}
