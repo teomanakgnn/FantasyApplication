@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}NBA Teams 2026-27: Rosters, Schedules & Stats for All 30 Teams · HoopLife NBA{% endblock %}
+{% block description %}All 30 NBA teams for 2026-27: rosters with player stats, schedules and results, team leaders and injury reports, by conference.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">2026-27 NBA season</div>
+  <h1>NBA Teams</h1>
+  <p>Every team's roster with stats, schedule and results, leaders and injuries.</p>
+</div>
+{% for conf in confs %}
+<h2 style="font-size:1.05rem;margin:18px 0 8px">{{ conf.name }}</h2>
+<div class="tm-list">
+  {% for r in conf.rows %}{% set tm = team_of(r.abbr) %}{% if tm %}
+  <a class="card tm-card" href="/nba/teams/{{ tm.slug }}"><img src="{{ tm.logo }}" alt="" loading="lazy"><span><b>{{ tm.name }}</b><small>{{ r.w }}-{{ r.l }} · {{ loop.index }}{{ 'st' if loop.index == 1 else 'nd' if loop.index == 2 else 'rd' if loop.index == 3 else 'th' }}</small></span></a>
+  {% endif %}{% endfor %}
+</div>
+{% endfor %}
+{% if not confs %}
+<div class="tm-list">{% for tm in all_teams %}<a class="card tm-card" href="/nba/teams/{{ tm.slug }}"><img src="{{ tm.logo }}" alt="" loading="lazy"><span><b>{{ tm.name }}</b></span></a>{% endfor %}</div>
+{% endif %}
+{% endblock %}

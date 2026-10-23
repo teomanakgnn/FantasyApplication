@@ -199,7 +199,8 @@ def _extra_pages():
     """Oyuncu sayfalari ve sezonun biten maclari (Google'in bulmasi icin). Punt
     siralamalari ayni sayfanin sorgulu hali (canonical /rankings), haritaya konmuyor."""
     from services.nba_pages import indexed_games
-    return players.sitemap_paths() + [path for path, _ in indexed_games()]
+    from services.team_pages import sitemap_paths as team_paths
+    return players.sitemap_paths() + team_paths() + [path for path, _ in indexed_games()]
 
 
 @app.get("/llms.txt", include_in_schema=False)
@@ -215,6 +216,7 @@ def llms():
 ## NBA scores and stats (2026-27 season)
 - [NBA scores today]({base}/nba/scores): every game of the day with live and final scores; any date via ?date=YYYY-MM-DD.
 - [Game pages]({base}/nba/scores): one page per game - box score, quarter scores, top performers, team and player shot charts, recap.
+- [NBA teams]({base}/nba/teams): all 30 teams - roster with stats, schedule and results, team leaders, injury report (e.g. {base}/nba/teams/boston-celtics).
 - [NBA standings]({base}/nba/standings): Eastern and Western Conference tables with games behind, home/road, last 10, streak.
 - [Player stats and game logs]({base}/players/victor-wembanyama): 2026-27 season averages, every game this season, fantasy outlook.
 - [NBA injury report]({base}/injuries): every injured player by team, updated through the day.

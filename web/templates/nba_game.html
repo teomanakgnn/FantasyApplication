@@ -10,13 +10,13 @@
 <nav class="tiny dim" style="margin-bottom:8px"><a href="/nba/scores{% if g.when %}?date={{ g.when.date().isoformat() }}{% endif %}">NBA scores</a> › {{ a.nick }} vs {{ h.nick }}</nav>
 
 <section class="card nb-head">
-  <div class="nb-team {{ 'won' if g.final and a.winner }}"><img src="{{ a.logo }}" alt="{{ a.name }}"><b>{{ a.name }}</b><small>{{ a.record }}</small></div>
+  <div class="nb-team {{ 'won' if g.final and a.winner }}"><img src="{{ a.logo }}" alt="{{ a.name }}">{% if a.page %}<a href="{{ a.page }}"><b>{{ a.name }}</b></a>{% else %}<b>{{ a.name }}</b>{% endif %}<small>{{ a.record }}</small></div>
   <div class="nb-score">
     {% if g.started %}<div class="nb-big"><span>{{ a.score }}</span><i>-</i><span>{{ h.score }}</span></div>{% endif %}
     <div class="nb-detail {{ 'live' if g.state == 'in' }}">{{ g.detail }}</div>
     <div class="tiny dim">{{ nice }}{% if g.venue %} · {{ g.venue }}{% endif %}</div>
   </div>
-  <div class="nb-team {{ 'won' if g.final and h.winner }}"><img src="{{ h.logo }}" alt="{{ h.name }}"><b>{{ h.name }}</b><small>{{ h.record }}</small></div>
+  <div class="nb-team {{ 'won' if g.final and h.winner }}"><img src="{{ h.logo }}" alt="{{ h.name }}">{% if h.page %}<a href="{{ h.page }}"><b>{{ h.name }}</b></a>{% else %}<b>{{ h.name }}</b>{% endif %}<small>{{ h.record }}</small></div>
 </section>
 
 <h1 class="nb-h1">{{ a.name }} vs {{ h.name }}{% if nice %} <span class="dim">· {{ nice }}</span>{% endif %}</h1>

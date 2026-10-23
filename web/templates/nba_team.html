@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ t.name }} 2026-27: Roster, Schedule, Stats & Injuries · HoopLife NBA{% endblock %}
+{% block description %}{{ t.name }} 2026-27: {{ t.wins }}-{{ t.losses }}{% if t.rank %}, {{ t.rank.seed }}{{ 'st' if t.rank.seed == 1 else 'nd' if t.rank.seed == 2 else 'rd' if t.rank.seed == 3 else 'th' }} in the {{ t.rank.conf }}{% endif %}. Full roster with stats, schedule and results, team leaders{% if t.leaders %} ({{ t.leaders[0].p.name }} {{ '%.1f'|format(t.leaders[0].value) }} ppg){% endif %} and injury report.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<nav class="tiny dim" style="margin-bottom:8px"><a href="/nba/teams">NBA teams</a> › {{ t.name }}</nav>
+<section class="card tm-head" style="--tm: {{ t.color }}">
+  <img src="{{ t.logo }}" alt="{{ t.name }} logo" width="88" height="88">
+  <div>
+    <div class="eyebrow" style="margin:0">2026-27 season</div>
+    <h1>{{ t.name }}</h1>
+    <div class="tm-chips">
+      <span class="chip chip-accent">{{ t.wins }}-{{ t.losses }}</span>
+      {% if t.rank %}<span class="chip">{{ t.rank.seed }}{{ 'st' if t.rank.seed == 1 else 'nd' if t.rank.seed == 2 else 'rd' if t.rank.seed == 3 else 'th' }} in the {{ t.rank.conf }}</span>
+      {% if t.rank.streak %}<span class="chip">Streak {{ t.rank.streak }}</span>{% endif %}{% if t.rank.l10 %}<span class="chip">Last 10: {{ t.rank.l10 }}</span>{% endif %}{% endif %}
+    </div>
+  </div>
+  {% if t.next %}<a class="tm-next" href="{{ t.next.path }}"><span>Next game</span><b>{{ 'vs' if t.next.home else '@' }} {{ t.next.opp_nick }}</b><small>{% if t.next.when %}{{ t.next.when.strftime('%a %b') }} {{ t.next.when.day }}, <span data-tip="{{ t.next.when.isoformat() }}"></span>{% endif %}</small></a>{% endif %}
+</section>
+
+<div class="tm-grid">
+  <section class="card">
+    <h2 class="card-title">Results</h2>
+    {% for g in t.played %}
+    <a class="tm-game" href="{{ g.path }}"><span class="tm-res {{ 'good' if g.won else 'bad' }}">{{ 'W' if g.won else 'L' }}</span>
+      <img src="{{ g.opp_logo }}" alt=""><b>{{ 'vs' if g.home else '@' }} {{ g.opp_nick }}</b><span class="tm-sc">{{ g.us }}-{{ g.them }}</span><small>{% if g.when %}{{ g.when.strftime('%b') }} {{ g.when.day }}{% endif %}</small></a>
+    {% else %}<p class="muted small">No games played yet.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <h2 class="card-title">Upcoming</h2>
+    {% for g in t.upcoming %}
+    <a class="tm-game" href="{{ g.path }}"><span class="tm-res dim">{{ g.when.strftime('%b') if g.when }} {{ g.when.day if g.when }}</span>
+      <img src="{{ g.opp_logo }}" alt=""><b>{{ 'vs' if g.home else '@' }} {{ g.opp_nick }}</b><small>{% if g.when %}<span data-tip="{{ g.when.isoformat() }}"></span>{% endif %}</small></a>
+    {% else %}<p class="muted small">No upcoming games.</p>{% endfor %}
+  </section>
+</div>
+
+{% if t.leaders %}
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">Team leaders <span class="dim small">· per game</span></h2>
+  <div class="tm-leaders">
+    {% for l in t.leaders %}{% set sl = player_slug(l.p.name) %}
+    <a {% if sl %}href="/players/{{ sl }}"{% endif %} class="tm-leader"><span class="pface"><img src="{{ face(l.p.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span>
+      <span><small>{{ l.label }}</small><b>{{ l.p.name }}</b></span><em>{{ '%.1f'|format(l.value) }}</em></a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">{{ t.name }} roster</h2>
+  <div class="table-wrap"><table class="table small">
+    <thead><tr><th class="l sticky-col">Player</th><th>#</th><th>Pos</th><th>Age</th><th>Ht</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th></tr></thead>
+    <tbody>{% for p in t.roster %}{% set sl = player_slug(p.name) %}<tr>
+      <td class="l sticky-col"><span class="pface"><img src="{{ face(p.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span>{% if sl %}<a class="player-name" href="/players/{{ sl }}">{{ p.name }}</a>{% else %}<span class="player-name">{{ p.name }}</span>{% endif %}</td>
+      <td>{{ p.jersey }}</td><td>{{ p.pos }}</td><td>{{ p.age or '' }}</td><td>{{ p.height }}</td>
+      {% if p.s %}<td>{{ p.s.GP|int }}</td><td>{{ '%.1f'|format(p.s.MIN) }}</td><td><b>{{ '%.1f'|format(p.s.PTS) }}</b></td><td>{{ '%.1f'|format(p.s.REB) }}</td><td>{{ '%.1f'|format(p.s.AST) }}</td><td>{{ '%.1f'|format(p.s.STL) }}</td><td>{{ '%.1f'|format(p.s.BLK) }}</td><td>{{ '%.1f'|format(p['s']['3Pts']) }}</td>
+      {% else %}<td colspan="8" class="dim">No NBA games yet</td>{% endif %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="tiny dim" style="margin:6px 0 0">Per-game averages: 2026-27 once a player has played 5 games this season, otherwise 2025-26.</p>
+</section>
+
+{% if t.injuries %}
+<section class="card" style="margin-top:12px">
+  <h2 class="card-title">Injury report</h2>
+  {% for i in t.injuries %}<div class="tm-inj"><b>{{ i.player }}</b> <span class="chip {{ 'chip-bad' if 'out' in (i.status or '')|lower }}">{{ i.status }}</span><p class="small muted">{{ i.injury_type }}</p></div>{% endfor %}
+</section>
+{% endif %}
+
+{% from "partials/faq.html" import faq %}
+{% set top = t.leaders[0] if t.leaders else none %}
+{{ faq([
+  ("What is the " ~ t.name ~ " record this season?",
+   "The " ~ t.name ~ " are " ~ t.wins ~ "-" ~ t.losses ~ " in the 2026-27 NBA season" ~ ((", " ~ t.rank.seed ~ " in the " ~ t.rank.conf) if t.rank else "") ~ "."),
+  ("Who leads the " ~ t.nick ~ " in scoring?",
+   (top.p.name ~ " leads the " ~ t.nick ~ " with " ~ ('%.1f'|format(top.value)) ~ " points per game.") if top else "Scoring leaders appear once the season starts."),
+  ("When is the next " ~ t.nick ~ " game?",
+   ("The " ~ t.nick ~ " play " ~ ('the ' ~ t.next.opp_nick ~ ' at home' if t.next.home else 'at the ' ~ t.next.opp_nick) ~ (" on " ~ t.next.when.strftime('%A, %B ') ~ t.next.when.day if t.next.when else "") ~ ".") if t.next else "The schedule is shown above."),
+  ("Who is injured on the " ~ t.nick ~ "?",
+   (t.injuries|map(attribute='player')|join(", ") ~ " are on the injury report.") if t.injuries else "No " ~ t.nick ~ " players are on the injury report right now.")
+], t.nick ~ " - questions") }}
+<p class="small muted" style="margin-top:16px">More: <a href="/nba/teams">all NBA teams</a> · <a href="/nba/standings">standings</a> · <a href="/nba/scores">scores</a> · <a href="/injuries">injury report</a></p>
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "SportsTeam", "name": t.name, "sport": "Basketball",
+  "memberOf": {"@type": "SportsOrganization", "name": "NBA"}, "logo": t.logo, "url": site_url ~ "/nba/teams/" ~ t.slug,
+  "athlete": t.roster|map(attribute='name')|list}|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll("[data-tip]").forEach((el) => { el.textContent = new Date(el.dataset.tip).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); });
+</script>{% endblock %}

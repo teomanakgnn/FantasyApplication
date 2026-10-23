@@ -70,10 +70,33 @@ def game_page(request: Request, game_id: str, slug: str):
     sim = db.get_sim(game_id) if db.available else None
     u = current_user(request)
     from services import game_sim
+    from services import team_pages as tp
+    g["away"]["page"], g["home"]["page"] = tp.path(g["away"]["abbr"]), tp.path(g["home"]["abbr"])
     return render(request, "nba_game.html", active="scores", g=g, sim=sim,
                   sim_record=game_sim.record() if sim and db.available else None,
                   is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
+                  player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
+
+
+@router.get("/nba/teams")
+def teams_index(request: Request):
+    from services import team_pages as tp
+    try:
+        confs = nb.standings()
+    except Exception:
+        confs = []
+    return render(request, "nba_teams.html", active="teams", confs=confs, all_teams=tp.teams(), team_of=tp.by_abbr)
+
+
+@router.get("/nba/teams/{slug}")
+def team_page(request: Request, slug: str):
+    from services import team_pages as tp
+    t = tp.team(slug.lower())
+    if not t:
+        raise HTTPException(404, "Team not found")
+    _, by_slug = pp.table()
+    return render(request, "nba_team.html", active="teams", t=t,
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
 
 
@@ -123,4 +146,8 @@ def standings(request: Request):
         confs = nb.standings()
     except Exception:
         confs = []
+    from services import team_pages as tp
+    for c in confs:
+        for r in c["rows"]:
+            r["page"] = tp.path(r["abbr"])
     return render(request, "nba_standings.html", active="standings", confs=confs, today=nb.today_et())

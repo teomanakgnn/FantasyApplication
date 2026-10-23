@@ -45,6 +45,7 @@ NAV = [
     ("home", "/", "Home"),
     ("scores", "/nba/scores", "Scores"),
     ("standings", "/nba/standings", "Standings"),
+    ("teams", "/nba/teams", "Teams"),
     ("rankings", "/rankings", "Rankings 2026-27"),
     ("waiver", "/waiver-wire", "Waiver Wire"),
     ("ou", "/over-under", "Over / Under"),

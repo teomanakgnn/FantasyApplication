@@ -17,7 +17,7 @@
     <thead><tr><th>#</th><th class="l sticky-col">Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>Home</th><th>Road</th><th>L10</th><th>Strk</th><th>Diff</th></tr></thead>
     <tbody>{% for r in c.rows %}<tr class="{{ 'cut-po' if loop.index == 6 else 'cut-pi' if loop.index == 10 }}">
       <td>{{ loop.index }}</td>
-      <td class="l sticky-col"><span class="nb-tm"><img src="{{ r.logo }}" alt="" loading="lazy">{{ r.name }}</span></td>
+      <td class="l sticky-col"><span class="nb-tm"><img src="{{ r.logo }}" alt="" loading="lazy">{% if r.page %}<a href="{{ r.page }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</span></td>
       <td><b>{{ r.w }}</b></td><td>{{ r.l }}</td><td>{{ r.pct }}</td><td>{{ r.gb }}</td><td>{{ r.home }}</td><td>{{ r.road }}</td><td>{{ r.l10 }}</td><td>{{ r.streak }}</td>
       <td class="{{ 'good' if (r.diff or '0')|float > 0 else 'bad' if (r.diff or '0')|float < 0 }}">{{ r.diff }}</td>
     </tr>{% endfor %}</tbody>
