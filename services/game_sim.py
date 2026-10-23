@@ -121,8 +121,13 @@ def _minutes(rng, players, n):
     want = np.where(plays, np.clip(base + rng.normal(0, 2.5, (n, len(players))), 0, 42), 0.0)
     before = np.cumsum(want, axis=1) - want
     m = np.clip(np.minimum(want, 240.0 - before), 0, None)
-    tot = m.sum(axis=1, keepdims=True)
-    m = np.where(tot < 240, np.minimum(m * 240.0 / np.maximum(tot, 1e-9), 44.0), m)
+    # Toplam 240'in altindaysa oynayanlara orantili ekle; 44 sinirina takilanin
+    # artani digerlerine gecsin (birkac tur)
+    for _ in range(4):
+        gap = 240.0 - m.sum(axis=1, keepdims=True)
+        room = np.where((m > 0) & (m < 44.0), m, 0.0)
+        share = room / np.maximum(room.sum(axis=1, keepdims=True), 1e-9)
+        m = np.minimum(m + np.clip(gap, 0, None) * share, 44.0)
     return m
 
 

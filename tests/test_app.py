@@ -322,4 +322,4 @@ def test_game_sim_minutes_rotation():
     m = game_sim._minutes(np.random.default_rng(0), players, 500)
     assert np.allclose(m.sum(axis=1), 240, atol=1e-6)
     assert m[:, 1].max() == 0
-    assert m[:, 0].mean() > 32 and m[:, -1].mean() < 6
+    assert m[:, 0].mean() > 32 and m[:, -1].mean() < 9   # yildiz sakat: kalanlar biraz artar
