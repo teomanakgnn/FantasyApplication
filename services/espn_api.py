@@ -180,12 +180,12 @@ def get_game_shots(game_id):
     return shots
 
 
-@cache_data(ttl=86400)
+@cache_data(ttl=86400, skip_empty=True)
 def get_cached_shots(game_id):
     return get_game_shots(game_id)
 
 
-@cache_data(ttl=86400)
+@cache_data(ttl=86400, skip_empty=True)
 def get_cached_boxscore(game_id):
     return get_boxscore(game_id)
 

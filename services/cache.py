@@ -26,9 +26,24 @@ def _key(args, kwargs):
         return repr((args, sorted(kwargs.items())))
 
 
-def cache_data(ttl=None, show_spinner=None, copy_result=True, max_entries=256):
+def _empty(value):
+    if value is None:
+        return True
+    if hasattr(value, "empty") and isinstance(getattr(value, "empty"), bool):
+        return value.empty
+    try:
+        return len(value) == 0
+    except TypeError:
+        return False
+
+
+def cache_data(ttl=None, show_spinner=None, copy_result=True, max_entries=256, skip_empty=False):
     """
     Dekorator. ``ttl`` saniye cinsinden (None = surec boyunca).
+
+    ``skip_empty``: bos sonuc (bos liste/sozluk, None) saklanmaz. ESPN'in
+    anlik bir hatasi ya da henuz dolmamis veri uzun sure onbellekte kalmasin
+    (bir macin kutu skoru 24 saat bos gorunuyordu).
 
     ``show_spinner`` Streamlit uyumlulugu icin kabul edilip yok sayilir.
     ``_`` ile baslayan anahtar kelime argumanlari da Streamlit'teki gibi
@@ -55,6 +70,8 @@ def cache_data(ttl=None, show_spinner=None, copy_result=True, max_entries=256):
                 if hit is not None and (ttl is None or time.time() - hit[0] < ttl):
                     return copy.deepcopy(hit[1]) if copy_result else hit[1]
                 value = func(*args, **kwargs)
+                if skip_empty and _empty(value):
+                    return value
                 if len(store) >= max_entries:
                     oldest = min(store, key=lambda k: store[k][0])
                     store.pop(oldest, None)

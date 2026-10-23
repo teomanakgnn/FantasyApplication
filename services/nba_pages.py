@@ -56,7 +56,7 @@ def _day_live(day):
     return get_scoreboard(datetime.combine(day, datetime.min.time()))
 
 
-@cache_data(ttl=6 * 3600, show_spinner=False)
+@cache_data(ttl=6 * 3600, show_spinner=False, skip_empty=True)
 def _day_past(day):
     from services.espn_api import get_scoreboard
     return get_scoreboard(datetime.combine(day, datetime.min.time()))
