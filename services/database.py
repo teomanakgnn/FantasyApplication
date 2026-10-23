@@ -1093,6 +1093,18 @@ class Database:
         rows = self._run("SELECT game_id FROM game_sims WHERE day = %s", (day,), fetch="all") or []
         return {r["game_id"] for r in rows}
 
+    def all_sims(self, limit=200):
+        import json
+        rows = self._run("SELECT game_id, day, payload FROM game_sims ORDER BY day DESC, created_at DESC LIMIT %s",
+                         (int(limit),), fetch="all") or []
+        out = []
+        for r in rows:
+            try:
+                out.append({"game_id": r["game_id"], "day": r["day"], "sim": json.loads(r["payload"])})
+            except ValueError:
+                continue
+        return out
+
     def sim_ids(self, game_ids):
         if not game_ids:
             return set()

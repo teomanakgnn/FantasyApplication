@@ -21,7 +21,7 @@ WINDOWS = {"7": ("Last 7 days", 1), "15": ("Last 15 days", 2), "season": ("Seaso
 POS = {1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C"}
 # ESPN istatistik kimlikleri -> bizim alanlar
 STAT = {"pts": "0", "blk": "1", "stl": "2", "ast": "3", "reb": "6", "to": "11", "fgm": "13", "fga": "14",
-        "ftm": "15", "fta": "16", "tpm": "17", "min": "40", "gp": "42"}
+        "ftm": "15", "fta": "16", "tpm": "17", "tpa": "18", "min": "40", "gp": "42"}
 
 
 @cache_data(ttl=2 * 3600, show_spinner=False, copy_result=False)

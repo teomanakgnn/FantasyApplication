@@ -156,3 +156,5 @@
 .sim-factors span.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
 .sim-factors span.warn { color: #F2C94C; }
 @media (max-width: 640px) { .sim-factors { grid-template-columns: 1fr; } }
+
+.sim-rec { margin: 4px 0 6px; font-size: .85rem; }

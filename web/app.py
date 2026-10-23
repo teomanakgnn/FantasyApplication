@@ -122,7 +122,7 @@ def healthz():
     return JSONResponse({"ok": False, "warming": True}, status_code=503)
 
 
-PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/waiver-wire", "/over-under", "/bracket",
+PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/nba/simulations", "/waiver-wire", "/over-under", "/bracket",
                 "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
@@ -364,10 +364,18 @@ def _warm():
                 try:
                     sims = game_sim.daily_run()
                     if sims and config.PRODUCTION:
-                        _ping_indexnow(sims)
+                        _ping_indexnow(sims + ["/nba/simulations"])
+                    game_sim.evaluate()
                 except Exception as exc:
                     print(f"game sim failed: {exc}")
-                time.sleep(1800)
+                # Mac oncesi yenileme icin daha sik bak (20 dk); diger isler 30 dk'da bir
+                for _ in range(3):
+                    time.sleep(600)
+                    try:
+                        from services.nba_pages import today_et
+                        game_sim.refresh_before_tip(today_et())
+                    except Exception as exc:
+                        print(f"sim refresh failed: {exc}")
                 try:
                     fresh = nba_pages.refresh_index()
                     if fresh and config.PRODUCTION:

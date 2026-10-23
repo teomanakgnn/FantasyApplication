@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}NBA Game Simulations & Predictions - 5,000 Simulations a Game · HoopLife NBA{% endblock %}
+{% block description %}Every NBA game HoopLife simulated 5,000 times: win probability, most likely score and projected box score, with the model's track record{% if rec %} ({{ rec.right }}-{{ rec.wrong }} picking winners){% endif %}.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="eyebrow">2026-27 NBA season</div>
+  <h1>NBA Game Simulations</h1>
+  <p>Every morning two games are played 5,000 times each - from every player's numbers, today's injury report, tempo, defense, rest and home court - and updated about an hour before tip-off. Here is every simulation and how it turned out.</p>
+</div>
+{% if rec %}
+<div class="sim-kpis" style="margin-bottom:14px">
+  <div><span>Winners picked</span><b>{{ rec.right }}-{{ rec.wrong }}</b><small>{{ rec.pct }}% of {{ rec.games }} games</small></div>
+  <div><span>Margin error</span><b>{{ rec.margin_err }}</b><small>points, on average</small></div>
+  <div><span>Total points error</span><b>{{ rec.total_err }}</b><small>points, on average</small></div>
+  <div><span>Brier score</span><b>{{ rec.brier }}</b><small>lower is better (0.25 = coin flip)</small></div>
+</div>
+{% endif %}
+{% if not items %}<div class="empty">The first simulations run tomorrow morning.</div>{% endif %}
+<div class="table-wrap"><table class="table small">
+  <thead><tr><th class="l">Date</th><th class="l">Game</th><th>Pick</th><th>Most likely</th><th>Final</th><th>Result</th></tr></thead>
+  <tbody>{% for it in items %}{% set s = it.s %}{% set r = s.result %}<tr>
+    <td class="l">{{ it.day.strftime('%b') }} {{ it.day.day }}</td>
+    <td class="l"><a href="{{ it.path }}">{{ it.away_nick }} @ {{ it.home_nick }}</a></td>
+    <td><b>{{ it.fav }}</b> {{ (100 * it.p_fav)|round|int }}%</td>
+    <td>{{ s.score.away.median|int }}-{{ s.score.home.median|int }}</td>
+    <td>{% if r %}{{ r.away }}-{{ r.home }}{% else %}<span class="dim">-</span>{% endif %}</td>
+    <td>{% if r %}<span class="{{ 'good' if r.correct else 'bad' }}">{{ 'Correct' if r.correct else 'Missed' }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div>
+<p class="tiny dim" style="margin-top:8px">For fun and fantasy decisions - not betting advice.</p>
+{% endblock %}

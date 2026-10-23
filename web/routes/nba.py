@@ -69,10 +69,29 @@ def game_page(request: Request, game_id: str, slug: str):
     from services.database import db
     sim = db.get_sim(game_id) if db.available else None
     u = current_user(request)
+    from services import game_sim
     return render(request, "nba_game.html", active="scores", g=g, sim=sim,
+                  sim_record=game_sim.record() if sim and db.available else None,
                   is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
+
+
+@router.get("/nba/simulations")
+def simulations(request: Request):
+    """Butun simulasyonlar ve modelin karnesi."""
+    from services import game_sim
+    from services.database import db
+    rows = db.all_sims(120) if db.available else []
+    items = []
+    for r in rows:
+        s = r["sim"]
+        fav_home = s["p_home"] >= 0.5
+        items.append({"day": r["day"], "s": s, "fav": s["home"] if fav_home else s["away"],
+                      "p_fav": s["p_home"] if fav_home else s["p_away"],
+                      "path": f"/nba/game/{r['game_id']}/{nb.game_slug(s['away'], s['home'])}",
+                      "away_nick": nb.nick(s["away"]), "home_nick": nb.nick(s["home"])})
+    return render(request, "nba_sims.html", active="scores", items=items, rec=game_sim.record() if db.available else None)
 
 
 @router.post("/api/admin/sim/{game_id}")

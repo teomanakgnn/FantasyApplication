@@ -5,7 +5,8 @@
     <div>
       <div class="eyebrow" style="margin:0">{{ '{:,}'.format(s.n) }} simulations</div>
       <h2>We played {{ a.nick }} @ {{ h.nick }} {{ '{:,}'.format(s.n) }} times</h2>
-      <p class="small muted">Every simulation draws who plays (today's injury report), minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 numbers - adjusted for each team's tempo and defense, back-to-backs, hot and cold shooting nights and home court.</p>
+      {% if sim_record %}<p class="sim-rec"><b>Model record: {{ sim_record.right }}-{{ sim_record.wrong }}</b> picking winners ({{ sim_record.pct }}%) · off by {{ sim_record.margin_err }} pts on the margin on average · <a href="/nba/simulations">all simulations</a></p>{% else %}<p class="sim-rec"><a href="/nba/simulations">All simulations and the model's track record</a></p>{% endif %}
+      <p class="small muted">Every simulation draws who plays (today's injury report), minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 numbers - adjusted for each team's tempo and defense, rebounding and rim protection, rest days, hot and cold shooting nights and home court (bigger in Denver and Utah).{% if s.refreshed %} <b>Updated about an hour before tip-off with the latest injury report.</b>{% endif %}</p>
     </div>
   </div>
 
@@ -39,7 +40,11 @@
       <span>pace {{ 'fast' if f.pace > 1.015 else 'slow' if f.pace < 0.985 else 'average' }}</span>
       {% if f.pa %}<span>allows {{ f.pa }} ppg{{ ' (tough D)' if f.def < 0.97 else ' (leaky D)' if f.def > 1.03 else '' }}</span>{% endif %}
       {% if f.b2b %}<span class="bad">back-to-back</span>{% endif %}
+      {% if f.rest is defined and f.rest >= 2 %}<span>rested</span>{% endif %}
+      {% if f.reb_share is defined %}<span>{{ (100 * f.reb_share)|round|int }}% of rebounds</span>{% endif %}
+      {% if f.rim is defined and f.rim > 1.12 %}<span>rim protection</span>{% endif %}
       {% for d in f.doubtful %}<span class="warn">{{ d }} questionable</span>{% endfor %}
+      {% for d in (f.proj_only or [])[:2] %}<span>{{ d }} (projection)</span>{% endfor %}
     </div>
     {% endfor %}
   </div>
