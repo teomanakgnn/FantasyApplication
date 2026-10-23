@@ -43,7 +43,25 @@
     {% endfor %}
   </div>
 
-  <h3 class="sim-h3">The most typical game <span class="dim small">· {{ a.abbr }} {{ s.typical.score.away }} - {{ s.typical.score.home }} {{ h.abbr }}{% if s.typical.ot %} (OT){% endif %}</span></h3>
+  <h3 class="sim-h3">Watch the most typical game <span class="dim small">· {{ a.abbr }} {{ s.typical.score.away }} - {{ s.typical.score.home }} {{ h.abbr }}{% if s.typical.ot %} (OT){% endif %}</span></h3>
+  <div class="sim-anim" id="sim-anim">
+    <div class="sa-board">
+      <div class="sa-t"><img src="{{ a.logo }}" alt=""><b>{{ a.abbr }}</b><span class="sa-a">0</span></div>
+      <div class="sa-clock">Q1 12:00</div>
+      <div class="sa-t r"><span class="sa-h">0</span><b>{{ h.abbr }}</b><img src="{{ h.logo }}" alt=""></div>
+    </div>
+    <svg class="sa-court" viewBox="0 0 94 50" role="img" aria-label="Simulated game on court"></svg>
+    <svg class="sa-flow" viewBox="0 0 600 90" preserveAspectRatio="none" aria-label="Score margin over the game"></svg>
+    <div class="sa-ctrl">
+      <button class="btn btn-primary btn-sm sa-play" type="button">Play</button>
+      <div class="seg seg-sm" role="group" aria-label="Speed"><button type="button" data-speed="1" class="is-on">1x</button><button type="button" data-speed="3">3x</button><button type="button" data-speed="10">10x</button></div>
+      <button class="btn btn-ghost btn-sm sa-skip" type="button">Skip to final</button>
+      <span class="tiny dim sa-legend">{{ a.abbr }} attacks left · {{ h.abbr }} attacks right</span>
+    </div>
+    <div class="sa-feed" aria-live="off"></div>
+  </div>
+  <script type="application/json" id="sim-anim-data">{{ {"game": s.game_id, "away": s.typical.away, "home": s.typical.home}|tojson }}</script>
+  <h3 class="sim-h3">The most typical game: box score</h3>
   <div class="sim-typ">
     {% for side, t in (('away', a), ('home', h)) %}
     <div class="table-wrap"><table class="table small">

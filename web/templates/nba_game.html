@@ -91,7 +91,7 @@
 {% if open_ids is not none %}<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "WebPage", "name": a.name ~ " vs " ~ h.name ~ " box score",
   "isAccessibleForFree": false, "hasPart": {"@type": "WebPageElement", "isAccessibleForFree": false, "cssSelector": ".hl-gated"}}|tojson }}</script>{% endif %}
 {% endblock %}
-{% block scripts %}{% if is_admin %}<script>
+{% block scripts %}{% if sim %}<script src="/static/js/sim_anim.js?v={{ asset_version }}" defer></script>{% endif %}{% if is_admin %}<script>
 document.getElementById("sim-run")?.addEventListener("click", async (e) => {
   const b = e.currentTarget; b.classList.add("is-loading");
   try { await window.HL.api(`/api/admin/sim/${b.dataset.game}`, { method: "POST" }); location.hash = "simulation"; location.reload(); }

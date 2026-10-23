@@ -242,7 +242,10 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None):
     players = {s: player_rows(s) for s in ("away", "home")}
 
     # En tipik mac
-    close = (np.abs(margin - med_margin) <= 3) & (np.abs(score["home"] + score["away"] - med_total) <= 6) & (home_win == fav_home)
+    # Tipik mac oyuncu kutusuyla tutarli olsun: uzatmasiz senaryolar, skor = oyuncu sayilari toplami
+    raw_away, raw_home = box["away"]["pts"].sum(axis=1), box["home"]["pts"].sum(axis=1)
+    close = ((np.abs(margin - med_margin) <= 3) & (np.abs(score["home"] + score["away"] - med_total) <= 6)
+             & (home_win == fav_home) & (ot == 0) & ((raw_home > raw_away) == fav_home))
     idx = np.where(close)[0]
     if not len(idx):
         idx = np.argsort(np.abs(margin - med_margin))[:200]
@@ -285,7 +288,7 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None):
         "hist": [{"from": bins[i], "to": bins[i + 1], "p": round(float(hist[i]), 3)} for i in range(len(hist))],
         "players": players, "leaders": leaders,
         "typical": {"away": typical("away"), "home": typical("home"),
-                    "score": {"away": int(score["away"][t]), "home": int(score["home"][t])}, "ot": int(ot[t])},
+                    "score": {"away": int(raw_away[t]), "home": int(raw_home[t])}, "ot": int(ot[t])},
         "out": {s: [p["name"] for p in teams[s] if p["play"] == 0] for s in ("away", "home")},
     }
 
