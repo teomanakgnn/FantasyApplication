@@ -158,3 +158,5 @@
 @media (max-width: 640px) { .sim-factors { grid-template-columns: 1fr; } }
 
 .sim-rec { margin: 4px 0 6px; font-size: .85rem; }
+.sim .sim-kpis { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) { .sim .sim-kpis { grid-template-columns: 1fr 1fr; } .sim .sim-kpis > div:last-child { grid-column: 1 / -1; } }
