@@ -90,10 +90,10 @@ def admin_sim(request: Request, game_id: str):
     if not (u and u.get("username") in config.ADMIN_USERNAMES):
         return JSONResponse({"error": "Not available."}, 403)
     g = _game(game_id)
-    res = game_sim.simulate(game_id, g["away"]["abbr"], g["home"]["abbr"], get_current_season_year())
+    day = g["when"].date() if g["when"] else nb.today_et()
+    res = game_sim.simulate(game_id, g["away"]["abbr"], g["home"]["abbr"], get_current_season_year(), day=day)
     if not res:
         return JSONResponse({"error": "Not enough roster data to simulate."}, 400)
-    day = g["when"].date() if g["when"] else nb.today_et()
     db.save_sim(game_id, day, json.dumps(res))
     return {"ok": True, "p_home": res["p_home"]}
 

@@ -26,8 +26,11 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from services.cache import cache_data
+
 N_SIMS = 5000
-MODEL = "v1"
+MODEL = "v2"
+POSS_CAL = 0.972   # cop zamani eklemesi ve ev avantaji sonrasi lig ortalamasina kalibrasyon
 EASTERN = ZoneInfo("America/New_York")
 LONDON = ZoneInfo("Europe/London")
 LG = {"p2": 0.54, "p3": 0.36, "pft": 0.78}
@@ -137,34 +140,41 @@ def _count(rng, mean):
     return np.clip(np.round(rng.normal(mean, np.sqrt(mean) * 0.45)), 0, None).astype(int)
 
 
-def _team(rng, players, mins, poss_scale, form, home):
-    R = lambda k: np.array([p["rates"].get(k, 0.0) for p in players])
-    P = lambda k: np.array([p["pct"][k] for p in players])
-    scale = mins * poss_scale[:, None]
+def _team(rng, players, mins, scale_s, ctx, home):
+    """
+    Bir takimin 5.000 maclik kutu skoru.
+    scale_s: senaryo basina kullanim olcegi (takimin topa sahip olmalari / oyuncularin
+    toplam kullanimi) - sakat yildizin sutlari kalanlara dagilir.
+    ctx: rakip savunmasi (isabet ve serbest atis carpani), rakibin top calma baskisi,
+    yorgunluk (back-to-back), takimin 2'lik / 3'luk gece formu.
+    """
+    n, k = mins.shape
+    R = lambda key: np.array([p["rates"].get(key, 0.0) for p in players])
+    P = lambda key: np.array([p["pct"][key] for p in players])
+    scale = mins * scale_s[:, None]
     boost = 0.012 if home else 0.0
+    tired = 0.012 if ctx["b2b"] else 0.0
+    player_form = rng.normal(0, 0.03, (n, k))                 # oyuncunun sicak / soguk gecesi
     fga2 = _count(rng, R("fga2") * scale)
     fga3 = _count(rng, R("fga3") * scale)
-    fta = _count(rng, R("fta") * scale * (1.04 if home else 1.0))
-    p2 = np.clip(P("p2") + form[:, None] + boost, 0.2, 0.8)
-    p3 = np.clip(P("p3") + form[:, None] + boost * 0.6, 0.1, 0.6)
+    fta = _count(rng, R("fta") * scale * (1.04 if home else 1.0) * ctx["def"])
+    p2 = np.clip(P("p2") * ctx["def"] + ctx["form2"][:, None] + player_form + boost - tired, 0.2, 0.8)
+    p3 = np.clip(P("p3") * ctx["def"] + ctx["form3"][:, None] + player_form * 0.8 + boost * 0.6 - tired, 0.1, 0.6)
     fgm2 = rng.binomial(fga2, p2)
     fgm3 = rng.binomial(fga3, p3)
-    ftm = rng.binomial(fta, np.clip(P("pft"), 0.3, 0.95))
+    ftm = rng.binomial(fta, np.clip(P("pft") - tired * 0.5, 0.3, 0.95))
     box = {"min": mins, "fgm": fgm2 + fgm3, "fga": fga2 + fga3, "tpm": fgm3, "tpa": fga3, "ftm": ftm, "fta": fta,
            "pts": 2 * fgm2 + 3 * fgm3 + ftm}
-    for k in ("reb", "ast", "stl", "blk", "to"):
-        box[k] = rng.poisson(R(k) * scale)
+    for key in ("reb", "ast", "stl", "blk"):
+        box[key] = rng.poisson(R(key) * scale)
+    box["to"] = rng.poisson(R("to") * scale * ctx["press"])
     return box
 
 
-def _poss_per_min(players):
-    """Takimin dakika basi 'topa sahip olma' tahmini (FGA + 0.44 FTA + TO), rotasyon dakikalariyla."""
-    base = np.array([p["min"] * p["play"] for p in players])
-    base = np.clip(np.minimum(base, 240.0 - (np.cumsum(base) - base)), 0, None)
-    base = base * 240.0 / max(base.sum(), 1e-9)
-    r = np.array([p["rates"].get("fga2", 0) + p["rates"].get("fga3", 0) + 0.44 * p["rates"].get("fta", 0)
-                  + p["rates"].get("to", 0) for p in players])
-    return float((r * base).sum())
+def _usage_rate(players):
+    """Oyuncu basina dakika basi kullanim: FGA + 0.44 FTA + TO."""
+    return np.array([p["rates"].get("fga2", 0) + p["rates"].get("fga3", 0) + 0.44 * p["rates"].get("fta", 0)
+                     + p["rates"].get("to", 0) for p in players])
 
 
 def _league_poss(season):
@@ -177,20 +187,71 @@ def _league_poss(season):
     return float(tot / (30 * 82))
 
 
-def simulate(game_id, away, home, season, n=N_SIMS, seed=None):
+@cache_data(ttl=6 * 3600, show_spinner=False, copy_result=False)
+def _standings(season):
+    """{takim: {pf, pa, gp}} - ESPN puan durumu (mac basi atilan / yenen sayi)."""
+    import requests
+    d = requests.get("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings",
+                     params={"season": season}, timeout=15).json()
+    out = {}
+    for conf in d.get("children") or []:
+        for e in (conf.get("standings") or {}).get("entries") or []:
+            st = {x.get("name"): x.get("value") for x in e.get("stats") or []}
+            gp = _f(st.get("wins")) + _f(st.get("losses"))
+            out[e["team"]["abbreviation"]] = {"pf": _f(st.get("avgPointsFor")), "pa": _f(st.get("avgPointsAgainst")), "gp": gp}
+    return out
+
+
+def team_factors(abbr, season):
+    """
+    Takim temposu ve savunmasi: gecen sezon + bu sezon (mac sayisi arttikca bu sezon
+    agir basar). pace = (atilan + yenen) / 2 / lig ortalamasi; defense = yenen / lig
+    ortalamasi (1'den buyuk = gecirgen savunma).
+    """
+    try:
+        last, cur = _standings(season - 1), _standings(season)
+    except Exception:
+        return {"pace": 1.0, "def": 1.0, "pf": None, "pa": None}
+    L = np.mean([t["pf"] for t in last.values()]) if last else 115.0
+    a, c = last.get(abbr), cur.get(abbr)
+    w = c["gp"] / (c["gp"] + 15.0) if c and c["gp"] else 0.0
+    pf = (1 - w) * (a["pf"] if a else L) + w * (c["pf"] if c else L)
+    pa = (1 - w) * (a["pa"] if a else L) + w * (c["pa"] if c else L)
+    return {"pace": ((pf + pa) / 2) / L, "def": pa / L, "pf": round(pf, 1), "pa": round(pa, 1)}
+
+
+def _back_to_back(abbr, day):
+    """Takim dun mac oynadi mi (ABD Dogu tarihi)."""
+    from services.nba_pages import games_on
+    try:
+        return any(abbr in (g.get("away_team"), g.get("home_team")) for g in games_on(day - timedelta(days=1)))
+    except Exception:
+        return False
+
+
+def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
     rng = np.random.default_rng(seed if seed is not None else zlib.crc32(f"{game_id}-{MODEL}".encode()))
     teams = {"away": _profiles(away, season), "home": _profiles(home, season)}
     if len(teams["away"]) < 7 or len(teams["home"]) < 7:
         return None
-    # Iki takim ayni sayida topa sahip olur: lig ortalamasi x mac temposu. Her takimin
-    # oyuncularinin oranlari bu paya olceklenir (rotasyonun toplam kullanimi %100'u gecmesin).
-    poss = {k: _poss_per_min(v) for k, v in teams.items()}
-    game_poss = _league_poss(season) * 0.975 * rng.normal(1.0, 0.03, n)   # 0.975: cop zamani eklemesi ve ev avantaji sonrasi lig ortalamasina kalibrasyon
+    day = day or datetime.now(EASTERN).date()
+    abbr = {"away": away, "home": home}
+    tf = {s: team_factors(abbr[s], season) for s in ("away", "home")}
+    b2b = {s: _back_to_back(abbr[s], day) for s in ("away", "home")}
+    # Tempo: iki takimin temposunun ortalamasi (hizli takimlar daha cok topa sahip olur)
+    pace = (tf["away"]["pace"] + tf["home"]["pace"]) / 2
+    game_poss = _league_poss(season) * POSS_CAL * pace * rng.normal(1.0, 0.03, n)
+    # Rakibin top calma baskisi: oyuncularinin dakika basi top calmasi / lig ortalamasi
+    stl = {s: sum(p["rates"].get("stl", 0) * p["min"] * p["play"] for p in teams[s]) for s in teams}
+    stl_avg = (stl["away"] + stl["home"]) / 2 or 1.0
     box, score = {}, {}
     for side in ("away", "home"):
+        opp = "home" if side == "away" else "away"
         mins = _minutes(rng, teams[side], n)
-        form = rng.normal(0, 0.012, n)
-        box[side] = _team(rng, teams[side], mins, game_poss / poss[side], form, side == "home")
+        usage = (mins * _usage_rate(teams[side])).sum(axis=1)          # senaryo basina toplam kullanim
+        ctx = {"def": 1 + 0.85 * (tf[opp]["def"] - 1), "press": (stl[opp] / stl_avg) ** 0.5, "b2b": b2b[side],
+               "form2": rng.normal(0, 0.012, n), "form3": rng.normal(0, 0.03, n)}
+        box[side] = _team(rng, teams[side], mins, game_poss / np.maximum(usage, 1e-6), ctx, side == "home")
         score[side] = box[side]["pts"].sum(axis=1).astype(float)
     # Mac gidisati: buyuk farkta yildizlar dinlenir, geride kalan takim cop zamaninda
     # farki kapatir. 8 sayiyi asan farkin %35'i geride kalana doner (gercek NBA'de skor
@@ -292,6 +353,8 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None):
         "typical": {"away": typical("away"), "home": typical("home"),
                     "score": {"away": int(raw_away[t]), "home": int(raw_home[t])}, "ot": int(ot[t])},
         "out": {s: [p["name"] for p in teams[s] if p["play"] == 0] for s in ("away", "home")},
+        "factors": {s: {"pace": round(tf[s]["pace"], 3), "def": round(tf[s]["def"], 3), "pf": tf[s]["pf"], "pa": tf[s]["pa"],
+                        "b2b": b2b[s], "doubtful": [p["name"] for p in teams[s] if 0 < p["play"] < 1]} for s in ("away", "home")},
     }
 
 
@@ -324,7 +387,7 @@ def daily_run(force=False):
     fresh = []
     for g in picked:
         try:
-            res = simulate(g["game_id"], g["away_team"], g["home_team"], season)
+            res = simulate(g["game_id"], g["away_team"], g["home_team"], season, day=day)
         except Exception as exc:
             print(f"sim failed for {g['game_id']}: {exc}")
             continue

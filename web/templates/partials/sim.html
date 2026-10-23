@@ -5,7 +5,7 @@
     <div>
       <div class="eyebrow" style="margin:0">{{ '{:,}'.format(s.n) }} simulations</div>
       <h2>We played {{ a.nick }} @ {{ h.nick }} {{ '{:,}'.format(s.n) }} times</h2>
-      <p class="small muted">Every simulation draws who plays, minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 per-minute numbers and today's injury report.</p>
+      <p class="small muted">Every simulation draws who plays (today's injury report), minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 numbers - adjusted for each team's tempo and defense, back-to-backs, hot and cold shooting nights and home court.</p>
     </div>
   </div>
 
@@ -32,6 +32,18 @@
     <div><span>Top scorer</span><b class="sim-ell">{{ s.leaders[0].name }}</b><small>in {{ (100 * s.leaders[0].p)|round|int }}% of games</small></div>
   </div>
 
+  {% if s.factors %}
+  <div class="sim-factors">
+    {% for side, t in (('away', a), ('home', h)) %}{% set f = s.factors[side] %}
+    <div><b>{{ t.abbr }}</b>
+      <span>pace {{ 'fast' if f.pace > 1.015 else 'slow' if f.pace < 0.985 else 'average' }}</span>
+      {% if f.pa %}<span>allows {{ f.pa }} ppg{{ ' (tough D)' if f.def < 0.97 else ' (leaky D)' if f.def > 1.03 else '' }}</span>{% endif %}
+      {% if f.b2b %}<span class="bad">back-to-back</span>{% endif %}
+      {% for d in f.doubtful %}<span class="warn">{{ d }} questionable</span>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
   <h3 class="sim-h3">Final margin <span class="dim small">· share of the {{ '{:,}'.format(s.n) }} games</span></h3>
   {% set top = s.hist|map(attribute='p')|max %}
   <div class="sim-hist">
