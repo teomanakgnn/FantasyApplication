@@ -79,7 +79,7 @@
   </div>
   <script type="application/json" id="sim-anim-data">{{ {"game": s.game_id, "away": s.typical.away, "home": s.typical.home,
     "colors": {"away": [a.color, a.alt], "home": [h.color, h.alt]}, "abbr": {"away": a.abbr, "home": h.abbr}}|tojson }}</script>
-  <h3 class="sim-h3">The most typical game: box score</h3>
+  <h3 class="sim-h3">Player stats in the most typical game</h3>
   <div class="sim-typ">
     {% for side, t in (('away', a), ('home', h)) %}
     <div class="table-wrap"><table class="table small">
@@ -92,20 +92,6 @@
     {% endfor %}
   </div>
 
-  <h3 class="sim-h3">Player projections <span class="dim small">· median line, points range (80% of games), chances</span></h3>
-  <div class="sim-typ">
-    {% for side, t in (('away', a), ('home', h)) %}
-    <div class="table-wrap"><table class="table small">
-      <thead><tr><th class="l sticky-col">{{ t.abbr }}</th><th>PTS</th><th>Range</th><th>REB</th><th>AST</th><th>30+</th><th>DD</th><th>FP</th></tr></thead>
-      <tbody>{% for r in s.players[side][:9] %}<tr>
-        <td class="l sticky-col"><span class="pface"><img src="{{ face(r.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><span class="player-name">{{ r.name }}</span>{% if r.play < 0.95 %}<div class="tiny bad">{{ (100 * r.play)|round|int }}% to play</div>{% endif %}</td>
-        <td><b>{{ r.pts|int }}</b></td><td class="dim">{{ r.pts_lo|int }}-{{ r.pts_hi|int }}</td><td>{{ r.reb|int }}</td><td>{{ r.ast|int }}</td>
-        <td>{{ (100 * r.p30)|round|int }}%</td><td>{{ (100 * r.p_dd)|round|int }}%</td><td>{{ r.fp }}</td>
-      </tr>{% endfor %}</tbody>
-    </table></div>
-    {% endfor %}
-  </div>
-
   {% if s.out.away or s.out.home %}<p class="small muted" style="margin:10px 0 0">Out: {{ (s.out.away + s.out.home)|join(', ') }}.</p>{% endif %}
-  <p class="tiny dim" style="margin:8px 0 0">FP = HoopLife fantasy points. Simulated {{ s.created[:10] }} from ESPN stats and injury report. For fun and fantasy decisions - not betting advice.</p>
+  <p class="tiny dim" style="margin:8px 0 0">Simulated {{ s.created[:10] }} from ESPN stats and injury report. For fun and fantasy decisions - not betting advice.</p>
 </section>
