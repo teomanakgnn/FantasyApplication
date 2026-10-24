@@ -73,7 +73,7 @@ def game_page(request: Request, game_id: str, slug: str):
     from services import team_pages as tp
     g["away"]["page"], g["home"]["page"] = tp.path(g["away"]["abbr"]), tp.path(g["home"]["abbr"])
     return render(request, "nba_game.html", active="scores", g=g, sim=sim,
-                  sim_record=game_sim.record() if sim and db.available and u and u.get("username") in __import__("config").ADMIN_USERNAMES else None,
+                  sim_record=game_sim.record() if sim and db.available else None,
                   is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
@@ -101,12 +101,22 @@ def team_page(request: Request, slug: str):
 
 
 @router.get("/nba/simulations")
-def simulations_public(request: Request):
-    """Liste yalnizca yoneticiye: herkese acik surum kaldirildi."""
-    import config
-    u = current_user(request)
-    target = "/admin/simulations" if u and u.get("username") in config.ADMIN_USERNAMES else "/nba/scores"
-    return RedirectResponse(target, 302)
+def simulations(request: Request):
+    """Butun simulasyonlar ve modelin karnesi (herkese acik). Mac basladiktan sonra
+    calistirilanlar tahmin sayilmaz: listede de karnede de yok."""
+    from services import game_sim
+    from services.database import db
+    items = []
+    for r in db.all_sims(120) if db.available else []:
+        s = r["sim"]
+        if s.get("late"):
+            continue
+        fav_home = s["p_home"] >= 0.5
+        items.append({"day": r["day"], "s": s, "fav": s["home"] if fav_home else s["away"],
+                      "p_fav": s["p_home"] if fav_home else s["p_away"],
+                      "path": f"/nba/game/{r['game_id']}/{nb.game_slug(s['away'], s['home'])}",
+                      "away_nick": nb.nick(s["away"]), "home_nick": nb.nick(s["home"])})
+    return render(request, "nba_sims.html", active="scores", items=items, rec=game_sim.record() if db.available else None)
 
 
 @router.get("/admin/simulations")
