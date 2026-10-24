@@ -158,6 +158,10 @@ def get_game_shots(game_id):
     potadan uzaklik (her iki yari ayni yone cevrilmis). Serbest atislar
     gecersiz koordinatla gelir, onlar haritada yok.
     """
+    return _shots_with_state(game_id)[0]
+
+
+def _shots_with_state(game_id):
     data = espn_get(f"{SUMMARY_URL}?event={game_id}", timeout=10).json()
     shots = {}
     for p in data.get("plays") or []:
@@ -177,29 +181,60 @@ def get_game_shots(game_id):
             "x": float(x), "y": float(y), "made": bool(p.get("scoringPlay")), "three": bool(three),
             "q": (p.get("period") or {}).get("number"), "clock": (p.get("clock") or {}).get("displayValue", ""),
             "text": text})
-    return shots
+    return shots, _game_state(data)
 
 
-@cache_data(ttl=86400, skip_empty=True)
+def _game_state(data):
+    """ESPN ozetinden macin durumu: pre / in / post."""
+    comp = ((data.get("header") or {}).get("competitions") or [{}])[0]
+    return ((comp.get("status") or {}).get("type") or {}).get("state")
+
+
+# Biten maclarin kutu skoru ve sut verisi uzun sure saklanir - AMA yalnizca ESPN
+# mac bitti diyorsa. Eskiden "final" bilgisini cagiran veriyordu; ABD aksaminda
+# UTC tarihi degisince suren mac bitmis sanildi ve mac basindaki yarim kutu skor
+# (yalniz ilk besler) 24 saat kaldi.
+_FINAL_CACHE = {}
+_FINAL_TTL = 86400
+
+
+def _cached_if_final(kind, game_id, fetch):
+    import copy as _copy
+    import time as _time
+    key = (kind, str(game_id))
+    hit = _FINAL_CACHE.get(key)
+    if hit and _time.time() - hit[0] < _FINAL_TTL:
+        return _copy.deepcopy(hit[1])
+    value, state = fetch(game_id)
+    if value and state == "post":
+        if len(_FINAL_CACHE) > 2000:
+            _FINAL_CACHE.pop(min(_FINAL_CACHE, key=lambda k: _FINAL_CACHE[k][0]), None)
+        _FINAL_CACHE[key] = (_time.time(), _copy.deepcopy(value))
+    return value
+
+
 def get_cached_shots(game_id):
-    return get_game_shots(game_id)
+    return _cached_if_final("shots", game_id, _shots_with_state)
 
 
-@cache_data(ttl=86400, skip_empty=True)
 def get_cached_boxscore(game_id):
-    return get_boxscore(game_id)
+    return _cached_if_final("box", game_id, _boxscore_with_state)
+
 
 def get_boxscore(game_id):
+    return _boxscore_with_state(game_id)[0]
+
+def _boxscore_with_state(game_id):
     url = f"{SUMMARY_URL}?event={game_id}"
     try:
         data = espn_get(url, timeout=10).json()
     except Exception:
-        return []
+        return [], None
 
     players = []
 
     if "boxscore" not in data or "players" not in data["boxscore"]:
-        return []
+        return [], None
 
     for team in data["boxscore"]["players"]:
         team_abbr = (team.get("team") or {}).get("abbreviation", "UNK")
@@ -257,7 +292,7 @@ def get_boxscore(game_id):
 
                 players.append(stats)
 
-    return players
+    return players, _game_state(data)
 
 @cache_data(ttl=3600)
 def get_injuries():

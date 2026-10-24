@@ -483,7 +483,14 @@ def evaluate():
         home_won = sc["home"] > sc["away"]
         p_winner = sim["p_home"] if home_won else sim["p_away"]
         pred_margin = sim["score"]["home"]["median"] - sim["score"]["away"]["median"]
+        try:
+            from web import stats
+            box = stats.boxscore(row["game_id"], final=True) or []
+            top = max(box, key=lambda r: int(r.get("PTS") or 0)) if box else None
+        except Exception:
+            top = None
         sim["result"] = {"away": sc["away"], "home": sc["home"], "home_won": home_won, "p_winner": p_winner,
+                         "top_scorer": ({"name": top["PLAYER"], "pts": int(top.get("PTS") or 0)} if top else None),
                          "correct": p_winner >= 0.5, "margin_err": abs(pred_margin - (sc["home"] - sc["away"])),
                          "total_err": abs(sim["total_median"] - (sc["home"] + sc["away"]))}
         db.save_sim(row["game_id"], row["day"], json.dumps(sim))
@@ -494,7 +501,7 @@ def evaluate():
 def record():
     """Modelin karnesi: kazanan tahmini, ortalama skor farki ve toplam sayi hatasi."""
     from services.database import db
-    res = [r["sim"]["result"] for r in db.all_sims(500) if r["sim"].get("result")]
+    res = [r["sim"]["result"] for r in db.all_sims(500) if r["sim"].get("result") and not r["sim"].get("late")]
     if not res:
         return None
     n = len(res)

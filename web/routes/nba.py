@@ -73,7 +73,7 @@ def game_page(request: Request, game_id: str, slug: str):
     from services import team_pages as tp
     g["away"]["page"], g["home"]["page"] = tp.path(g["away"]["abbr"]), tp.path(g["home"]["abbr"])
     return render(request, "nba_game.html", active="scores", g=g, sim=sim,
-                  sim_record=game_sim.record() if sim and db.available else None,
+                  sim_record=game_sim.record() if sim and db.available and u and u.get("username") in __import__("config").ADMIN_USERNAMES else None,
                   is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),
                   player_slug=lambda name: pp.slugify(name or "") if pp.slugify(name or "") in by_slug else None)
@@ -101,20 +101,44 @@ def team_page(request: Request, slug: str):
 
 
 @router.get("/nba/simulations")
-def simulations(request: Request):
-    """Butun simulasyonlar ve modelin karnesi."""
+def simulations_public(request: Request):
+    """Liste yalnizca yoneticiye: herkese acik surum kaldirildi."""
+    import config
+    u = current_user(request)
+    target = "/admin/simulations" if u and u.get("username") in config.ADMIN_USERNAMES else "/nba/scores"
+    return RedirectResponse(target, 302)
+
+
+@router.get("/admin/simulations")
+def simulations_admin(request: Request):
+    """Yonetici: her simulasyonun tahmini ve gercek sonucu, karne."""
+    import config
+
     from services import game_sim
     from services.database import db
-    rows = db.all_sims(120) if db.available else []
+    from web.core import login_required, redirect
+    gate = login_required(request)
+    if gate:
+        return gate
+    u = current_user(request)
+    if not (u and u.get("username") in config.ADMIN_USERNAMES):
+        return redirect("/", "Not available.", "error")
+    try:
+        game_sim.evaluate()          # biten ama henuz degerlendirilmemis maclar
+    except Exception as exc:
+        print(f"sim evaluate failed: {exc}")
     items = []
-    for r in rows:
+    for r in db.all_sims(200) if db.available else []:
         s = r["sim"]
         fav_home = s["p_home"] >= 0.5
-        items.append({"day": r["day"], "s": s, "fav": s["home"] if fav_home else s["away"],
+        res = s.get("result")
+        items.append({"day": r["day"], "s": s, "res": res, "fav": s["home"] if fav_home else s["away"],
                       "p_fav": s["p_home"] if fav_home else s["p_away"],
+                      "lead": (s.get("leaders") or [{}])[0],
                       "path": f"/nba/game/{r['game_id']}/{nb.game_slug(s['away'], s['home'])}",
                       "away_nick": nb.nick(s["away"]), "home_nick": nb.nick(s["home"])})
-    return render(request, "nba_sims.html", active="scores", items=items, rec=game_sim.record() if db.available else None)
+    return render(request, "admin_sims.html", active="account", items=items,
+                  rec=game_sim.record() if db.available else None)
 
 
 @router.post("/api/admin/sim/{game_id}")
@@ -136,6 +160,9 @@ def admin_sim(request: Request, game_id: str):
     res = game_sim.simulate(game_id, g["away"]["abbr"], g["home"]["abbr"], get_current_season_year(), day=day)
     if not res:
         return JSONResponse({"error": "Not enough roster data to simulate."}, 400)
+    # Mac basladiktan sonra calistirilan simulasyon tahmin sayilmaz (karneye girmez)
+    if g["state"] != "pre":
+        res["late"] = True
     db.save_sim(game_id, day, json.dumps(res))
     return {"ok": True, "p_home": res["p_home"]}
 

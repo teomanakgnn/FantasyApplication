@@ -215,7 +215,8 @@ def _period_games(start, end):
 
     date_game_map = get_game_ids_in_range(start, end)
     tasks = [(d, gid) for d, ids in date_game_map.items() for gid in ids]
-    today = date.today()
+    from services.nba_pages import today_et
+    today = today_et()          # mac gunleri ABD tarihli; sunucu UTC
 
     def fetch(task):
         day, gid = task
