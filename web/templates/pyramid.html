@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Pyramid #{{ puzzle }}{% if label %} - {{ label }}{% endif %} · NBA Daily Game · HoopLife NBA{% endblock %}
+{% block description %}Rank ten NBA players into a pyramid by {{ label|lower or 'a stat' }} - most at the top, least at the bottom right. A new NBA pyramid every day; share your score without spoilers.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="py-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Daily game</div>
+    <h1>Pyramid <span class="dim">#{{ puzzle }}</span></h1>
+    <p>Rank ten players by today's stat. Most at the top, then two, three and four - the bottom-right spot is the least. Tap a player, then tap a spot.</p>
+  </div>
+  {% if not ready %}
+    <div class="note note-info">Today's pyramid is still loading. Refresh in a minute.</div>
+  {% else %}
+    <div id="py-game"></div>
+    <script id="py-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/share_card.js?v={{ asset_version }}"></script><script src="/static/js/pyramid.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

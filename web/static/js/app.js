@@ -227,6 +227,7 @@
       },
       statmatch: () => { const g = get("hl_statmatch_game"); return !!(g && g.puzzle === P.statmatch && g.picks && g.picks.length >= (g.length || 10)); },
       starting5: () => { const g = get("hl_sf_game"); return !!(g && g.puzzle === P.starting5 && g.done); },
+      pyramid: () => { const g = get("hl_pyr_game"); return !!(g && g.puzzle === P.pyramid && g.done); },
       eightytwo: () => {
         try {
           for (let i = 0; i < localStorage.length; i++) {
@@ -241,7 +242,7 @@
 
   // Uye olmayan ziyaretci gunde bir oyun oynar; baska bir oyuna gecince uyelik karti
   function oneGameGate() {
-    const games = { daily: "Mystery Player", statmatch: "Stat Match", starting5: "Starting Five", eightytwo: "82-0 Challenge" };
+    const games = { daily: "Mystery Player", statmatch: "Stat Match", starting5: "Starting Five", eightytwo: "82-0 Challenge", pyramid: "Pyramid" };
     const here = window.HL_ACTIVE;
     if (window.HL_USER || !games[here]) return;
     const done = gamesDone();
@@ -279,7 +280,7 @@
     let pending = 0, changed = false;
     // Oyunlarin kendi istatistiginden seri tahmini: oyunlar #1 ile basladi; oynanan
     // oyun sayisi son oynanan gunun numarasina esitse ilk gunden beri her gun oynanmis.
-    const NATIVE = { statmatch: "hl_statmatch_stats", starting5: "hl_sf_stats", eightytwo: "hl_82_stats" };
+    const NATIVE = { statmatch: "hl_statmatch_stats", starting5: "hl_sf_stats", eightytwo: "hl_82_stats", pyramid: "hl_pyr_stats" };
     function nativeSeed(key) {
       const st = get(NATIVE[key]); if (!st) return null;
       const last = parseInt(st.last, 10) || 0;

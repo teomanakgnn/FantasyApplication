@@ -265,3 +265,55 @@
 .ez-allin span { color: var(--muted); font-size: .86rem; }
 .ez-sub { white-space: nowrap; }
 .ez-sub.off { background: #EF6464; color: #fff; }
+
+/* ==================== PYRAMID ==================== */
+.py-wrap { max-width: 760px; margin: 0 auto; }
+.py-cat { text-align: center; margin: 4px 0 14px; }
+.py-cat span { display: block; font-size: .72rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.py-cat b { font-size: 1.5rem; font-weight: 900; }
+.py-pyr { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.py-row { display: flex; gap: 8px; justify-content: center; }
+.py-cell { position: relative; width: 132px; height: 112px; border-radius: 14px; border: 2px dashed var(--line-strong); background: var(--surface);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text); cursor: pointer; padding: 6px 4px; font: inherit; transition: border-color .15s, transform .1s; }
+.py-cell:hover:not([disabled]) { border-color: var(--accent); }
+.py-cell.filled { border-style: solid; border-color: var(--line); background: var(--surface-2); }
+.py-cell.sel { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); transform: translateY(-2px); }
+.py-cell img { width: 64px; height: 47px; object-fit: cover; border-radius: 8px; }
+.py-cell b { font-size: .82rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.py-cell small { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.py-cell em { font-style: normal; font-size: .7rem; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+.py-rank { position: absolute; top: 5px; left: 7px; font-size: .68rem; font-weight: 900; color: var(--dim); }
+.py-cell.hit { border: 2px solid var(--good); background: color-mix(in srgb, var(--good) 14%, var(--surface-2)); }
+.py-cell.near { border: 2px solid #F2C94C; background: color-mix(in srgb, #F2C94C 12%, var(--surface-2)); }
+.py-cell.miss { border: 2px solid var(--line); opacity: .8; }
+.py-cell[disabled] { cursor: default; }
+.py-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin: 18px 0 10px; min-height: 40px; padding: 8px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.py-chip { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); cursor: pointer; text-align: left; font: inherit; }
+.py-chip:hover { border-color: var(--accent); }
+.py-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.py-chip img { width: 46px; height: 34px; object-fit: cover; border-radius: 7px; flex: none; }
+.py-chip span { display: flex; flex-direction: column; min-width: 0; }
+.py-chip b { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.py-chip small { font-size: .7rem; color: var(--muted); }
+.py-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.py-score { text-align: center; margin: 4px 0 6px; }
+.py-score b { display: block; font-size: 2.6rem; font-weight: 900; }
+.py-score span { color: var(--muted); font-weight: 700; }
+.py-h3 { text-align: center; font-size: .95rem; margin: 16px 0 8px; }
+.py-legend { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
+.py-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.py-legend .hit::before { background: var(--good); }
+.py-legend .near::before { background: #F2C94C; }
+.py-legend .miss::before { background: var(--line-strong); }
+@media (max-width: 640px) {
+  .py-row { gap: 5px; }
+  .py-pyr { gap: 5px; }
+  .py-cell { width: 82px; height: 94px; border-radius: 11px; padding: 4px 2px; }
+  .py-cell img { width: 48px; height: 35px; }
+  .py-cell b { font-size: .7rem; }
+  .py-cell small { font-size: .6rem; }
+  .py-pool { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 6px; }
+  .py-chip { min-width: 0; }
+  .py-chip img { width: 38px; height: 28px; }
+  .py-chip b { font-size: .78rem; }
+}

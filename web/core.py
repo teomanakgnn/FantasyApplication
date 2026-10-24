@@ -53,6 +53,7 @@ NAV = [
     ("statmatch", "/stat-match", "Stat Match"),
     ("starting5", "/starting-five", "Starting Five"),
     ("eightytwo", "/82-0", "82-0 Challenge"),
+    ("pyramid", "/pyramid", "Pyramid"),
     ("tiers", "/tier-list", "Tier List"),
     ("bracket", "/bracket", "Playoff Bracket"),
     None,
@@ -258,9 +259,10 @@ def _streaks(user):
 def _puzzles():
     """Gunluk oyunlarin bugunku numarasi: menude 'bugun oynanmadi' rozeti icin."""
     try:
-        from services import daily_player, eighty_two, minigames, starting_five
+        from services import daily_player, eighty_two, minigames, pyramid, starting_five
         return {"daily": daily_player.puzzle_number(), "statmatch": minigames.stat_match_number(),
-                "starting5": starting_five.puzzle_number(), "eightytwo": eighty_two.puzzle_number()}
+                "starting5": starting_five.puzzle_number(), "eightytwo": eighty_two.puzzle_number(),
+                "pyramid": pyramid.puzzle_number()}
     except Exception:
         return {}
 

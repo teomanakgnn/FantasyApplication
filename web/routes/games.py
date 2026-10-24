@@ -137,6 +137,44 @@ def stat_match_practice():
     return {"rounds": minigames.stat_match_rounds(secrets.token_hex(8))}
 
 
+# ==================== PYRAMID ====================
+
+@router.get("/pyramid")
+def pyramid_page(request: Request):
+    from services import pyramid
+    day = daily.today()
+    puzzle = pyramid.daily(day)
+    payload = {"puzzle": pyramid.puzzle_number(day), "seed": "daily", "next_in": daily.seconds_to_next(),
+               "signed_in": bool(current_user(request)), **(pyramid.public(puzzle) if puzzle else {})}
+    return render(request, "pyramid.html", active="pyramid", payload=_json(payload), ready=bool(puzzle),
+                  puzzle=payload["puzzle"], label=(puzzle or {}).get("label", ""))
+
+
+@router.get("/api/pyramid/practice")
+def pyramid_practice():
+    import secrets
+    from services import pyramid
+    seed = "p-" + secrets.token_hex(8)
+    puzzle = pyramid.build(seed)
+    if not puzzle:
+        return _bad("Could not build a practice pyramid. Try again.")
+    return {"seed": seed, **pyramid.public(puzzle)}
+
+
+@router.post("/api/pyramid/check")
+async def pyramid_check(request: Request):
+    from services import pyramid
+    body = await request.json()
+    seed = str(body.get("seed") or "daily")
+    puzzle = pyramid.daily() if seed == "daily" else pyramid.build(seed) if seed.startswith("p-") else None
+    if not puzzle:
+        return _bad("Unknown puzzle.")
+    order = [str(x) for x in (body.get("order") or [])]
+    if len(order) != pyramid.N or set(order) != {p["id"] for p in puzzle["players"]}:
+        return _bad("Place all ten players first.")
+    return pyramid.check(puzzle, order)
+
+
 @router.get("/tier-list")
 def tier_list(request: Request):
     players = minigames.tier_players(200)

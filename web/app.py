@@ -133,7 +133,7 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/nba/simulations", "/waiver-wire", "/over-under", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/pyramid", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
 @app.get("/privacy", include_in_schema=False)
@@ -234,6 +234,7 @@ def llms():
 - [Stat Match]({base}/stat-match): match two stat lines to two players.
 - [Starting Five]({base}/starting-five): name the missing starters of a real playoff game.
 - [82-0 Challenge]({base}/82-0): build a five from random teams and eras and try to go 82-0.
+- [Pyramid]({base}/pyramid): rank ten NBA players by a stat (e.g. last season's steals) into a 1-2-3-4 pyramid, most at the top.
 - [NBA over/under win totals]({base}/over-under): preseason Las Vegas win totals for all 30 teams and how each team is tracking.
 """)
 
