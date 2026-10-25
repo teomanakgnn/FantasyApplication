@@ -99,3 +99,12 @@
 .wp-name p { margin: 4px 0 10px; }
 .wp-person.lost { border-color: color-mix(in srgb, var(--bad) 60%, transparent); }
 .wp-person.lost em { color: var(--bad); }
+
+/* Kisi basina ses */
+.wp-vol { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.wp-vrow { display: grid; grid-template-columns: minmax(0, 1fr) 160px 56px 84px; gap: 10px; align-items: center; }
+.wp-vrow [data-mute] { width: 100%; }
+.wp-vrow b { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wp-vrow input[type=range] { width: 100%; accent-color: var(--accent); }
+.wp-vpct { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 640px) { .wp-vrow { grid-template-columns: minmax(0, 1fr) auto; } .wp-vrow input[type=range] { grid-column: 1 / -1; grid-row: 2; } .wp-vpct { display: none; } }

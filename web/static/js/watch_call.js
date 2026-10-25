@@ -120,11 +120,45 @@
     try { p.pc.close(); } catch (e) { /* zaten kapali */ }
     peers.delete(id);
     document.querySelectorAll(`#wp-audio [data-peer="${id}"]`).forEach((a) => a.remove());
+    for (const [key, g] of gains) if (g.peer === id) { try { g.gain.disconnect(); } catch (e) { /* yok */ } gains.delete(key); }
     for (const [key, m] of meters) if (m.peer === id) meters.delete(key);
     if (stageOwner === id) hideStage();
   }
 
   // ---------------- gelen ses / goruntu ----------------
+  // ---------------- kisi basina ses ----------------
+  // Her uzak ses akisi bir GainNode'dan gecer. <audio> ogesi sessiz calar (Chrome
+  // uzak WebRTC sesini ancak bir ogeye bagliyken Web Audio'ya verir); duyulan ses
+  // kazanc dugumunden. Ayarlar kisi adiyla bu tarayicida saklanir.
+  const gains = new Map();                 // stream.id -> {gain, peer, stream}
+  const VOL = "hl_wp_vol";
+  const vols = (() => { try { return JSON.parse(localStorage.getItem(VOL)) || {}; } catch (e) { return {}; } })();
+  const saveVols = () => { try { localStorage.setItem(VOL, JSON.stringify(vols)); } catch (e) { /* yok */ } };
+  const isScreen = (stream) => stream.getVideoTracks().length > 0;
+  const volKey = (peerId, screen) => `${screen ? "screen" : "voice"}:${(peers.get(peerId) || {}).name || peerId}`;
+  function applyVolumes() {
+    for (const g of gains.values()) {
+      const v = vols[volKey(g.peer, isScreen(g.stream))] || { level: 1, muted: false };
+      g.gain.gain.value = v.muted ? 0 : v.level;
+    }
+  }
+  function renderVolumes() {
+    const box = $("#wp-vol");
+    if (!box || box.hidden) return;
+    const rows = [];
+    for (const [id, p] of peers) {
+      rows.push({ key: volKey(id, false), label: p.name });
+      if (p.sharing) rows.push({ key: volKey(id, true), label: `${p.name} - shared screen sound` });
+    }
+    box.innerHTML = rows.length ? rows.map((r) => {
+      const v = vols[r.key] || { level: 1, muted: false };
+      return `<div class="wp-vrow" data-key="${h(r.key)}"><b>${h(r.label)}</b>
+        <input type="range" min="0" max="150" step="5" value="${Math.round(v.level * 100)}" aria-label="Volume for ${h(r.label)}">
+        <span class="wp-vpct">${v.muted ? "muted" : Math.round(v.level * 100) + "%"}</span>
+        <button type="button" class="btn btn-sm ${v.muted ? "btn-primary" : "btn-ghost"}" data-mute>${v.muted ? "Unmute" : "Mute"}</button></div>`;
+    }).join("") : '<span class="dim small">Nobody else in the voice room yet.</span>';
+  }
+
   function onTrack(id, e) {
     const stream = e.streams[0] || new MediaStream([e.track]);
     if (e.track.kind === "audio") {
@@ -137,6 +171,16 @@
         $("#wp-audio").appendChild(a);
       }
       a.srcObject = stream;
+      if (audioCtx && !gains.has(stream.id)) {
+        try {
+          const src = audioCtx.createMediaStreamSource(stream);
+          const gain = audioCtx.createGain();
+          src.connect(gain).connect(audioCtx.destination);
+          gains.set(stream.id, { gain, peer: id, stream });
+          a.muted = true;                            // duyulan ses kazanc dugumunden
+          applyVolumes();
+        } catch (err) { a.muted = false; }
+      }
       a.play().catch(() => show("wp-unmute-video", true));
       meter(stream.id, stream, id);
     } else {
@@ -190,6 +234,7 @@
 
   // ---------------- kisiler ----------------
   function renderPeople() {
+    renderVolumesIfChanged();
     const box = $("#wp-people");
     if (left) { box.innerHTML = '<span class="dim small">Voice room · join to talk and watch together</span>'; return; }
     const meMic = !!(mic && mic.getAudioTracks()[0]?.enabled);
@@ -203,6 +248,13 @@
       }).join("");
   }
 
+  let volSig = "";
+  function renderVolumesIfChanged() {
+    const sig = [...peers.entries()].map(([id, p]) => `${id}:${p.sharing ? 1 : 0}`).join(",");
+    if (sig !== volSig) { volSig = sig; renderVolumes(); }   // kaydirirken yeniden cizilmesin
+    applyVolumes();
+  }
+
   // ---------------- dugmeler ----------------
   async function join() {
     if (!left) return;
@@ -214,7 +266,7 @@
     left = false;
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; }
     connect();
-    show("wp-join", false); show("wp-mic", true); show("wp-leave", true); show("wp-share", canShare);
+    show("wp-join", false); show("wp-mic", true); show("wp-leave", true); show("wp-share", canShare); show("wp-volbtn", true);
     renderMic();
     renderPeople();
   }
@@ -231,6 +283,7 @@
     hideStage();
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
     show("wp-join", true); show("wp-mic", false); show("wp-leave", false); show("wp-share", false); show("wp-unmute-video", false);
+    show("wp-volbtn", false); $("#wp-vol").hidden = true; gains.clear();
     renderShare();
     renderPeople();
   }
@@ -301,6 +354,30 @@
     renderShare(); sendState(); renderPeople();
   }
 
+  btn("wp-volbtn").addEventListener("click", () => {
+    const box = $("#wp-vol"); box.hidden = !box.hidden;
+    btn("wp-volbtn").classList.toggle("btn-primary", !box.hidden);
+    volSig = ""; renderVolumes();
+  });
+  $("#wp-vol").addEventListener("input", (e) => {
+    const row = e.target.closest(".wp-vrow");
+    if (!row || e.target.type !== "range") return;
+    const v = vols[row.dataset.key] || { level: 1, muted: false };
+    v.level = +e.target.value / 100; v.muted = false; vols[row.dataset.key] = v;
+    row.querySelector(".wp-vpct").textContent = Math.round(v.level * 100) + "%";
+    const b = row.querySelector("[data-mute]"); b.textContent = "Mute"; b.className = "btn btn-sm btn-ghost";
+    applyVolumes(); saveVols();
+  });
+  $("#wp-vol").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-mute]");
+    if (!b) return;
+    const row = b.closest(".wp-vrow");
+    const v = vols[row.dataset.key] || { level: 1, muted: false };
+    v.muted = !v.muted; vols[row.dataset.key] = v;
+    b.textContent = v.muted ? "Unmute" : "Mute"; b.className = `btn btn-sm ${v.muted ? "btn-primary" : "btn-ghost"}`;
+    row.querySelector(".wp-vpct").textContent = v.muted ? "muted" : Math.round(v.level * 100) + "%";
+    applyVolumes(); saveVols();
+  });
   btn("wp-join").addEventListener("click", join);
   btn("wp-leave").addEventListener("click", leave);
   btn("wp-mic").addEventListener("click", toggleMic);
