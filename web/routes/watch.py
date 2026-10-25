@@ -105,22 +105,25 @@ def lobby(request: Request):
             games = []
         if games:
             days.append((d, games))
-    return render(request, "watch_lobby.html", active="home", days=days)
+    return render(request, "watch_lobby.html", active="home", days=days, room_key=room_key)
 
 
 @router.get("/admin/watch/{game_id}")
 def old_room(game_id: str):
-    return RedirectResponse(f"/watch/{game_id}", 303)
+    return RedirectResponse(f"/watch/{game_id}?k={room_key(game_id)}", 303)
 
 
 @router.get("/watch/{game_id}")
 def room(request: Request, game_id: str, k: str = ""):
     u = current_user(request)
+    # Yonetici anahtarsiz girdiyse adres cubugu da paylasilabilir olsun: anahtarli adrese git
+    if _is_admin(u) and not _key_ok(game_id, k):
+        return RedirectResponse(f"/watch/{game_id}?k={room_key(game_id)}", 302)
     guest = not (u and _member(u, game_id, k))
     if guest and not _key_ok(game_id, k):
         if not u:
             return login_required(request, next_url=f"/watch/{game_id}")
-        return redirect("/", "This watch party needs an invite link.", "error")
+        return redirect("/", "That watch party link is incomplete or out of date - ask for a fresh invite link.", "error")
     try:
         g = wp.game_state(game_id)
     except Exception:
