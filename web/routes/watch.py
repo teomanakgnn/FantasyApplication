@@ -131,7 +131,7 @@ def room(request: Request, game_id: str, k: str = ""):
     key = room_key(game_id)
     invite = f"{config.SITE_URL.rstrip('/')}/watch/{game_id}?k={key}"
     response = render(request, "watch_room.html", active="home", game_id=game_id, g=g, reactions=REACTIONS,
-                      room_k=key, invite=invite, is_admin=_is_admin(u), guest=guest,
+                      room_k=key, room_invite=invite, is_admin=_is_admin(u), guest=guest,
                       ice=json.dumps(_ice_servers()), call_limit=CALL_LIMIT)
     if guest and len(request.cookies.get(GUEST_COOKIE) or "") < 16:
         import secrets

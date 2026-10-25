@@ -116,7 +116,7 @@
     const link = inv.dataset.link;
     try {
       if (navigator.share && matchMedia("(pointer: coarse)").matches) await navigator.share({ title: "Watch party", url: link });
-      else { await navigator.clipboard.writeText(link); toast("Invite link copied - friends need a free account to join."); }
+      else { await navigator.clipboard.writeText(link); toast("Invite link copied - anyone with it can join, no account needed."); }
     } catch (e) { prompt("Invite link", link); }
   });
 
