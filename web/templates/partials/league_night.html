@@ -1,7 +1,9 @@
 {% if not n %}
   <p class="muted">No finished NBA games in the last few days.</p>
+{% elif not n.has_team %}
+  <p class="muted">Pick your team above to see your players and this week's opponent from last night.</p>
 {% else %}
-<p class="small muted" style="margin:0 0 10px">Every fantasy team's players who played on <b>{{ n.day.strftime('%A, %B') }} {{ n.day.day }}</b> ({{ n.games }} game{{ 's' if n.games != 1 }}). FP = HoopLife fantasy points. Tap a player for his shot chart.</p>
+<p class="small muted" style="margin:0 0 10px">Your players and your week {{ n.week }} opponent's who played on <b>{{ n.day.strftime('%A, %B') }} {{ n.day.day }}</b> ({{ n.games }} game{{ 's' if n.games != 1 }}). FP = HoopLife fantasy points. Tap a player for his shot chart.</p>
 {% for t in n.teams %}
 <section class="card ln-team {{ 'ln-mine' if t.mine }}">
   <div class="ln-head"><b>{{ t.name }}{% if t.mine %} <span class="chip chip-accent">You</span>{% endif %}</b>

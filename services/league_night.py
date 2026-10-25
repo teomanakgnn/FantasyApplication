@@ -33,8 +33,20 @@ def night(league_id, season, my_team=None):
                 where[str(r["ID"])] = {"game_id": g["game_id"], "opp": opp, "home": r.get("TEAM") == g["home_team"],
                                        "score": f"{g['away_team']} {g['away_score']}-{g['home_score']} {g['home_team']}"}
     data = lw.league_raw(int(league_id), season)
+    # Yalnizca senin takimin ve bu haftaki rakibin
+    period = (data.get("status") or {}).get("currentMatchupPeriod")
+    opp_id = None
+    for m in data.get("schedule") or []:
+        if m.get("matchupPeriodId") != period:
+            continue
+        ids = [(m.get("home") or {}).get("teamId"), (m.get("away") or {}).get("teamId")]
+        if my_team and int(my_team) in ids:
+            opp_id = next((i for i in ids if i != int(my_team)), None)
+    keep = {int(my_team), opp_id} if my_team else set()
     teams = []
     for t in data.get("teams") or []:
+        if t["id"] not in keep:
+            continue
         played = []
         for e in (t.get("roster") or {}).get("entries") or []:
             pl = (e.get("playerPoolEntry") or {}).get("player") or {}
@@ -52,4 +64,4 @@ def night(league_id, season, my_team=None):
                       "fp": round(sum(p["fp"] for p in played), 1),
                       "pts": sum(int(p["PTS"] or 0) for p in played if str(p["PTS"]).isdigit())})
     teams.sort(key=lambda t: (not t["mine"], -t["fp"]))
-    return {"day": day, "teams": teams, "games": len(games)}
+    return {"day": day, "teams": teams, "games": len(games), "week": period, "has_team": bool(my_team)}
