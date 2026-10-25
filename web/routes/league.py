@@ -468,6 +468,21 @@ def league_today(request: Request, league_id: int, team: int = 0):
         "can_write": bool(config.ESPN_WRITE_S2 and config.ESPN_WRITE_SWID)})
 
 
+@router.get("/api/league/{league_id}/night")
+def league_night(request: Request, league_id: int, team: int = 0):
+    from fastapi.responses import HTMLResponse
+    from services.league_insights import league_data
+    from services.league_night import night
+    from web.core import templates
+    try:
+        _, season, _ = league_data(int(league_id))
+        n = night(league_id, season, team or None)
+    except Exception as exc:
+        print(f"league night failed: {exc}")
+        return HTMLResponse("<p class=\"muted\">Last night's lines could not be loaded. Try again shortly.</p>")
+    return templates.TemplateResponse(request, "partials/league_night.html", {"n": n})
+
+
 @router.post("/api/league/{league_id}/set-lineup")
 async def league_set_lineup(request: Request, league_id: int):
     from fastapi.responses import JSONResponse

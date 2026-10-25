@@ -106,6 +106,7 @@
 {% if standings is not none or matchups %}
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
   {% if platform == 'espn' and team %}<button class="tab" data-tab="today">Today</button>{% endif %}
+  {% if platform == 'espn' and league_id %}<button class="tab" data-tab="night">Last night</button>{% endif %}
   {% if wk %}<button class="tab" data-tab="week">This week</button>{% endif %}
   {% if insights %}<button class="tab" data-tab="insights">Insights</button>{% endif %}
   <button class="tab" data-tab="standings">Standings</button>
@@ -118,6 +119,12 @@
 {% if platform == 'espn' and team %}
 <div class="tab-panel" data-panel-of="league" data-panel="today">
   <div id="lu-box" data-src="/api/league/{{ league_id }}/today?team={{ team }}"><div class="spinner"></div></div>
+</div>
+{% endif %}
+
+{% if platform == 'espn' and league_id %}
+<div class="tab-panel" data-panel-of="league" data-panel="night">
+  <div id="ln-box" data-src="/api/league/{{ league_id }}/night?team={{ team or '' }}"><div class="spinner"></div></div>
 </div>
 {% endif %}
 
@@ -317,6 +324,17 @@
 <script>
 (function () {
   // Gunun kadrosu: sayfa acildiktan sonra yuklenir (ESPN cagrisi sayfayi bekletmesin)
+  // Dun gece: sekme acilinca yuklenir
+  const night = document.getElementById("ln-box");
+  if (night) {
+    let loaded = false;
+    const loadNight = async () => {
+      if (loaded) return; loaded = true;
+      try { night.innerHTML = await window.HL.api(night.dataset.src); } catch (e) { night.innerHTML = `<p class="muted">${window.HL.escapeHtml(e.message)}</p>`; }
+    };
+    document.querySelector('[data-tab="night"]')?.addEventListener("click", loadNight);
+    if (location.hash === "#night") loadNight();
+  }
   const box = document.getElementById("lu-box");
   if (!box) return;
   const { api, toast } = window.HL;

@@ -76,3 +76,12 @@
 .lu-note.out { border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .lu-table tr.lu-idle td { opacity: .5; }
 .lu-table tr.lu-moved td:first-child b { color: var(--accent); }
+
+/* Last night */
+.ln-team { margin-bottom: 10px; }
+.ln-team.ln-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.ln-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.ln-fp { color: var(--accent); }
+.ln-bench td { opacity: .6; }
+.ln-game { display: block; font-size: .68rem; color: var(--muted); margin-left: 53px; margin-top: -4px; }
+@media (max-width: 640px) { .ln-game { margin-left: 47px; } }

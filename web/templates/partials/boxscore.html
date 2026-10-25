@@ -13,7 +13,7 @@
       <table class="table">
         <thead><tr>
           <th class="l sticky-col">Player</th><th>Min</th><th>PTS</th><th>REB</th><th>AST</th>
-          <th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th>
+          <th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>PF</th><th>+/-</th>
           {% if user %}<th></th>{% endif %}
         </tr></thead>
         <tbody>
@@ -23,7 +23,7 @@
             <td>{{ p.MIN }}</td><td><b>{{ p.PTS }}</b></td><td>{{ p.REB }}</td><td>{{ p.AST }}</td>
             <td>{{ p.STL }}</td><td>{{ p.BLK }}</td><td>{{ p.TO }}</td>
             <td>{{ p.FGM }}-{{ p.FGA }}</td><td>{{ p['3Pts'] }}-{{ p['3PTA'] }}</td><td>{{ p.FTM }}-{{ p.FTA }}</td>
-            <td>{{ p['+/-'] }}</td>
+            <td>{{ p.PF }}</td><td>{{ p['+/-'] }}</td>
             {% if user %}<td>{% if p.PLAYER not in watch %}<button class="btn btn-sm btn-ghost" data-watch="{{ p.PLAYER }}">Track</button>{% endif %}</td>{% endif %}
           </tr>
         {% endfor %}

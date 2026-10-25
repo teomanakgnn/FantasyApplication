@@ -65,11 +65,11 @@
 <section class="card" style="margin-top:12px">
   <h2 class="card-title">{{ t.name }} box score</h2>
   <div class="table-wrap"><table class="table small nb-box">
-    <thead><tr><th class="l sticky-col">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>+/-</th><th>FP</th></tr></thead>
+    <thead><tr><th class="l sticky-col">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>PF</th><th>+/-</th><th>FP</th></tr></thead>
     <tbody>{% for r in rows %}{% set locked = open_ids is not none and (r.ID or r.PLAYER)|string not in open_ids %}<tr class="{{ 'is-gated hl-gated' if locked }}">
       <td class="l sticky-col"><span class="pface"><img src="{{ face(r.ID) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span>{% if r.ID and not locked %}<a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ g.id }}/{{ r.ID }}?final={{ 1 if g.final else 0 }}">{{ r.PLAYER }}</a>{% else %}{{ r.PLAYER }}{% endif %}{% set sl = player_slug(r.PLAYER) %}{% if sl %} <a class="nb-plink" href="/players/{{ sl }}" title="{{ r.PLAYER }} stats and game log">›</a>{% endif %}</td>
       <td>{{ r.MIN }}</td><td><b>{{ r.PTS }}</b></td><td>{{ r.REB }}</td><td>{{ r.AST }}</td><td>{{ r.STL }}</td><td>{{ r.BLK }}</td><td>{{ r.TO }}</td>
-      <td>{{ r.FGM }}-{{ r.FGA }}</td><td>{{ r['3Pts'] }}-{{ r['3PTA'] }}</td><td>{{ r.FTM }}-{{ r.FTA }}</td><td>{{ r['+/-'] }}</td><td><b>{{ r.FP }}</b></td>
+      <td>{{ r.FGM }}-{{ r.FGA }}</td><td>{{ r['3Pts'] }}-{{ r['3PTA'] }}</td><td>{{ r.FTM }}-{{ r.FTA }}</td><td>{{ r.PF }}</td><td>{{ r['+/-'] }}</td><td><b>{{ r.FP }}</b></td>
     </tr>{% endfor %}</tbody>
   </table></div>
   {% if open_ids is not none and rows|length > 3 %}{{ gate("See the full " ~ t.name ~ " box score", "Every player, every stat and the player shot charts - free with an account.", "box-game") }}{% endif %}

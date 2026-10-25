@@ -1,0 +1,22 @@
+{% if not n %}
+  <p class="muted">No finished NBA games in the last few days.</p>
+{% else %}
+<p class="small muted" style="margin:0 0 10px">Every fantasy team's players who played on <b>{{ n.day.strftime('%A, %B') }} {{ n.day.day }}</b> ({{ n.games }} game{{ 's' if n.games != 1 }}). FP = HoopLife fantasy points. Tap a player for his shot chart.</p>
+{% for t in n.teams %}
+<section class="card ln-team {{ 'ln-mine' if t.mine }}">
+  <div class="ln-head"><b>{{ t.name }}{% if t.mine %} <span class="chip chip-accent">You</span>{% endif %}</b>
+    <span class="small muted">{{ t.players|length }} played · {{ t.pts }} pts · <b class="ln-fp">{{ t.fp }} FP</b></span></div>
+  {% if t.players %}
+  <div class="table-wrap"><table class="table small">
+    <thead><tr><th class="l sticky-col">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th><th>PF</th><th>FP</th></tr></thead>
+    <tbody>{% for p in t.players %}<tr class="{{ 'ln-bench' if p.slot in (12, 13) }}">
+      <td class="l sticky-col"><span class="pface"><img src="{{ face(p.id) }}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/static/img/player.svg'"></span><a href="#" class="player-name pc-link" data-modal-url="/api/player-card/{{ p.game_id }}/{{ p.id }}?final=1">{{ p.name }}</a><span class="ln-game">{{ p.team }} {{ 'vs' if p.home else '@' }} {{ p.opp }}</span></td>
+      <td>{{ p.MIN }}</td><td><b>{{ p.PTS }}</b></td><td>{{ p.REB }}</td><td>{{ p.AST }}</td><td>{{ p.STL }}</td><td>{{ p.BLK }}</td><td>{{ p.TO }}</td>
+      <td>{{ p.FGM }}-{{ p.FGA }}</td><td>{{ p['3Pts'] }}-{{ p['3PTA'] }}</td><td>{{ p.FTM }}-{{ p.FTA }}</td><td>{{ p.PF }}</td><td><b>{{ p.fp }}</b></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="small muted" style="margin:6px 0 0">Nobody on this roster played.</p>{% endif %}
+</section>
+{% endfor %}
+<p class="tiny dim" style="margin-top:6px">Dimmed rows are players currently on the bench or IR in ESPN.</p>
+{% endif %}
