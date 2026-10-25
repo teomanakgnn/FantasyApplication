@@ -97,3 +97,5 @@
 
 .wp-name { margin-bottom: 12px; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .wp-name p { margin: 4px 0 10px; }
+.wp-person.lost { border-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+.wp-person.lost em { color: var(--bad); }

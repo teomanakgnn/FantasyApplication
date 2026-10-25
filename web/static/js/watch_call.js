@@ -83,7 +83,11 @@
     };
     pc.ontrack = (e) => onTrack(info.id, e);
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed") pc.restartIce();
+      if (pc.connectionState === "failed") {
+        if (!p.warned) { p.warned = true; toast(`Couldn't connect audio with ${p.name} - one of your networks blocks direct connections. Retrying...`, true); }
+        pc.restartIce();
+      }
+      if (pc.connectionState === "connected") p.warned = false;
       renderPeople();
     };
     if (mic) mic.getTracks().forEach((t) => pc.addTrack(t, mic));
@@ -190,8 +194,8 @@
     if (left) { box.innerHTML = '<span class="dim small">Voice room · join to talk and watch together</span>'; return; }
     const meMic = !!(mic && mic.getAudioTracks()[0]?.enabled);
     const chip = (id, name, micOn, sharing, state) => `
-      <span class="wp-person ${state === "connecting" ? "connecting" : ""}" data-id="${id}" title="${state || ""}">
-        <i>${h(name.slice(0, 1).toUpperCase())}</i><b>${h(name)}</b><em>${micOn ? "mic" : "muted"}${sharing ? " · sharing" : ""}</em></span>`;
+      <span class="wp-person ${state === "connecting" ? "connecting" : ""} ${state === "failed" || state === "disconnected" ? "lost" : ""}" data-id="${id}" title="${state || ""}">
+        <i>${h(name.slice(0, 1).toUpperCase())}</i><b>${h(name)}</b><em>${state === "connecting" ? "connecting..." : state === "failed" ? "no connection" : state === "disconnected" ? "reconnecting..." : micOn ? "mic" : "muted"}${sharing ? " · sharing" : ""}</em></span>`;
     box.innerHTML = chip("me", "You", meMic, !!screen) +
       [...peers.entries()].map(([id, p]) => {
         const st = p.pc.connectionState;

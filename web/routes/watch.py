@@ -77,10 +77,42 @@ def _who(conn, game_id, k):
     return {"id": "g:" + token[:16], "name": f"{name} (guest)", "guest": True}
 
 
+_TURN = {"at": 0.0, "servers": None}
+
+
+def _cloudflare_turn():
+    """
+    Cloudflare TURN (ses/goruntuyu aradan aktarir: mobil operatorler ve bircok
+    modem dogrudan baglantiyi engelliyor). Kalici anahtar sunucuda kalir; tarayiciya
+    24 saatlik gecici kimlik gider. 12 saat onbellek.
+    """
+    key_id, token = os.environ.get("CF_TURN_KEY_ID"), os.environ.get("CF_TURN_API_TOKEN")
+    if not (key_id and token):
+        return None
+    if _TURN["servers"] and time.time() - _TURN["at"] < 12 * 3600:
+        return _TURN["servers"]
+    try:
+        import requests
+        r = requests.post(f"https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers",
+                          headers={"Authorization": f"Bearer {token}"}, json={"ttl": 86400}, timeout=8)
+        r.raise_for_status()
+        ice = r.json().get("iceServers")
+        servers = ice if isinstance(ice, list) else [ice] if ice else None
+        if servers:
+            _TURN.update(at=time.time(), servers=servers)
+        return servers
+    except Exception as exc:
+        print(f"cloudflare turn failed: {exc}")
+        return _TURN["servers"]
+
+
 def _ice_servers():
-    """STUN her zaman; TURN (zor aglar icin aktarma) ortam degiskeniyle eklenir."""
+    """STUN her zaman; TURN (zor aglar icin aktarma): Cloudflare ya da ortam degiskeni."""
     servers = [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302",
                          "stun:stun.cloudflare.com:3478"]}]
+    cf = _cloudflare_turn()
+    if cf:
+        servers += cf
     turn = os.environ.get("TURN_URLS")
     if turn:
         servers.append({"urls": [u.strip() for u in turn.split(",") if u.strip()],
