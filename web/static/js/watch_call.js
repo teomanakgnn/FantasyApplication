@@ -37,7 +37,7 @@
       [...peers.keys()].forEach(dropPeer);
       renderPeople();
       if (left) return;
-      if (e.code === 4403) { toast("You are not in this room.", true); return leave(); }
+      if (e.code === 4403) { toast("Pick a name or use the invite link to join.", true); return leave(); }
       if (e.code === 4409) { toast("You joined from another tab.", true); return leave(); }
       if (retries++ < 8) setTimeout(() => { if (!left) connect(); }, 1500 * retries);
       else { toast("Voice connection lost.", true); leave(); }
@@ -202,6 +202,11 @@
   // ---------------- dugmeler ----------------
   async function join() {
     if (!left) return;
+    if (window.HL_WP_NEEDS_NAME && window.HL_WP_NEEDS_NAME()) {
+      const box = document.getElementById("wp-name");
+      if (box) { box.hidden = false; document.getElementById("wp-name-input").focus(); }
+      return toast("Pick a name first.", true);
+    }
     left = false;
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; }
     connect();

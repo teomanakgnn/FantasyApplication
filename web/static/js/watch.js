@@ -4,7 +4,29 @@
   const { $, api, toast, escapeHtml: h, openModalUrl } = window.HL;
   const root = $(".wp-room");
   if (!root) return;
-  const game = root.dataset.game, me = root.dataset.me, k = encodeURIComponent(root.dataset.k || "");
+  const game = root.dataset.game, k = encodeURIComponent(root.dataset.k || "");
+  // Misafir (davet linkiyle, hesapsiz): adi bu tarayicida saklanir ve cereze yazilir
+  const guest = root.dataset.guest === "1";
+  const NAME = "hl_wp_name";
+  const getName = () => { try { return localStorage.getItem(NAME) || ""; } catch (e) { return ""; } };
+  const setName = (n) => {
+    try { localStorage.setItem(NAME, n); } catch (e) { /* yok */ }
+    document.cookie = `hl_wpn=${encodeURIComponent(n)}; path=/; max-age=31536000; samesite=lax`;
+  };
+  let me = guest ? (getName() ? `${getName()} (guest)` : "") : root.dataset.me;
+  if (guest) {
+    if (getName()) setName(getName());
+    const box = document.getElementById("wp-name");
+    if (box && !getName()) box.hidden = false;
+    document.getElementById("wp-name-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const n = document.getElementById("wp-name-input").value.trim().replace(/[^\p{L}\p{N} ._-]/gu, "").slice(0, 20);
+      if (n.length < 2) return toast("Name needs 2+ letters.", true);
+      setName(n); me = `${n} (guest)`; box.hidden = true;
+      toast(`Welcome, ${n}!`);
+    });
+  }
+  window.HL_WP_NEEDS_NAME = () => guest && !getName();
   let after = 0, final = root.dataset.final === "1", tick = 0, firstLoad = true, busy = false;
   const seenPlays = new Set();
 
@@ -42,6 +64,7 @@
   }
 
   async function send(kind, body) {
+    if (window.HL_WP_NEEDS_NAME()) { document.getElementById("wp-name").hidden = false; document.getElementById("wp-name-input").focus(); return toast("Pick a name first.", true); }
     try {
       await api(`/api/watch/${game}/post?k=${k}`, { method: "POST", body: { kind, body } });
       poll();

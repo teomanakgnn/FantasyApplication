@@ -4,15 +4,22 @@
 {% block head %}<link rel="stylesheet" href="/static/css/watch.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <div class="wp-room" data-game="{{ game_id }}" data-k="{{ room_k }}" data-final="{{ 1 if g.final else 0 }}"
-     data-me="{{ user.username }}" data-limit="{{ call_limit }}" data-ice='{{ ice }}'>
+     data-me="{{ user.username if user and not guest else '' }}" data-guest="{{ 1 if guest else 0 }}" data-limit="{{ call_limit }}" data-ice='{{ ice }}'>
   <div class="wp-top">
     {% if is_admin %}<a href="/admin/watch" class="btn btn-sm btn-ghost">&larr; Games</a>{% else %}<span></span>{% endif %}
     <div class="wp-top-r">
-      {% if is_admin %}<button class="btn btn-sm" type="button" id="wp-invite" data-link="{{ invite }}">Copy invite link</button>{% endif %}
+      <button class="btn btn-sm" type="button" id="wp-invite" data-link="{{ invite }}">Copy invite link</button>
       <label class="wp-spoil small"><input type="checkbox" id="wp-spoiler"> Hide score</label>
     </div>
   </div>
 
+  {% if guest %}
+  <div class="card wp-name" id="wp-name" hidden>
+    <b>Join the watch party</b>
+    <p class="small muted">Pick a name your friends will see in the chat and voice room. No account needed.</p>
+    <form id="wp-name-form" class="wp-form"><input class="input" id="wp-name-input" maxlength="20" placeholder="Your name" autocomplete="nickname" required><button class="btn btn-primary" type="submit">Join</button></form>
+  </div>
+  {% endif %}
   <section class="card wp-score" id="wp-score">
     <div class="wp-side"><img src="{{ g.away.logo }}" alt=""><b>{{ g.away.abbr }}</b></div>
     <div class="wp-mid"><div class="wp-pts"><span id="wp-away">{{ g.away.score }}</span><i>-</i><span id="wp-home">{{ g.home.score }}</span></div>

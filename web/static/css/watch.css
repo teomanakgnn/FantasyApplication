@@ -94,3 +94,6 @@
   .wp-ctrls .btn { flex: 1; }
   .wp-stage-bar { opacity: 1; }
 }
+
+.wp-name { margin-bottom: 12px; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.wp-name p { margin: 4px 0 10px; }
