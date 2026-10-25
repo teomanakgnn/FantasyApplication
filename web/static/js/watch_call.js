@@ -91,7 +91,7 @@
       renderPeople();
     };
     if (mic) mic.getTracks().forEach((t) => pc.addTrack(t, mic));
-    if (screen) screen.getTracks().forEach((t) => tuneVideo(pc.addTrack(t, screen), t));
+    if (screen) screen.getTracks().forEach((t) => tuneVideo(pc.addTrack(t, screen), t, pc));
   }
 
   async function handle(from, { description, candidate }) {
@@ -255,6 +255,60 @@
     applyVolumes();
   }
 
+  // ---------------- canli kalite (sorun kimde?) ----------------
+  // Paylasan: gonderilen cozunurluk / fps / Mbps ve tarayicinin kaliteyi dusurme nedeni
+  // (bandwidth = paylasanin yukleme hizi yetmiyor, cpu = bilgisayar yetismiyor).
+  // Izleyen: alinan cozunurluk / fps / Mbps, paket kaybi (izleyenin agi) ve aktarma (relay).
+  const lastBytes = new Map();
+  const REASON = { bandwidth: "your upload speed", cpu: "your computer (CPU)", other: "the browser", none: "" };
+  async function qualityTick() {
+    const el = $("#wp-stage-q");
+    if (!el || left || $("#wp-stage").hidden) return;
+    const now = performance.now();
+    if (screen) {
+      const v = screen.getVideoTracks()[0];
+      let worst = null;
+      for (const [id, p] of peers) {
+        const sender = p.pc.getSenders().find((s) => s.track === v);
+        if (!sender) continue;
+        tuneVideo(sender, v);
+        const st = await sender.getStats().catch(() => null);
+        st && st.forEach((r) => {
+          if (r.type !== "outbound-rtp" || r.kind !== "video") return;
+          const prev = lastBytes.get("o" + id), mbps = prev ? ((r.bytesSent - prev.b) * 8) / ((now - prev.t) * 1000) : 0;
+          lastBytes.set("o" + id, { b: r.bytesSent, t: now });
+          const row = { w: r.frameWidth || 0, h: r.frameHeight || 0, fps: Math.round(r.framesPerSecond || 0), mbps, why: r.qualityLimitationReason || "none" };
+          if (!worst || row.h < worst.h) worst = row;
+        });
+      }
+      el.textContent = worst ? `Sending ${worst.w}x${worst.h} · ${worst.fps} fps · ${worst.mbps.toFixed(1)} Mbps per viewer`
+        + (REASON[worst.why] ? ` · held back by ${REASON[worst.why]}` : "") : "Sending...";
+      el.className = worst && worst.why !== "none" ? "warn" : "";
+      return;
+    }
+    const p = peers.get(stageOwner);
+    if (!p) return;
+    const st = await p.pc.getStats().catch(() => null);
+    if (!st) return;
+    let row = null, relay = false;
+    st.forEach((r) => {
+      if (r.type === "inbound-rtp" && r.kind === "video") {
+        const prev = lastBytes.get("i"), mbps = prev ? ((r.bytesReceived - prev.b) * 8) / ((now - prev.t) * 1000) : 0;
+        const lostPct = prev ? (100 * (r.packetsLost - prev.l)) / Math.max(1, (r.packetsReceived - prev.r) + (r.packetsLost - prev.l)) : 0;
+        lastBytes.set("i", { b: r.bytesReceived, t: now, l: r.packetsLost, r: r.packetsReceived });
+        row = { w: r.frameWidth || 0, h: r.frameHeight || 0, fps: Math.round(r.framesPerSecond || 0), mbps, lost: Math.max(0, lostPct) };
+      }
+      if (r.type === "candidate-pair" && r.nominated && r.state === "succeeded") {
+        const l = st.get(r.localCandidateId), rm = st.get(r.remoteCandidateId);
+        relay = (l && l.candidateType === "relay") || (rm && rm.candidateType === "relay");
+      }
+    });
+    if (!row) return;
+    el.textContent = `Receiving ${row.w}x${row.h} · ${row.fps} fps · ${row.mbps.toFixed(1)} Mbps${row.lost >= 2 ? ` · ${row.lost.toFixed(0)}% packets lost (your connection)` : ""}${relay ? " · via relay" : ""}`;
+    el.className = row.lost >= 2 || row.h && row.h < 540 ? "warn" : "";
+  }
+  setInterval(qualityTick, 2000);
+
   // ---------------- dugmeler ----------------
   async function join() {
     if (!left) return;
@@ -308,18 +362,43 @@
     renderMic(); sendState(); renderPeople();
   }
 
-  function tuneVideo(sender, track) {
-    if (track.kind !== "video") return;
+  // Kalite modu (paylasan secer): smooth = akicilik, sharp = netlik, balanced = ikisi
+  const QUALITY = { smooth: ["motion", "maintain-framerate"], balanced: ["motion", "balanced"], sharp: ["detail", "maintain-resolution"] };
+  let quality = (() => { try { return localStorage.getItem("hl_wp_quality") || "balanced"; } catch (e) { return "balanced"; } })();
+  // Paylasan her izleyiciye ayri kopya gonderir: toplam ~9 Mbps yukleme butcesi izleyicilere bolunur
+  const perViewerBitrate = () => Math.max(1500000, Math.min(6000000, Math.round(9000000 / Math.max(1, peers.size))));
+
+  // VP9 (yoksa H264) once: ayni bant genisliginde VP8'den belirgin net
+  function preferCodecs(pc, sender) {
+    try {
+      const tr = pc.getTransceivers().find((t) => t.sender === sender);
+      const caps = RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities("video");
+      if (!tr || !tr.setCodecPreferences || !caps) return;
+      const rank = (c) => (/vp9/i.test(c.mimeType) ? 0 : /h264/i.test(c.mimeType) ? 1 : /vp8/i.test(c.mimeType) ? 2 : 3);
+      tr.setCodecPreferences([...caps.codecs].sort((a, b) => rank(a) - rank(b)));
+    } catch (e) { /* desteklenmiyor */ }
+  }
+
+  // Bit hizi ve oncelik; muzakere bitmeden ayarlanamadigi icin istatistik dongusunde de yenilenir
+  function tuneVideo(sender, track, pc) {
+    if (!track || track.kind !== "video") return;
+    if (pc) preferCodecs(pc, sender);
     try {
       const prm = sender.getParameters();
-      if (!prm.encodings || !prm.encodings.length) prm.encodings = [{}];
-      prm.encodings[0].maxBitrate = 2500000;
-      prm.degradationPreference = "maintain-framerate";
+      if (!prm.encodings || !prm.encodings.length) return;           // henuz muzakere edilmedi
+      const want = perViewerBitrate();
+      const pref = QUALITY[quality][1];
+      if (prm.encodings[0].maxBitrate === want && prm.degradationPreference === pref) return;
+      prm.encodings[0].maxBitrate = want;
+      prm.encodings[0].maxFramerate = 30;
+      prm.degradationPreference = pref;
       sender.setParameters(prm).catch(() => {});
     } catch (e) { /* desteklenmiyor */ }
   }
 
   function renderShare() {
+    const q = document.getElementById("wp-quality");
+    if (q) q.hidden = !screen;
     btn("wp-share").textContent = screen ? "Stop sharing" : "Share screen";
     btn("wp-share").classList.toggle("btn-primary", !!screen);
   }
@@ -329,15 +408,15 @@
     if (other) return toast(`${other.name} is already sharing.`, true);
     try {
       screen = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30, max: 30 }, height: { ideal: 1080 } },
+        video: { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
         systemAudio: "include", surfaceSwitching: "include", selfBrowserSurface: "exclude",
       });
     } catch (e) { screen = null; return; }
     const v = screen.getVideoTracks()[0];
-    if (v) { v.contentHint = "motion"; v.onended = stopShare; }
+    if (v) { v.contentHint = QUALITY[quality][0]; v.onended = stopShare; }
     if (!screen.getAudioTracks().length) toast("Shared without sound - pick a tab and tick \"share tab audio\" for game sound.", true);
-    for (const p of peers.values()) screen.getTracks().forEach((t) => tuneVideo(p.pc.addTrack(t, screen), t));
+    for (const p of peers.values()) screen.getTracks().forEach((t) => tuneVideo(p.pc.addTrack(t, screen), t, p.pc));
     showStage("me", screen);
     renderShare(); sendState(); renderPeople();
   }
@@ -378,6 +457,17 @@
     row.querySelector(".wp-vpct").textContent = v.muted ? "muted" : Math.round(v.level * 100) + "%";
     applyVolumes(); saveVols();
   });
+  const qsel = document.getElementById("wp-quality");
+  if (qsel) {
+    qsel.value = quality;
+    qsel.addEventListener("change", () => {
+      quality = qsel.value;
+      try { localStorage.setItem("hl_wp_quality", quality); } catch (e) { /* yok */ }
+      const v = screen && screen.getVideoTracks()[0];
+      if (v) v.contentHint = QUALITY[quality][0];
+      for (const p of peers.values()) p.pc.getSenders().filter((s) => s.track === v).forEach((s) => tuneVideo(s, v));
+    });
+  }
   btn("wp-join").addEventListener("click", join);
   btn("wp-leave").addEventListener("click", leave);
   btn("wp-mic").addEventListener("click", toggleMic);

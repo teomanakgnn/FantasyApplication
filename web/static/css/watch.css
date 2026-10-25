@@ -108,3 +108,8 @@
 .wp-vrow input[type=range] { width: 100%; accent-color: var(--accent); }
 .wp-vpct { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 @media (max-width: 640px) { .wp-vrow { grid-template-columns: minmax(0, 1fr) auto; } .wp-vrow input[type=range] { grid-column: 1 / -1; grid-row: 2; } .wp-vpct { display: none; } }
+
+.wp-stage-q { position: absolute; top: 8px; left: 8px; padding: 4px 9px; border-radius: 8px; background: rgba(0,0,0,.6); color: #cfd6e4; font-size: .72rem; font-weight: 700; max-width: calc(100% - 16px); }
+.wp-stage-q:empty { display: none; }
+.wp-stage-q.warn { color: #F2C94C; }
+.wp-qsel { width: auto; padding: 4px 8px; font-size: .8rem; background: rgba(0,0,0,.5); color: #fff; border-color: rgba(255,255,255,.35); }

@@ -30,7 +30,9 @@
   <section class="card wp-call" id="wp-call">
     <div class="wp-stage" id="wp-stage" hidden>
       <video id="wp-video" playsinline autoplay muted></video>
+      <div class="wp-stage-q" id="wp-stage-q"></div>
       <div class="wp-stage-bar"><span id="wp-stage-who"></span>
+        <select id="wp-quality" class="input wp-qsel" hidden aria-label="Stream quality"><option value="balanced">Balanced</option><option value="sharp">Sharper</option><option value="smooth">Smoother</option></select>
         <button type="button" class="btn btn-sm btn-ghost" id="wp-unmute-video" hidden>Tap for sound</button>
         <button type="button" class="btn btn-sm btn-ghost" id="wp-full">Full screen</button></div>
     </div>
