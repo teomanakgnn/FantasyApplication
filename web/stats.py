@@ -22,7 +22,7 @@ from utils.images import headshot
 # ==================== PUANLAMA ====================
 
 BASE_WEIGHTS = {
-    "PTS": 0.75, "REB": 0.5, "AST": 0.8, "STL": 1.7, "BLK": 1.6, "TO": -1.5,
+    "PTS": 0.5, "REB": 0.6, "AST": 0.8, "STL": 1.7, "BLK": 1.6, "TO": -1.5,
     "FGA": -0.9, "FGM": 1.2, "FTA": -0.55, "FTM": 1.1, "3Pts": 0.6,
 }
 

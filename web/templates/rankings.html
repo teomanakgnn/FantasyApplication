@@ -23,21 +23,22 @@
 
 <div class="table-wrap sr-table">
   <table class="table">
-    <thead><tr><th>#</th><th class="l">Player</th><th>Value</th>{% for c in cats %}<th>{{ c }}</th>{% endfor %}<th>Games</th></tr></thead>
+    <thead><tr><th>#</th><th class="l">Player</th><th>Value</th><th>MIN</th>{% for c in cats %}<th>{{ c }}</th>{% endfor %}<th>Games</th></tr></thead>
     <tbody>
       {% for p in rows %}
       <tr>
         <td>{{ p.punt_rank[punt] if punt else p.rank }}</td>
         <td class="l"><a class="sr-name" href="/players/{{ p.slug }}"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ p.id }}.png&w=96&h=70" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span><b>{{ p.name }}</b><small>{{ p.team }} · {{ p.pos }}{% if p.injury != 'ACTIVE' %} · <span class="bad">{{ p.injury|replace('_', ' ')|lower }}</span>{% endif %}</small></span></a></td>
         <td><b>{{ '%.1f'|format(p.total - (p.z[punt] if punt else 0)) }}</b></td>
-        {% for c in cats %}{% set v = p.z[c] %}<td class="sr-z {{ 'pos' if v >= 1 else 'neg' if v <= -1 else '' }} {{ 'muted' if c == punt }}">{{ '%.1f'|format(v) }}</td>{% endfor %}
+        <td class="dim">{{ '%.0f'|format(p.min) if p.min else '-' }}</td>
+        {% for c in cats %}{% set v = p.z[c] %}{% set s = p.s %}<td class="sr-z {{ 'pos' if v >= 1 else 'neg' if v <= -1 else '' }} {{ 'muted' if c == punt }}" title="z-score {{ '%+.1f'|format(v) }}">{% if c == 'FG%' %}{{ '%.1f'|format(100 * s.fgm / s.fga) if s.fga else '-' }}{% elif c == 'FT%' %}{{ '%.1f'|format(100 * s.ftm / s.fta) if s.fta else '-' }}{% else %}{{ '%.1f'|format(s[{'3PM': 'tpm', 'PTS': 'pts', 'REB': 'reb', 'AST': 'ast', 'STL': 'stl', 'BLK': 'blk', 'TO': 'to'}[c]]) }}{% endif %}</td>{% endfor %}
         <td>{% if p.basis == 'season' %}{{ p.gp }}{% else %}<span class="dim" title="Not enough 2026-27 games yet: ranked on projection">{{ p.season_gp or 0 }}*</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-<p class="tiny dim" style="margin-top:8px">Category columns are z-scores against the drafted player pool (0 = average draftable player); FG%/FT% are volume-weighted. Games = 2026-27 games played. * = not enough games yet, placed by preseason projection.</p>
+<p class="tiny dim" style="margin-top:8px">Category columns are per-game averages (FG%/FT% in percent). Green = clearly above the average draftable player, red = clearly below; hover a cell for its z-score. Value = sum of the nine z-scores (FG%/FT% volume-weighted). Games = 2026-27 games played. * = not enough games yet, placed by preseason projection.</p>
 {% from "partials/faq.html" import faq %}
 {% if rows %}
 {{ faq([
