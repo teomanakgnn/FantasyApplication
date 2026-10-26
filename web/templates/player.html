@@ -45,7 +45,7 @@
       <div><b>{{ '%.1f'|format(100 * p.s.fgm / p.s.fga) if p.s.fga else '-' }}%</b><span>FG%</span></div>
       <div><b>{{ '%.1f'|format(100 * p.s.ftm / p.s.fta) if p.s.fta else '-' }}%</b><span>FT%</span></div>
     </div>
-    <p class="tiny dim">Per-game projection for the 2026-27 season.</p>
+    <p class="tiny dim">{% if p.basis == 'season' %}Per-game 2026-27 averages ({{ p.gp }} games).{% else %}Per-game projection for the 2026-27 season.{% endif %}</p>
   </section>
   <section class="card">
     <h2 class="card-title">Category strengths</h2>

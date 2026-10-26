@@ -1,7 +1,8 @@
 """
 Arama motoru sayfalari: 2026-27 fantasy siralamasi ve oyuncu basina
-"fantasy outlook" sayfasi. Hepsi Trade Analyzer'in projeksiyon degerlerinden
-(services/trade_values.py) uretilir; metin kurallarla yazilir.
+"fantasy outlook" sayfasi. Siralama 2026-27 sezonunun gercek mac basi
+istatistiklerinden (services/trade_values.py, "season"); bu sezon yeterli maci
+olmayan oyuncular projeksiyonlariyla listenin sonuna eklenir (sayfalari kalir).
 
 Insanlarin Google'da aradigi sey tam olarak bu: "jokic fantasy outlook",
 "fantasy basketball rankings 2026-27", "punt ft% targets".
@@ -22,25 +23,56 @@ def slugify(name):
     return s
 
 
-@cache_data(ttl=3600, show_spinner=False, copy_result=False)
-def table():
-    rows = players("proj")
+def _min_games(rows):
+    """Siralamaya girmek icin gereken mac: takimlarin oynadigi macin ~%40'i (en az 1)."""
+    most = max((p["gp"] for p in rows), default=0)
+    return max(1, round(0.4 * most))
+
+
+def _prep(rows, basis):
     out = []
     for p in rows:
         q = dict(p)
         q["slug"] = slugify(p["name"])
         q["total"] = round(sum(p["z"].values()), 2)
+        q["basis"] = basis
         out.append(q)
-    out.sort(key=lambda p: -p["total"])
+    return sorted(out, key=lambda p: -p["total"])
+
+
+@cache_data(ttl=1800, show_spinner=False, copy_result=False)
+def table():
+    """
+    2026-27 sezon istatistiklerine gore 9-cat sirasi. Yeterli maci olanlar
+    once (mac basi z-skoru), digerleri (sakat, az mac) projeksiyonla sonra.
+    """
+    season = players("season")
+    need = _min_games(season)
+    ranked = _prep([p for p in season if p["gp"] >= need], "season")
+    seen = {p["slug"] for p in ranked}
+    rest = [p for p in _prep(players("proj"), "proj") if p["slug"] not in seen]
+    # Bu sezon az oynamis ama sezon satiri olanlar: istatistikleri gercek olsun
+    by_season = {slugify(p["name"]): p for p in season}
+    for p in rest:
+        s = by_season.get(p["slug"])
+        if s:
+            p["season_gp"] = s["gp"]
+    out = ranked + rest
     for i, p in enumerate(out, 1):
         p["rank"] = i
-    # Her punt yapisinda sira
+    # Her punt yapisinda sira (iki grup kendi icinde, ayni duzen)
     for c in PUNTS:
-        order = sorted(out, key=lambda p: -(p["total"] - p["z"][c]))
+        order = (sorted(ranked, key=lambda p: -(p["total"] - p["z"][c]))
+                 + sorted(rest, key=lambda p: -(p["total"] - p["z"][c])))
         for i, p in enumerate(order, 1):
             p.setdefault("punt_rank", {})[c] = i
     by_slug = {p["slug"]: p for p in out}
     return out, by_slug
+
+
+def ranked_count():
+    rows, _ = table()
+    return sum(1 for p in rows if p["basis"] == "season")
 
 
 def adp_of(name):
@@ -66,10 +98,14 @@ def outlook(p):
     weak = sorted(CATS, key=lambda c: z[c])
     name = p["name"].split(" ")[-1] if len(p["name"].split(" ")) > 1 else p["name"]
     paras = []
-    paras.append(f"{p['name']} projects as the No. {p['rank']} player in 9-category leagues for 2026-27 "
-                 f"({tier(p['rank']).lower()}). Our projection has him at {p['s']['pts']:.1f} points, "
-                 f"{p['s']['reb']:.1f} rebounds, {p['s']['ast']:.1f} assists, {p['s']['stl']:.1f} steals, "
-                 f"{p['s']['blk']:.1f} blocks and {p['s']['tpm']:.1f} threes per game.")
+    line = (f"{p['s']['pts']:.1f} points, {p['s']['reb']:.1f} rebounds, {p['s']['ast']:.1f} assists, "
+            f"{p['s']['stl']:.1f} steals, {p['s']['blk']:.1f} blocks and {p['s']['tpm']:.1f} threes per game")
+    if p.get("basis") == "season":
+        paras.append(f"{p['name']} ranks No. {p['rank']} in 9-category leagues on his 2026-27 numbers "
+                     f"({tier(p['rank']).lower()}): {line} over {p['gp']} game{'s' if p['gp'] != 1 else ''}.")
+    else:
+        paras.append(f"{p['name']} has not played enough 2026-27 games to be ranked on this season's stats yet, "
+                     f"so he sits at No. {p['rank']} on his projection: {line}.")
     good = [c for c in strong if z[c] >= 0.75][:3]
     bad = [c for c in weak if z[c] <= -0.5][:2]
     if good:
@@ -93,7 +129,7 @@ def outlook(p):
                          f"Name value is doing some of the work here.")
         else:
             paras.append(f"Draft value: his ADP ({adp:.0f}) is in line with where we rank him.")
-    if p["avail"] < 0.8:
+    if p.get("basis") != "season" and p["avail"] < 0.8:
         paras.append(f"Health: he is projected for about {round(p['avail'] * 82)} games, so build depth behind him.")
     if p.get("injury") and p["injury"] != "ACTIVE":
         paras.append(f"Current status: {p['injury'].replace('_', ' ').lower()}.")

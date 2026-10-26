@@ -80,7 +80,7 @@ def _raw(basis):
         return df
     from web import stats
     if basis == "season":
-        st = stats.season_table(stats.BASE_WEIGHTS)
+        st = stats.season_table(stats.BASE_WEIGHTS, min_games=False)
         if st is None or st.empty:
             return pd.DataFrame()
         df = pd.DataFrame({"name": st["PLAYER"].values, "gp": _num(st.get("GAMES", st.get("GP", 0))).values,

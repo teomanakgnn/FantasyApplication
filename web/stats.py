@@ -271,15 +271,15 @@ def period_table(period, weights):
 MIN_GAMES_FLOOR, MIN_GAMES_CAP = 3, 10
 
 
-def season_table(weights):
-    """Resmi sezon ortalamalari (tek istek)."""
+def season_table(weights, min_games=True):
+    """Resmi sezon ortalamalari (tek istek). min_games=False: mac alt siniri yok."""
     df = get_nba_season_stats_official()
     if df is None or df.empty:
         return pd.DataFrame()
     df = df.copy()
     games = pd.to_numeric(df.get("GP"), errors="coerce").fillna(0)
     played = int(games.max() or 0)
-    if played > MIN_GAMES_FLOOR:
+    if min_games and played > MIN_GAMES_FLOOR:
         threshold = max(MIN_GAMES_FLOOR, min(MIN_GAMES_CAP, played // 3))
         kept = df[games >= threshold]
         df = kept if not kept.empty else df

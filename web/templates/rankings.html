@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Fantasy Basketball Rankings 2026-27{% if punt %} - Punt {{ punt }}{% endif %}{% if pos %} - {{ positions[pos] }}{% endif %} · HoopLife NBA{% endblock %}
-{% block description %}2026-27 fantasy basketball rankings for 9-category leagues: top 300 players by projected category value{% if punt %}, re-ranked for punt {{ punt }} builds{% endif %}, with injury risk priced in.{% endblock %}
+{% block description %}2026-27 fantasy basketball rankings for 9-category leagues: top 300 players ranked by their 2026-27 per-game stats{% if punt %}, re-ranked for punt {{ punt }} builds{% endif %}, with injury risk priced in.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <div class="page-head">
   <div class="eyebrow">2026-27 season</div>
   <h1>Fantasy Basketball Rankings{% if punt %} <span class="dim">· punt {{ punt }}</span>{% endif %}</h1>
-  <p>Top 300 players for 9-category leagues, ranked by projected value across FG%, FT%, 3PM, PTS, REB, AST, STL, BLK and TO, with injury risk priced in. Tap a player for his full outlook.</p>
+  <p>Top 300 players for 9-category leagues, ranked by this season's per-game value across FG%, FT%, 3PM, PTS, REB, AST, STL, BLK and TO. Updated as games are played. Tap a player for his full outlook.</p>
 </div>
 
 <div class="card sr-filters">
@@ -31,13 +31,13 @@
         <td class="l"><a class="sr-name" href="/players/{{ p.slug }}"><img src="https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{{ p.id }}.png&w=96&h=70" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span><b>{{ p.name }}</b><small>{{ p.team }} · {{ p.pos }}{% if p.injury != 'ACTIVE' %} · <span class="bad">{{ p.injury|replace('_', ' ')|lower }}</span>{% endif %}</small></span></a></td>
         <td><b>{{ '%.1f'|format(p.total - (p.z[punt] if punt else 0)) }}</b></td>
         {% for c in cats %}{% set v = p.z[c] %}<td class="sr-z {{ 'pos' if v >= 1 else 'neg' if v <= -1 else '' }} {{ 'muted' if c == punt }}">{{ '%.1f'|format(v) }}</td>{% endfor %}
-        <td>{{ (p.avail * 82)|round|int }}</td>
+        <td>{% if p.basis == 'season' %}{{ p.gp }}{% else %}<span class="dim" title="Not enough 2026-27 games yet: ranked on projection">{{ p.season_gp or 0 }}*</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-<p class="tiny dim" style="margin-top:8px">Category columns are z-scores against the drafted player pool (0 = average draftable player); FG%/FT% are volume-weighted. Games = projected games played.</p>
+<p class="tiny dim" style="margin-top:8px">Category columns are z-scores against the drafted player pool (0 = average draftable player); FG%/FT% are volume-weighted. Games = 2026-27 games played. * = not enough games yet, placed by preseason projection.</p>
 {% from "partials/faq.html" import faq %}
 {% if rows %}
 {{ faq([

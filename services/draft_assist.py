@@ -70,8 +70,10 @@ def pool(league_id):
     return out
 
 
-def state(league_id, my_team, manual=None):
+def state(league_id, my_team, manual=None, punts=()):
     """
+    punts: punt edilen kategoriler (etiketle: "FT%", "3PM"...). Degerden,
+    zayif/guclu kategori ve kategori karnesinden cikarilir.
     manual: elle girilen secimler (oyuncu kimlikleri, secim sirasiyla).
     ESPN canli draft sirasinda secimleri API'de yayinlamiyor; o zaman
     sira ESPN'in secim tablosundan, oyuncular kullanicidan gelir.
@@ -95,7 +97,12 @@ def state(league_id, my_team, manual=None):
     picks = sorted(d["draftDetail"]["picks"], key=lambda p: p["overallPickNumber"])
     total, nteams = len(picks), len(teams) or 12
     rounds = max(1, total // nteams)
+    label_to_cat = {v: k for k, v in CAT_LABEL.items()}
+    punted = [label_to_cat[x] for x in punts if x in label_to_cat]
+    cats = [c for c in NINE_CAT if c not in punted]
     sc = _scores(nteams, rounds)
+    if punted:
+        sc = sc.assign(VALUE=total_value(sc, punted))
     by_id = {str(int(x)): i for i, x in sc["ESPN_ID"].items() if x == x}
 
     made = [p for p in picks if p.get("playerId", -1) > 0]
@@ -112,7 +119,7 @@ def state(league_id, my_team, manual=None):
     my_rows = [r for r in my_rows if r is not None]
     # Kategori profili ve mevki sayilari
     profile = {c: float(sum(r[c] for r in my_rows)) for c in NINE_CAT}
-    weak = sorted(NINE_CAT, key=lambda c: profile[c])[:3] if my_rows else []
+    weak = sorted(cats, key=lambda c: profile[c])[:3] if my_rows else []
     counts = {"G": 0, "F": 0, "C": 0}
     for r in my_rows:
         for g in _group(r["POSITIONS"]):
@@ -134,8 +141,9 @@ def state(league_id, my_team, manual=None):
             beat = sum(1 for v in vals if mine_v > v)
             avg = sum(vals) / len(vals) if vals else 0.0
             cat_table.append({"cat": CAT_LABEL[c], "rank": int(1 + sum(1 for v in vals if v > mine_v)),
-                              "beat": int(beat), "of": len(vals), "win": bool(mine_v > avg)})
-    cat_record = [sum(1 for x in cat_table if x["win"]), sum(1 for x in cat_table if not x["win"])]
+                              "beat": int(beat), "of": len(vals), "win": bool(mine_v > avg), "punt": c in punted})
+    live = [x for x in cat_table if not x["punt"]]
+    cat_record = [sum(1 for x in live if x["win"]), sum(1 for x in live if not x["win"])]
 
     avail = sc[~sc["ESPN_ID"].astype("Int64").astype(str).isin(taken)].copy()
     first, second = (my_open + [None, None])[:2]
@@ -159,7 +167,7 @@ def state(league_id, my_team, manual=None):
     top = avail.sort_values("SCORE", ascending=False).head(12)
 
     def reason(r):
-        strong = sorted(NINE_CAT, key=lambda c: -r[c])[:3]
+        strong = sorted(cats, key=lambda c: -r[c])[:3]
         bits = ["+" + "/".join(CAT_LABEL[c] for c in strong)]
         helps = [CAT_LABEL[c] for c in weak if r[c] > 0.4]
         if helps:
@@ -191,6 +199,6 @@ def state(league_id, my_team, manual=None):
         "mine": [named(p) for p in mine],
         "weak": [CAT_LABEL[c] for c in weak], "counts": counts,
         "cats": cat_table, "cat_record": cat_record, "teams_n": len(teams),
-        "strong": [CAT_LABEL[c] for c in sorted(NINE_CAT, key=lambda c: -profile[c])[:3]] if my_rows else [],
-        "recs": recs,
+        "strong": [CAT_LABEL[c] for c in sorted(cats, key=lambda c: -profile[c])[:3]] if my_rows else [],
+        "recs": recs, "punts": [CAT_LABEL[c] for c in punted], "need_wins": (len(cats) // 2) + 1,
     }

@@ -292,7 +292,8 @@ async def draft_assist_manual(request: Request):
         feed = _FEED.get(str(body.get("league")))
         live = feed and time.time() - feed["ts"] < 30
         taken = feed["ids"] if live else [str(x) for x in body.get("taken") or []]
-        out = state(int(body.get("league")), str(body.get("team")), manual=taken)
+        out = state(int(body.get("league")), str(body.get("team")), manual=taken,
+                    punts=[str(x) for x in body.get("punts") or []][:4])
         out["feed"] = {"live": bool(live), "picks": len(taken), "source": feed and feed.get("source"),
                        "age": round(time.time() - feed["ts"]) if feed else None}
         out["taken"] = taken

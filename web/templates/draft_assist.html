@@ -21,6 +21,10 @@
   <div id="da-feed" class="small"></div>
 </div>
 <script id="da-bm-code" type="text/plain">javascript:(function(){var U='{{ feed_url }}';var L=new URLSearchParams(location.search).get('leagueId')||'{{ league or '' }}';if(!L){alert('Open this in your ESPN draft room tab');return;}function grab(){return fetch('https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/2027/segments/0/leagues/'+L+'?view=mDraftDetail&_='+Date.now(),{credentials:'include'}).then(function(r){return r.json()}).then(function(d){var p=((d.draftDetail||{}).picks||[]).filter(function(x){return x.playerId>0}).sort(function(a,b){return a.overallPickNumber-b.overallPickNumber}).map(function(x){return x.playerId});return p}).catch(function(){return []});}function dom(){var sel='.pick-history .playerinfo__playername, .pick-history-tables .playerinfo__playername, [class*=pickHistory] .playerinfo__playername, [class*=PickHistory] [class*=layername], .draft-pick .playerinfo__playername';var n=[].slice.call(document.querySelectorAll(sel)).map(function(e){return e.textContent.trim()}).filter(Boolean);var cls={};[].slice.call(document.querySelectorAll('[class]')).forEach(function(e){String(e.className).split(/\s+/).forEach(function(c){if(/pick|draft|history|roster|team/i.test(c))cls[c]=(cls[c]||0)+1})});return {names:n,debug:{url:location.pathname,classes:Object.keys(cls).slice(0,80),sample:[].slice.call(document.querySelectorAll('[class*=layername]')).slice(0,5).map(function(e){return e.className+':'+e.textContent.trim()})}};}function push(){grab().then(function(ids){var b=ids.length?{league:L,ids:ids}:Object.assign({league:L},dom());fetch(U,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(function(r){return r.json()}).then(function(j){document.title='HL feed: '+j.picks+' picks'})})}push();setInterval(push,4000);alert('HoopLife draft feed is on. Keep this tab open.');})();</script>
+<div id="da-punt" class="card" hidden style="margin-top:12px">
+  <div class="card-title">Punt <span class="dim small">· tap categories you are giving up; advice and the category record ignore them</span></div>
+  <div class="da-punts">{% for c in ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO'] %}<button type="button" class="btn btn-sm btn-ghost" data-punt="{{ c }}">{{ c }}</button>{% endfor %}</div>
+</div>
 <div id="da-entry" class="card" hidden style="margin-top:12px;position:relative">
   <div class="row" style="gap:8px;align-items:center">
     <input class="input" id="da-input" placeholder="Who was just picked? Type a name…" autocomplete="off" style="flex:1;min-width:200px;font-size:1.05rem">
@@ -50,6 +54,8 @@
   .da-cats div { text-align:center; padding:8px 4px; border-radius:10px; display:flex; flex-direction:column; gap:2px; }
   .da-cats .w { background:var(--good-soft); border:1px solid var(--good); }
   .da-cats .l { background:var(--bad-soft); border:1px solid var(--bad); }
+  .da-cats .p { background:var(--surface-2); border:1px dashed var(--line); opacity:.55; }
+  .da-punts { display:flex; flex-wrap:wrap; gap:6px; }
   .da-cats b { font-size:.8rem; } .da-cats span { font-size:1.15rem; font-weight:900; } .da-cats small { font-size:.66rem; color:var(--muted); }
   @media (max-width: 800px) { .da-grid { grid-template-columns: 1fr; } .da-cats { grid-template-columns: repeat(5, minmax(0,1fr)); } }
 </style>
@@ -59,6 +65,24 @@
 (function () {
   const { $, api, toast, escapeHtml: h } = window.HL;
   const box = $("#da"), input = $("#da-input"), list = $("#da-list");
+  let punts = [];
+  const pkey = () => `hl_da_punt_${cur[0]}`;
+  function drawPunts() {
+    document.querySelectorAll("[data-punt]").forEach((b) => {
+      const on = punts.includes(b.dataset.punt);
+      b.className = `btn btn-sm ${on ? "btn-primary" : "btn-ghost"}`;
+    });
+  }
+  document.getElementById("da-punt").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-punt]");
+    if (!b || !cur) return;
+    const c = b.dataset.punt;
+    if (punts.includes(c)) punts = punts.filter((x) => x !== c);
+    else if (punts.length >= 4) return window.HL.toast("Punting more than 4 categories leaves too few to win.", true);
+    else punts.push(c);
+    try { localStorage.setItem(pkey(), JSON.stringify(punts)); } catch (err) {}
+    drawPunts(); refresh(false);
+  });
   let cur = null, taken = [], players = [], byId = new Map(), matches = [], active = 0, busy = false, poll = null;
   $("#da-bm").href = $("#da-bm-code").textContent.trim();
   $("#da-bm").addEventListener("click", (e) => { e.preventDefault(); toast("Drag this button to your bookmarks bar, then click it in the ESPN draft tab."); });
@@ -70,7 +94,7 @@
     if (!cur || busy) return;
     busy = true;
     try {
-      const s = await api("/api/admin/draft", { method: "POST", body: { league: cur[0], team: cur[1], taken, with_pool: !!withPool } });
+      const s = await api("/api/admin/draft", { method: "POST", body: { league: cur[0], team: cur[1], taken, punts, with_pool: !!withPool } });
       if (s.pool) { players = s.pool; byId = new Map(players.map((p) => [p.id, p])); }
       if (s.feed && s.feed.live) { taken = s.taken; }
       $("#da-feed").innerHTML = s.feed && s.feed.live
@@ -96,12 +120,13 @@
         <div class="da-clock ${s.on_me ? "me" : ""}">${clock}</div>
         ${!s.on_me && s.until_me != null ? `<span class="chip chip-accent">${s.until_me} picks until you (#${s.my_next})</span>` : ""}
         ${s.strong && s.strong.length ? `<span class="chip" style="background:var(--good-soft);color:var(--good)">Strongest: ${s.strong.join(", ")}</span>` : ""}
+        ${s.punts && s.punts.length ? `<span class="chip">Punting ${s.punts.join(", ")}</span>` : ""}
         ${s.weak.length ? `<span class="chip" style="background:var(--bad-soft);color:var(--bad)">Weakest: ${s.weak.join(", ")}</span>` : ""}
         <span class="chip">G ${s.counts.G} · F ${s.counts.F} · C ${s.counts.C}</span>
       </div>
       ${s.cats && s.cats.length ? `<section class="card" style="margin-bottom:12px">
-        <div class="card-title">Your roster now: <b class="${s.cat_record[0] >= 5 ? "good" : "bad"}">${s.cat_record[0]}-${s.cat_record[1]}</b> vs the average team <span class="dim small">· rank among ${s.teams_n} teams, and how many rosters you beat</span></div>
-        <div class="da-cats">${s.cats.map((c) => `<div class="${c.win ? "w" : "l"}"><b>${c.cat}</b><span>#${c.rank}</span><small>beats ${c.beat}/${c.of}</small></div>`).join("")}</div>
+        <div class="card-title">Your roster now: <b class="${s.cat_record[0] >= s.need_wins ? "good" : "bad"}">${s.cat_record[0]}-${s.cat_record[1]}</b> vs the average team <span class="dim small">· rank among ${s.teams_n} teams, and how many rosters you beat</span></div>
+        <div class="da-cats">${s.cats.map((c) => `<div class="${c.punt ? "p" : c.win ? "w" : "l"}"><b>${c.cat}</b><span>#${c.rank}</span><small>${c.punt ? "punted" : `beats ${c.beat}/${c.of}`}</small></div>`).join("")}</div>
       </section>` : ""}
       <div class="da-grid">
         <section class="card"><div class="card-title">${s.on_me ? "Take one of these (tap = mark as your pick)" : "Best for your next pick"}</div>${recs}</section>
@@ -146,6 +171,8 @@
   $("#da-go").addEventListener("click", () => {
     cur = $("#da-pick").value.split("|");
     try { taken = JSON.parse(localStorage.getItem(key())) || []; } catch (e) { taken = []; }
+    try { punts = JSON.parse(localStorage.getItem(pkey())) || []; } catch (e) { punts = []; }
+    $("#da-punt").hidden = false; drawPunts();
     history.replaceState(null, "", `/admin/draft?league=${cur[0]}&team=${cur[1]}`);
     $("#da-entry").hidden = false; box.innerHTML = '<div class="spinner"></div>';
     refresh(true); input.focus();
