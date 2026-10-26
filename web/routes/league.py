@@ -351,7 +351,8 @@ async def trade_fit_eval(request: Request):
     b = await request.json()
     try:
         from services.trade_fit import evaluate
-        return evaluate(int(b["league"]), int(b["team"]), b.get("partner"), b.get("send") or [], b.get("get") or [])
+        return evaluate(int(b["league"]), int(b["team"]), b.get("partner"), b.get("send") or [], b.get("get") or [],
+                        punts=[str(x) for x in b.get("punts") or []][:4])
     except Exception as exc:
         print(f"trade fit failed: {exc}")
         return JSONResponse({"error": f"Could not evaluate: {exc}"[:200]}, 502)

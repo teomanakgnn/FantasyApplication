@@ -6,6 +6,8 @@ iyi N oyuncu (N = ligin baslangic yeri), ESPN projeksiyonu + son 15 gun
 (services/league_week.team_week). Her takim ligdeki herkese karsi
 eslestirilir; "haftalik beklenen kategori galibiyeti" = rakiplere karsi
 ortalama. Takas once/sonra hem benim hem karsi takim icin hesaplanir.
+Punt: benim punt ettigim kategoriler benim beklenen galibiyetimden ve
+kararlardan cikar (karsi takim tum kategorilerle degerlendirilir).
 """
 from datetime import datetime
 
@@ -49,7 +51,7 @@ def _sps(season, n_weeks=3):
     return games, sps
 
 
-def evaluate(league_id, my_team, partner, send, get):
+def evaluate(league_id, my_team, partner, send, get, punts=()):
     season = _season(league_id)
     data = lw.league_raw(int(league_id), season)
     settings = data.get("settings") or {}
@@ -58,6 +60,7 @@ def evaluate(league_id, my_team, partner, send, get):
     cats = [c for c in lw.ORDER if c in cats] or lw.ORDER
     slots = (settings.get("rosterSettings") or {}).get("lineupSlotCounts") or {}
     starters = sum(int(n) for k, n in slots.items() if int(k) not in (lw.SLOT_BENCH, lw.SLOT_IR)) or 10
+    punted = [c for c in cats if c in set(punts or ())][:4]
     games, sps = _sps(season)
     teams = {t["id"]: t for t in data.get("teams") or []}
     my_team, partner = int(my_team), int(partner) if partner else None
@@ -83,16 +86,16 @@ def evaluate(league_id, my_team, partner, send, get):
         weeks = {tid: lw.team_week(t, sps, games, starters, season) for tid, t in state.items()}
         return weeks
 
-    def expected_vs_league(weeks, tid):
-        tot, per_cat = 0.0, {c: 0.0 for c in cats}
+    def expected_vs_league(weeks, tid, skip=()):
+        per_cat = {c: 0.0 for c in cats}
         opps = [o for o in weeks if o != tid]
         for o in opps:
-            rows, e, _, _, _ = lw.compare(weeks[tid], weeks[o], cats)
-            tot += e
+            rows, _, _, _, _ = lw.compare(weeks[tid], weeks[o], cats)
             for r in rows:
                 per_cat[r["cat"]] += r["pa"]
         n = max(1, len(opps))
-        return tot / n, {c: v / n for c, v in per_cat.items()}
+        per_cat = {c: v / n for c, v in per_cat.items()}
+        return sum(v for c, v in per_cat.items() if c not in skip), per_cat
 
     def ranks(weeks, tid):
         out = {}
@@ -108,24 +111,30 @@ def evaluate(league_id, my_team, partner, send, get):
         return out
 
     before_w, after_w = strength(teams), strength(after)
-    res = {"cats": cats, "teams": len(teams), "weeks_counted": len(sps)}
+    live = [c for c in cats if c not in punted]
+    res = {"cats": cats, "teams": len(teams), "weeks_counted": len(sps), "punts": punted,
+           "of": len(live), "need": len(live) // 2 + 1}
     for key, tid in (("me", my_team), ("partner", partner)):
         if tid is None:
             continue
-        b, bc = expected_vs_league(before_w, tid)
-        a, ac = expected_vs_league(after_w, tid)
+        skip = punted if key == "me" else ()
+        b, bc = expected_vs_league(before_w, tid, skip)
+        a, ac = expected_vs_league(after_w, tid, skip)
         rb, ra = ranks(before_w, tid), ranks(after_w, tid)
         res[key] = {"name": _team_name(teams[tid]), "before": round(b, 2), "after": round(a, 2), "delta": round(a - b, 2),
                     "cats": [{"cat": c, "before": round(100 * bc[c]), "after": round(100 * ac[c]),
-                              "rank_before": rb[c], "rank_after": ra[c]} for c in cats]}
+                              "rank_before": rb[c], "rank_after": ra[c], "punt": c in skip} for c in cats]}
     me = res["me"]
     d = me["delta"]
     res["verdict"] = ("Clearly helps your team" if d >= 0.35 else "Helps a little" if d >= 0.1 else
                       "Basically neutral" if d > -0.1 else "Hurts a little" if d > -0.35 else "Hurts your team")
-    up = [c["cat"] for c in me["cats"] if c["after"] - c["before"] >= 5]
-    down = [c["cat"] for c in me["cats"] if c["before"] - c["after"] >= 5]
-    notes = [f"Against the rest of the league you win {me['before']:.1f} categories a week now and "
+    up = [c["cat"] for c in me["cats"] if not c["punt"] and c["after"] - c["before"] >= 5]
+    down = [c["cat"] for c in me["cats"] if not c["punt"] and c["before"] - c["after"] >= 5]
+    of = f" of {len(live)}" if punted else ""
+    notes = [f"Against the rest of the league you win {me['before']:.1f}{of} categories a week now and "
              f"{me['after']:.1f} after the trade ({'+' if d >= 0 else ''}{d:.2f})."]
+    if punted:
+        notes.append(f"Punting {', '.join(punted)}: those categories are left out of your numbers and the verdict.")
     if up:
         notes.append("Better in: " + ", ".join(up) + ".")
     if down:

@@ -9,6 +9,10 @@
   <label class="field"><span>League</span><select class="input" id="tf-league">{% for l in leagues %}<option value="{{ l.league_ref }}" data-team="{{ l.team_id }}">{{ l.name }}</option>{% endfor %}</select></label>
   <label class="field"><span>Trade with</span><select class="input" id="tf-partner"></select></label>
 </section>
+<section class="card" style="margin-top:12px">
+  <div class="card-title">Punt <span class="dim small">· categories you are giving up; they do not count for your team</span></div>
+  <div class="tf-punts">{% for c in ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO'] %}<button type="button" class="btn btn-sm btn-ghost" data-punt="{{ c }}">{{ c }}</button>{% endfor %}</div>
+</section>
 <div class="tf-grid">
   <section class="card"><div class="card-title">You send <span class="dim small" id="tf-me-name"></span></div><div id="tf-mine" class="tf-list"></div></section>
   <section class="card"><div class="card-title">You get</div><div id="tf-theirs" class="tf-list"></div></section>
@@ -29,6 +33,8 @@
   .tf-big { display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; text-align:center; }
   .tf-big b { font-size:2.2rem; font-weight:900; font-variant-numeric:tabular-nums; }
   .tf-big span { display:block; font-size:.72rem; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+  .tf-punts { display:flex; flex-wrap:wrap; gap:6px; }
+  tr.tf-punted td { opacity:.45; }
   .tf-verdict { font-size:1.4rem; font-weight:900; text-align:center; margin-bottom:8px; }
   .tf-notes p { margin:6px 0; font-size:.92rem; }
   @media (max-width:760px) { .tf-top, .tf-grid { grid-template-columns:1fr; } }
@@ -38,10 +44,27 @@
 <script>
 (function () {
   const { $, api, toast, escapeHtml: h } = window.HL;
-  let data = null;
+  let data = null, punts = [];
+  const PKEY = () => `hl_tf_punt_${league()}`;
+  function drawPunts() {
+    document.querySelectorAll("[data-punt]").forEach((b) => { b.className = `btn btn-sm ${punts.includes(b.dataset.punt) ? "btn-primary" : "btn-ghost"}`; });
+  }
+  function loadPunts() { try { punts = JSON.parse(localStorage.getItem(PKEY())) || []; } catch (e) { punts = []; } drawPunts(); }
+  document.querySelector(".tf-punts").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-punt]");
+    if (!b) return;
+    const c = b.dataset.punt;
+    if (punts.includes(c)) punts = punts.filter((x) => x !== c);
+    else if (punts.length >= 4) return toast("Punting more than 4 categories leaves too few to win.", true);
+    else punts.push(c);
+    try { localStorage.setItem(PKEY(), JSON.stringify(punts)); } catch (err) {}
+    drawPunts();
+    if (!$("#tf-res").hidden) $("#tf-go").click();
+  });
   const league = () => $("#tf-league").value, myTeam = () => +$("#tf-league").selectedOptions[0].dataset.team;
   const row = (p) => `<label class="${p.slot === 13 ? "ir" : ""}"><input type="checkbox" value="${p.id}"><span><b>${h(p.name)}</b><small>${p.pts} pts · ${p.reb} reb · ${p.ast} ast${p.injury !== "ACTIVE" ? ` · <span class="bad">${h(p.injury.toLowerCase())}</span>` : ""}${p.slot === 13 ? " · IR" : ""}</small></span><em>${p.value}</em></label>`;
   async function load() {
+    loadPunts();
     $("#tf-mine").innerHTML = $("#tf-theirs").innerHTML = '<div class="spinner"></div>';
     try {
       data = await api(`/api/admin/trade-fit/rosters?league=${league()}`);
@@ -64,20 +87,20 @@
     if (!send.length && !get.length) return toast("Tick players on at least one side.", true);
     $("#tf-go").classList.add("is-loading");
     try {
-      const r = await api("/api/admin/trade-fit", { method: "POST", body: { league: league(), team: myTeam(), partner: +$("#tf-partner").value, send, get } });
+      const r = await api("/api/admin/trade-fit", { method: "POST", body: { league: league(), team: myTeam(), partner: +$("#tf-partner").value, send, get, punts } });
       const me = r.me, col = me.delta >= 0.1 ? "good" : me.delta <= -0.1 ? "bad" : "";
       $("#tf-res").hidden = false;
       $("#tf-res").innerHTML = `
         <div class="card">
           <div class="tf-verdict ${col}">${h(r.verdict)}</div>
-          <div class="tf-big"><div><b>${me.before.toFixed(1)}</b><span>cats / week now</span></div><div class="dim">→</div>
+          <div class="tf-big"><div><b>${me.before.toFixed(1)}</b><span>cats / week now${r.punts.length ? ` (of ${r.of})` : ""}</span></div><div class="dim">→</div>
             <div><b class="${col}">${me.after.toFixed(1)}</b><span>after trade</span></div>
             <div><b class="${col}">${me.delta >= 0 ? "+" : ""}${me.delta.toFixed(2)}</b><span>change</span></div></div>
           <div class="tf-notes">${r.notes.map((n) => `<p>${h(n)}</p>`).join("")}</div>
         </div>
         <section class="card" style="margin-top:12px"><div class="card-title">Your categories vs the league <span class="dim small">· win % against an average opponent, and your rank of ${r.teams}</span></div>
           <table class="table small"><thead><tr><th class="l">Cat</th><th>Win % now</th><th>After</th><th>Rank now</th><th>After</th></tr></thead><tbody>
-          ${me.cats.map((c) => { const d = c.after - c.before; return `<tr><td class="l"><b>${c.cat}</b></td><td>${c.before}%</td><td class="${d >= 5 ? "good" : d <= -5 ? "bad" : ""}"><b>${c.after}%</b> ${d ? `(${d > 0 ? "+" : ""}${d})` : ""}</td><td>${c.rank_before}</td><td class="${c.rank_after < c.rank_before ? "good" : c.rank_after > c.rank_before ? "bad" : ""}">${c.rank_after}</td></tr>`; }).join("")}
+          ${me.cats.map((c) => { const d = c.after - c.before; return `<tr class="${c.punt ? "tf-punted" : ""}"><td class="l"><b>${c.cat}</b>${c.punt ? ' <span class="tiny dim">punt</span>' : ""}</td><td>${c.before}%</td><td class="${d >= 5 ? "good" : d <= -5 ? "bad" : ""}"><b>${c.after}%</b> ${d ? `(${d > 0 ? "+" : ""}${d})` : ""}</td><td>${c.rank_before}</td><td class="${c.rank_after < c.rank_before ? "good" : c.rank_after > c.rank_before ? "bad" : ""}">${c.rank_after}</td></tr>`; }).join("")}
           </tbody></table></section>
         ${r.partner ? `<p class="small muted" style="margin-top:8px">${h(r.partner.name)}: ${r.partner.before.toFixed(1)} → ${r.partner.after.toFixed(1)} cats/week (${r.partner.delta >= 0 ? "+" : ""}${r.partner.delta.toFixed(2)}).</p>` : ""}`;
       $("#tf-res").scrollIntoView({ behavior: "smooth", block: "start" });
