@@ -116,7 +116,8 @@ def simulations(request: Request):
                       "p_fav": s["p_home"] if fav_home else s["p_away"],
                       "path": f"/nba/game/{r['game_id']}/{nb.game_slug(s['away'], s['home'])}",
                       "away_nick": nb.nick(s["away"]), "home_nick": nb.nick(s["home"])})
-    return render(request, "nba_sims.html", active="scores", items=items, rec=game_sim.record() if db.available else None)
+    return render(request, "nba_sims.html", active="scores", items=items, rec=game_sim.record() if db.available else None,
+                  hit_pts=game_sim.HIT_PTS)
 
 
 @router.get("/admin/simulations")
@@ -148,7 +149,7 @@ def simulations_admin(request: Request):
                       "path": f"/nba/game/{r['game_id']}/{nb.game_slug(s['away'], s['home'])}",
                       "away_nick": nb.nick(s["away"]), "home_nick": nb.nick(s["home"])})
     return render(request, "admin_sims.html", active="account", items=items,
-                  rec=game_sim.record() if db.available else None)
+                  rec=game_sim.record() if db.available else None, hit_pts=game_sim.HIT_PTS)
 
 
 @router.post("/api/admin/sim/{game_id}")

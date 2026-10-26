@@ -29,10 +29,17 @@ import numpy as np
 from services.cache import cache_data
 
 N_SIMS = 5000
-MODEL = "v3"
-POSS_CAL = 0.969   # cop zamani eklemesi ve ev avantaji sonrasi lig ortalamasina kalibrasyon
+MODEL = "v4"
+POSS_CAL = 0.975   # cop zamani eklemesi ve ev avantaji sonrasi lig ortalamasina kalibrasyon (v4: 2026-27 ilk 43 mac)
 EASTERN = ZoneInfo("America/New_York")
 LONDON = ZoneInfo("Europe/London")
+# Ev sahibi: isabet yuzdesine eklenen pay ve serbest atis carpani. v3'te 0.012 / 1.04 ev
+# sahibine +2.2 fark veriyordu; 2026-27'nin ilk 43 macinda gercek fark -0.1 (her olasilik
+# kovasinda ev sahibi ~10 puan fazla tahmin). Yariya indirildi (~+1.2), irtifa +0.006.
+HOME_BOOST = 0.006
+HOME_FTA = 1.02
+# Basari: tahmin edilen (tipik mac) skorda iki takim da gercege bu kadar yakinsa isabet
+HIT_PTS = 5
 LG = {"p2": 0.54, "p3": 0.36, "pft": 0.78}
 PLAY_PROB = {"out": 0.0, "doubtful": 0.2, "questionable": 0.6, "day-to-day": 0.6, "probable": 0.9}
 WEIGHTS = {"pts": 0.75, "reb": 0.5, "ast": 0.8, "stl": 1.7, "blk": 1.6, "to": -1.5, "fga": -0.9, "fgm": 1.2,
@@ -201,7 +208,7 @@ def _team(rng, players, mins, scale_s, ctx, home):
     player_form = rng.normal(0, 0.03, (n, k))                 # oyuncunun sicak / soguk gecesi
     fga2 = _count(rng, R("fga2") * scale)
     fga3 = _count(rng, R("fga3") * scale)
-    fta = _count(rng, R("fta") * scale * (1.04 if home else 1.0) * ctx["def"])
+    fta = _count(rng, R("fta") * scale * (HOME_FTA if home else 1.0) * ctx["def"])
     p2 = np.clip(P("p2") * ctx["def"] * ctx["rim"] + ctx["form2"][:, None] + player_form + boost + fresh, 0.2, 0.8)
     p3 = np.clip(P("p3") * ctx["def"] + ctx["form3"][:, None] + player_form * 0.8 + boost * 0.6 + fresh, 0.1, 0.6)
     fgm2 = rng.binomial(fga2, p2)
@@ -310,7 +317,7 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
         share = reb[side] / max(reb[side] + reb[opp], 1e-6)
         ctx.update({"rim": 1 - 0.04 * (blk[opp] / blk_avg - 1),
                     "fresh": -0.012 if rest[side] == 0 else 0.004 if rest[side] >= 2 else 0.0,
-                    "home_boost": 0.018 if abbr["home"] in ALTITUDE else 0.012})
+                    "home_boost": HOME_BOOST + (0.006 if abbr["home"] in ALTITUDE else 0.0)})
         side_poss = game_poss * (1 + 0.2 * (share - 0.5))
         box[side] = _team(rng, teams[side], mins, side_poss / np.maximum(usage, 1e-6), ctx, side == "home")
         score[side] = box[side]["pts"].sum(axis=1).astype(float)
@@ -367,9 +374,16 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
     # En tipik mac
     # Tipik mac oyuncu kutusuyla tutarli olsun: uzatmasiz senaryolar, skor = oyuncu sayilari toplami
     raw_away, raw_home = box["away"]["pts"].sum(axis=1), box["home"]["pts"].sum(axis=1)
-    close = ((np.abs(margin - med_margin) <= 3) & (np.abs(score["home"] + score["away"] - med_total) <= 6)
-             & (home_win == fav_home) & (ot == 0) & ((raw_home > raw_away) == fav_home))
-    idx = np.where(close)[0]
+    # Skor tahmini olarak yayinlanir: once her iki takimin medyan skoruna +-2 icindeki senaryolar
+    med_a, med_h = float(np.median(score["away"])), float(np.median(score["home"]))
+    same = (home_win == fav_home) & (ot == 0) & ((raw_home > raw_away) == fav_home)
+    idx = np.array([], dtype=int)
+    for tol in (2, 3, 5):
+        idx = np.where(same & (np.abs(raw_away - med_a) <= tol) & (np.abs(raw_home - med_h) <= tol))[0]
+        if len(idx) >= 20:
+            break
+    if not len(idx):
+        idx = np.where((np.abs(margin - med_margin) <= 3) & (np.abs(score["home"] + score["away"] - med_total) <= 6) & same)[0]
     if not len(idx):
         idx = np.argsort(np.abs(margin - med_margin))[:200]
     dev = np.zeros(len(idx))
@@ -490,6 +504,7 @@ def evaluate():
         except Exception:
             top = None
         sim["result"] = {"away": sc["away"], "home": sc["home"], "home_won": home_won, "p_winner": p_winner,
+                         **_score_check(sim, sc),
                          "top_scorer": ({"name": top["PLAYER"], "pts": int(top.get("PTS") or 0)} if top else None),
                          "correct": p_winner >= 0.5, "margin_err": abs(pred_margin - (sc["home"] - sc["away"])),
                          "total_err": abs(sim["total_median"] - (sc["home"] + sc["away"]))}
@@ -498,16 +513,31 @@ def evaluate():
     return done
 
 
+def _score_check(sim, sc):
+    """Tahmin edilen skor (tipik mac) gercege ne kadar yakin: iki takim da HIT_PTS icindeyse isabet."""
+    t = (sim.get("typical") or {}).get("score") or {"away": round(sim["score"]["away"]["median"]),
+                                                     "home": round(sim["score"]["home"]["median"])}
+    off = {s: abs(int(t[s]) - int(sc[s])) for s in ("away", "home")}
+    return {"off_away": off["away"], "off_home": off["home"], "off": round((off["away"] + off["home"]) / 2, 1),
+            "hit": max(off.values()) <= HIT_PTS}
+
+
 def record():
-    """Modelin karnesi: kazanan tahmini, ortalama skor farki ve toplam sayi hatasi."""
+    """
+    Modelin karnesi. Basari = skoru tutturmak (iki takim da HIT_PTS sayi icinde);
+    kazanani bilmek basari sayilmaz. Ayrica takim basi ortalama skor hatasi,
+    fark ve toplam hatasi ile olasilik kalitesi (Brier).
+    """
     from services.database import db
-    res = [r["sim"]["result"] for r in db.all_sims(500) if r["sim"].get("result") and not r["sim"].get("late")]
-    if not res:
+    rows = [r["sim"] for r in db.all_sims(500) if r["sim"].get("result") and not r["sim"].get("late")]
+    if not rows:
         return None
+    res = [dict(s["result"], **_score_check(s, s["result"])) for s in rows]
     n = len(res)
-    right = sum(1 for r in res if r["correct"])
+    hits = sum(1 for r in res if r["hit"])
     brier = sum((1 - r["p_winner"]) ** 2 for r in res) / n
-    return {"games": n, "right": right, "wrong": n - right, "pct": round(100 * right / n),
+    return {"games": n, "hits": hits, "misses": n - hits, "pct": round(100 * hits / n), "hit_pts": HIT_PTS,
+            "off": round(sum(r["off"] for r in res) / n, 1),
             "margin_err": round(sum(r["margin_err"] for r in res) / n, 1),
             "total_err": round(sum(r["total_err"] for r in res) / n, 1), "brier": round(brier, 3)}
 

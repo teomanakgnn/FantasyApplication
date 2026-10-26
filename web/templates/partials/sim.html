@@ -5,7 +5,7 @@
     <div>
       <div class="eyebrow" style="margin:0">{{ '{:,}'.format(s.n) }} simulations</div>
       <h2>We played {{ a.nick }} @ {{ h.nick }} {{ '{:,}'.format(s.n) }} times</h2>
-      {% if sim_record %}<p class="sim-rec"><b>Model record: {{ sim_record.right }}-{{ sim_record.wrong }}</b> picking winners ({{ sim_record.pct }}%) · off by {{ sim_record.margin_err }} pts on the margin on average · <a href="/nba/simulations">all simulations</a>{% if is_admin %} · <a href="/admin/simulations">admin summary</a>{% endif %}</p>{% else %}<p class="sim-rec"><a href="/nba/simulations">All simulations and the model's track record</a></p>{% endif %}
+      {% if sim_record %}<p class="sim-rec"><b>Model record: {{ sim_record.hits }} of {{ sim_record.games }}</b> final scores hit within {{ sim_record.hit_pts }} points · off by {{ sim_record.off }} pts per team on average · <a href="/nba/simulations">all simulations</a>{% if is_admin %} · <a href="/admin/simulations">admin summary</a>{% endif %}</p>{% else %}<p class="sim-rec"><a href="/nba/simulations">All simulations and the model's track record</a></p>{% endif %}
       <p class="small muted">Every simulation draws who plays (today's injury report), minutes, pace, every shot, rebound, assist, steal, block and turnover from each player's 2025-26 and 2026-27 numbers - adjusted for each team's tempo and defense, rebounding and rim protection, rest days, hot and cold shooting nights and home court (bigger in Denver and Utah).{% if s.refreshed %} <b>Updated about an hour before tip-off with the latest injury report.</b>{% endif %}</p>
     </div>
   </div>

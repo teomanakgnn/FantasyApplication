@@ -10,7 +10,8 @@
 </div>
 {% if rec %}
 <div class="sim-kpis" style="margin-bottom:14px">
-  <div><span>Winners picked</span><b>{{ rec.right }}-{{ rec.wrong }}</b><small>{{ rec.pct }}% of {{ rec.games }} finished games</small></div>
+  <div><span>Scores hit</span><b>{{ rec.hits }} of {{ rec.games }}</b><small>both teams within {{ rec.hit_pts }} points ({{ rec.pct }}%)</small></div>
+  <div><span>Score error</span><b>{{ rec.off }}</b><small>points per team, on average</small></div>
   <div><span>Margin error</span><b>{{ rec.margin_err }}</b><small>points, on average</small></div>
   <div><span>Total points error</span><b>{{ rec.total_err }}</b><small>points, on average</small></div>
   <div><span>Brier score</span><b>{{ rec.brier }}</b><small>0.25 = coin flip, lower is better</small></div>
@@ -18,7 +19,7 @@
 {% else %}<div class="note">No finished simulated games yet - results appear here after the games end.</div>{% endif %}
 
 <div class="table-wrap"><table class="table small">
-  <thead><tr><th class="l">Date</th><th class="l">Game</th><th>Pick</th><th>Typical game</th><th>Median</th><th>Final</th><th>Result</th><th>Margin err</th><th>Total err</th><th class="l">Top scorer: predicted / actual</th><th>Model</th></tr></thead>
+  <thead><tr><th class="l">Date</th><th class="l">Game</th><th>Pick</th><th>Predicted score</th><th>Median</th><th>Final</th><th>Result</th><th>Margin err</th><th>Total err</th><th class="l">Top scorer: predicted / actual</th><th>Model</th></tr></thead>
   <tbody>{% for it in items %}{% set s = it.s %}{% set r = it.res %}<tr>
     <td class="l">{{ it.day.strftime('%b') }} {{ it.day.day }}</td>
     <td class="l"><a href="{{ it.path }}">{{ s.away }} @ {{ s.home }}</a></td>
@@ -26,12 +27,12 @@
     <td>{{ s.typical.score.away }}-{{ s.typical.score.home }}</td>
     <td class="dim">{{ s.score.away.median|int }}-{{ s.score.home.median|int }}</td>
     <td>{% if r %}<b>{{ r.away }}-{{ r.home }}</b>{% else %}<span class="dim">-</span>{% endif %}</td>
-    <td>{% if r %}<span class="{{ 'good' if r.correct else 'bad' }}">{{ 'Correct' if r.correct else 'Missed' }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
+    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ 'Hit' if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
     <td>{{ r.margin_err|round(1) if r else '' }}</td>
     <td>{{ r.total_err|round(1) if r else '' }}</td>
     <td class="l">{{ it.lead.name }} <span class="dim">({{ (100 * (it.lead.p or 0))|round|int }}%)</span>{% if r and r.top_scorer %} / <b class="{{ 'good' if r.top_scorer.name == it.lead.name }}">{{ r.top_scorer.name }} {{ r.top_scorer.pts }}</b>{% endif %}</td>
     <td class="dim">{{ s.model }}{{ ' · pre-tip' if s.refreshed }}{% if s.late %} · <span class="bad">after tip, not counted</span>{% endif %}</td>
   </tr>{% else %}<tr><td colspan="11" class="muted">No simulations yet.</td></tr>{% endfor %}</tbody>
 </table></div>
-<p class="tiny dim" style="margin-top:8px">Simulations run after tip-off are shown but not counted in the record. Pick = side that won more of the 5,000 games. Margin and total errors compare the median of the simulations with the final score.</p>
+<p class="tiny dim" style="margin-top:8px">Simulations run after tip-off are shown but not counted in the record. Hit = predicted score within {{ hit_pts }} points of the final for both teams (the winner alone does not count). Pick = side that won more of the 5,000 games. Margin and total errors compare the median of the simulations with the final score.</p>
 {% endblock %}

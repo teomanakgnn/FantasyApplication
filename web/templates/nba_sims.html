@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}NBA Game Simulations & Predictions - 5,000 Simulations a Game · HoopLife NBA{% endblock %}
-{% block description %}Every NBA game HoopLife simulated 5,000 times: win probability, the most typical game and projected box score, with the model's track record{% if rec %} ({{ rec.right }}-{{ rec.wrong }} picking winners){% endif %}.{% endblock %}
+{% block description %}Every NBA game HoopLife simulated 5,000 times: win probability, the most typical game and projected box score, with the model's track record{% if rec %} ({{ rec.hits }} of {{ rec.games }} final scores predicted within {{ rec.hit_pts }} points){% endif %}.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -10,7 +10,8 @@
 </div>
 {% if rec %}
 <div class="sim-kpis" style="margin-bottom:14px">
-  <div><span>Winners picked</span><b>{{ rec.right }}-{{ rec.wrong }}</b><small>{{ rec.pct }}% of {{ rec.games }} games</small></div>
+  <div><span>Scores hit</span><b>{{ rec.hits }} of {{ rec.games }}</b><small>both teams within {{ rec.hit_pts }} points ({{ rec.pct }}%)</small></div>
+  <div><span>Score error</span><b>{{ rec.off }}</b><small>points per team, on average</small></div>
   <div><span>Margin error</span><b>{{ rec.margin_err }}</b><small>points, on average</small></div>
   <div><span>Total points error</span><b>{{ rec.total_err }}</b><small>points, on average</small></div>
   <div><span>Brier score</span><b>{{ rec.brier }}</b><small>lower is better (0.25 = coin flip)</small></div>
@@ -18,15 +19,15 @@
 {% endif %}
 {% if not items %}<div class="empty">The first simulations run tomorrow morning.</div>{% endif %}
 <div class="table-wrap"><table class="table small">
-  <thead><tr><th class="l">Date</th><th class="l">Game</th><th>Pick</th><th>Typical game</th><th>Final</th><th>Result</th></tr></thead>
+  <thead><tr><th class="l">Date</th><th class="l">Game</th><th>Pick</th><th>Predicted score</th><th>Final</th><th>Result</th></tr></thead>
   <tbody>{% for it in items %}{% set s = it.s %}{% set r = s.result %}<tr>
     <td class="l">{{ it.day.strftime('%b') }} {{ it.day.day }}</td>
     <td class="l"><a href="{{ it.path }}">{{ it.away_nick }} @ {{ it.home_nick }}</a></td>
     <td><b>{{ it.fav }}</b> {{ (100 * it.p_fav)|round|int }}%</td>
     <td>{{ s.typical.score.away }}-{{ s.typical.score.home }}</td>
     <td>{% if r %}{{ r.away }}-{{ r.home }}{% else %}<span class="dim">-</span>{% endif %}</td>
-    <td>{% if r %}<span class="{{ 'good' if r.correct else 'bad' }}">{{ 'Correct' if r.correct else 'Missed' }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
+    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ 'Hit' if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
   </tr>{% endfor %}</tbody>
 </table></div>
-<p class="tiny dim" style="margin-top:8px">For fun and fantasy decisions - not betting advice.</p>
+<p class="tiny dim" style="margin-top:8px">A simulation counts as a hit only when its predicted score is within {{ hit_pts }} points of the final for both teams - picking the winner alone does not count. For fun and fantasy decisions - not betting advice.</p>
 {% endblock %}
