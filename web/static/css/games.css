@@ -388,3 +388,21 @@
   .gr-head img { width: 32px; height: 32px; }
   .gr-cell b { font-size: .68rem; }
 }
+
+/* ==================== 82-0 arkadas odasi ==================== */
+.ez-room-join { max-width: 520px; margin-bottom: 12px; }
+.ez-room-join p { margin: 6px 0 10px; }
+.ezr-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ezr-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; margin-top: 14px; align-items: start; }
+.ezr-players { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.ezr-player { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.ezr-player.you { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.ezr-ph { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ezr-lineup { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: .8rem; }
+.ezr-lineup i { font-style: normal; font-weight: 800; color: var(--muted); margin-right: 2px; }
+.ezr-lineup small { color: var(--muted); }
+.ezr-winner { font-size: 1.15rem; font-weight: 900; color: var(--warn); margin: 6px 0 4px; }
+.ezr-chat { display: flex; flex-direction: column; height: 380px; }
+.ezr-chat-list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 5px; font-size: .86rem; word-break: break-word; }
+.ezr-chat form { margin-top: 8px; flex-wrap: nowrap; }
+@media (max-width: 760px) { .ezr-wrap { grid-template-columns: 1fr; } .ezr-chat { height: 280px; } }

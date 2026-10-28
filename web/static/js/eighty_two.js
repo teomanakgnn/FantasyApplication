@@ -16,6 +16,7 @@
   const lastName = (n) => { const w = n.split(" ").filter((x) => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(x)); return w[w.length - 1] || n; };
   const initials = (n) => n.split(" ").filter(Boolean).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
   const SPAN_LABEL = { 1: "Single season", 5: "5-season era", 10: "10-season era" };
+  const ROOM = data.room || null;              // arkadas odasi: ayni cevirmeler, sonuc odaya
 
   const prefs = Object.assign({ span: 1, easy: false }, load(PREFS, {}));
   const stats = Object.assign({ played: 0, best: 0, perfect: 0, last: "" }, load(STATS, {}));
@@ -69,7 +70,9 @@
         <div class="ez-setup-go">
           <button class="btn btn-primary btn-block" type="button" data-start="daily">${resume ? "Continue today's challenge" : "Play today's challenge"}</button>
           <button class="btn btn-block" type="button" data-start="random">Random game</button>
+          <button class="btn btn-block" type="button" data-friend>Play a friend</button>
         </div>
+        <p class="tiny dim" style="margin:6px 0 0"><b>Play a friend:</b> send a link - you all get the same five spins with this era and mode, build at the same time, and the better lineup wins. Chat included, no account needed.</p>
         <p class="tiny dim" style="margin:8px 0 0">Each game you get one <b>new team</b> re-roll (same years, another team) and one <b>new years</b> re-roll (same team, another era). Ratings stay hidden until the season is played.</p>
       </section>`;
   }
@@ -133,10 +136,10 @@
       : allIn ? "All five spots are filled." : "Pick one player from this team.";
     root.innerHTML = `
       <div class="ez-bar">
-        <span class="chip">${st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
+        <span class="chip">${ROOM ? "Friend room" : st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
         <span class="chip">Spin ${Math.min(st.spin + 1, C.spins)} / ${C.spins}</span>
         <span class="ez-pips">${C.slots.map((s) => `<i class="${st.lineup[s] ? "on" : ""}">${s}</i>`).join("")}</span>
-        <button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>
+        ${ROOM ? `<span class="chip chip-accent">Room · round ${st.round}</span>` : '<button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>'}
       </div>
       <div class="ez-grid">
         <div>${courtHtml(false)}
@@ -168,6 +171,7 @@
 
   function nextSpin() {
     st.spin += 1;
+    if (ROOM && window.HL82Room) window.HL82Room.progress(filled());
     if (filled() >= C.slots.length) {
       if (!st.easy) { st.done = true; persist(); return finish(); }
       persist(); return render();
@@ -183,7 +187,7 @@
     if (selected.src === "roster") {
       if (st.lineup[slot]) return;
       const sp = current();
-      st.lineup[slot] = Object.assign({ team: sp.abbr }, selected.p);
+      st.lineup[slot] = Object.assign({ team: sp.abbr, spin: st.spin }, selected.p);
       selected = null;
       return nextSpin();
     }
@@ -239,6 +243,11 @@
     if (ez) { prefs.easy = ez.dataset.easy === "1"; save(PREFS, prefs); return picker(); }
     const go = e.target.closest("[data-start]");
     if (go) return start(go.dataset.start === "daily");
+    if (e.target.closest("[data-friend]")) {
+      api("/api/82-0/room", { method: "POST", body: { span: prefs.span, easy: prefs.easy } })
+        .then((r) => { location.href = r.url; }).catch((err) => toast(err.message, true));
+      return;
+    }
     if (e.target.closest("[data-menu]")) { selected = null; return picker(); }
     if (animating) return;
     const p = e.target.closest("[data-pid]");
@@ -265,6 +274,7 @@
 
   // ---------------- sonuc ----------------
   function finish() {
+    if (ROOM) { if (window.HL82Room) window.HL82Room.submit(st); return renderResult(true); }
     const [w] = record();
     const tag = `${data.puzzle}-${st.span}${st.easy ? "e" : ""}`;
     if (st.daily && stats.last !== tag) {
@@ -279,24 +289,24 @@
   function renderResult(animate) {
     const r = rating(), [w, l] = record();
     root.innerHTML = `
-      <div class="ez-bar"><span class="chip">${st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
-        <button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button></div>
+      <div class="ez-bar"><span class="chip">${ROOM ? `Room · round ${st.round}` : st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
+        ${ROOM ? "" : '<button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>'}</div>
       <div class="ez-grid">
         <div>${courtHtml(true)}</div>
         <section class="card ez-result">
-          <div class="eyebrow">${st.daily ? `82-0 #${data.puzzle}` : "Random game"}</div>
+          <div class="eyebrow">${ROOM ? "Your season - see the room below" : st.daily ? `82-0 #${data.puzzle}` : "Random game"}</div>
           <div class="ez-record"><span id="ez-w">${animate ? 0 : w}</span>-<span id="ez-l">${animate ? 0 : l}</span></div>
           <div class="ez-verdict ${w === 82 ? "perfect" : ""}">${verdictOf(w)}</div>
           <p class="small muted">Team rating <b>${r.toFixed(1)}</b> · stars count most${C.slots.some((s) => !fits(st.lineup[s].pos, s)) ? " · off-position penalty applied" : ""}</p>
           <div class="ez-reveal">${C.slots.map((s) => { const x = st.lineup[s], e2 = effective(s);
             return `<div><span>${s}</span><b>${h(x.name)}</b><small>${h(x.team)} ${yy(x.season)}</small><i class="ez-ovr ${ovrClass(e2)}">${e2}</i></div>`; }).join("")}</div>
-          <div class="dp-actions">
+          ${ROOM ? "" : `<div class="dp-actions">
             <button class="btn btn-primary" id="ez-share" type="button">Share season</button>
             <button class="btn" id="ez-again" type="button">Random game</button>
-          </div>
+          </div>`}
           ${st.daily ? `<div class="dp-stats"><div><b>${stats.played}</b><span>Played</span></div><div><b>${stats.best}</b><span>Best wins</span></div><div><b>${stats.perfect}</b><span>82-0s</span></div></div>
             <p class="small muted" style="margin-top:12px">New spins every day at midnight UK time. Try another era from "Change mode".</p>` : ""}
-          ${data.signed_in ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your daily game streaks on every device and track players.</span></div>
+          ${data.signed_in || ROOM ? "" : `<div class="dp-keep"><div><b>Like daily games?</b><span>Free account: keep your daily game streaks on every device and track players.</span></div>
             <a class="btn btn-primary btn-sm" href="/register?next=%2F82-0">Create free account</a></div>`}
         </section>
       </div>`;
@@ -355,8 +365,27 @@
     return cv;
   }
 
-  // Acilis: yarim kalmis gunluk oyun varsa oradan devam, yoksa mod secimi
-  const pending = load(gameKey(true, prefs.span, prefs.easy), null);
-  if (pending && pending.puzzle === data.puzzle && !pending.done) { st = pending; spinAnim(); }
-  else picker();
+  // Oda turu: odanin cevirmeleri; ayni tur yarim kaldiysa bu cihazdan devam
+  async function roomRound() {
+    try {
+      const res = await api(`/api/82-0/room/${ROOM.code}`);
+      const key = `hl_82_room_${ROOM.code}_${res.round}`;
+      const saved = load(key, null);
+      if (saved && saved.round === res.round) { st = saved; return st.done ? renderResult() : spinAnim(); }
+      st = { key, puzzle: -1, daily: false, round: res.round, span: res.span, easy: res.easy, spins: res.spins,
+             choice: {}, rr: { team: 1, year: 1 }, spin: 0, lineup: {}, done: false };
+      selected = null; persist(); spinAnim();
+    } catch (err) { root.innerHTML = `<p class="muted">${h(err.message)} <a href="/82-0">Back to 82-0</a></p>`; }
+  }
+  window.HL82 = { roomRound, state: () => st };
+
+  if (ROOM) {
+    if (!ROOM.exists) root.innerHTML = '<div class="card"><b>This room has ended</b><p class="small muted">Rooms close a few hours after everyone leaves.</p><a class="btn btn-primary" href="/82-0">Back to 82-0</a></div>';
+    // tur, oda betigi ad secildikten sonra baslatir
+  } else {
+    // Acilis: yarim kalmis gunluk oyun varsa oradan devam, yoksa mod secimi
+    const pending = load(gameKey(true, prefs.span, prefs.easy), null);
+    if (pending && pending.puzzle === data.puzzle && !pending.done) { st = pending; spinAnim(); }
+    else picker();
+  }
 })();

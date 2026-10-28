@@ -360,3 +360,17 @@ def test_grid_daily_seed_rebuilds_same_grid():
     top = grid.answers(d["rows"][2], d["cols"][1])[0]
     assert grid.check(again, 7, top["id"])["ok"]
     assert grid.by_seed("grid-2099-01-01") is None
+
+
+def test_eighty_two_room_scores_only_valid_lineups():
+    """82-0 odasi: her cevirmeden bir oyuncu, ekrandaki takimdan; hak sinirlari; puan sunucuda."""
+    from services import eighty_two as e82
+    from web.routes.ez_room import score
+    spins = e82.game("room-test", 1)
+    lineup = {slot: {"spin": i, "id": spins[i]["main"]["players"][0]["id"]} for i, slot in enumerate(e82.SLOTS)}
+    res, err = score(spins, lineup, {}, False)
+    assert err is None and 0 <= res["wins"] <= 82 and len(res["lineup"]) == 5
+    other = spins[1]["main"]["players"][0]["id"]
+    assert score(spins, dict(lineup, PG={"spin": 0, "id": other}), {}, False)[1]          # baska takimin oyuncusu
+    assert score(spins, lineup, {"0": "t", "1": "t"}, False)[1]                          # iki "takim" hakki
+    assert score(spins, {k: v for k, v in lineup.items() if k != "C"}, {}, False)[1]     # eksik kadro

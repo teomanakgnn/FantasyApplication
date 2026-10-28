@@ -1,16 +1,19 @@
 {% extends "base.html" %}
-{% block title %}82-0 Challenge #{{ puzzle }} · HoopLife NBA{% endblock %}
+{% block title %}{% if room %}82-0 Challenge - Play a Friend{% else %}82-0 Challenge #{{ puzzle }}{% endif %} · HoopLife NBA{% endblock %}
+{% block robots %}{% if room %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
 {% block description %}Spin a random NBA team from any season since 1986, take one player, fill all five spots - can your lineup go 82-0?{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/daily.css?v={{ asset_version }}"><link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
 <div class="ez-wrap">
   <div class="page-head">
-    <div class="eyebrow">Daily game</div>
-    <h1>82-0 Challenge <span class="dim">#{{ puzzle }}</span></h1>
+    <div class="eyebrow">{% if room %}Play a friend{% else %}Daily game{% endif %}</div>
+    <h1>82-0 Challenge{% if puzzle %} <span class="dim">#{{ puzzle }}</span>{% endif %}</h1>
     <p>Five spins, five random teams from any era since 1986. Take one player from each and put him in a spot - player ratings stay hidden until the season is over. Out of position costs him 6 OVR. Can you go 82-0?</p>
   </div>
+  {% if room %}<div id="ez-room"></div>{% endif %}
   <div id="ez-game"></div>
+  {% if room %}<div id="ez-room-panel"></div>{% endif %}
   <script id="ez-data" type="application/json">{{ payload|safe }}</script>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/js/share_card.js?v={{ asset_version }}"></script><script src="/static/js/eighty_two.js?v={{ asset_version }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/share_card.js?v={{ asset_version }}"></script><script src="/static/js/eighty_two.js?v={{ asset_version }}"></script>{% if room %}<script src="/static/js/eighty_two_room.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
