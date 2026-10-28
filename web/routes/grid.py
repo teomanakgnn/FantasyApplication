@@ -58,7 +58,8 @@ def grid_room_page(request: Request, code: str):
     room = _rooms.get(code)
     payload = {"mode": "room", "room": code, "exists": bool(room), "max_turns": grid.MAX_TURNS, "turn_secs": TURN_SECS,
                "me": (current_user(request) or {}).get("username") or ""}
-    return render(request, "grid.html", active="grid", payload=_json(payload), ready=True, puzzle=None, room=code)
+    # Davet linkiyle gelen misafir "gunde bir oyun" kapisina takilmasin: ayri etkin sayfa adi
+    return render(request, "grid.html", active="grid-room", payload=_json(payload), ready=True, puzzle=None, room=code)
 
 
 # ==================== API ====================
