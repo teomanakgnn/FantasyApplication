@@ -349,3 +349,14 @@ def test_grid_builds_and_checks_answers():
     assert grid.winner(["X", "X", "X", None, "O", "O", None, None, None]) == "X"
     assert grid.final_result(["X", "O", None, None, None, None, None, None, None], grid.MAX_TURNS) == "draw"
     assert grid.build("p-test-grid") == g          # ayni tohum ayni grid
+
+
+def test_grid_daily_seed_rebuilds_same_grid():
+    """Gunluk grid'in tohumuyla gelen cevap ayni grid'e karsi kontrol edilmeli (ilk gunun hatasi)."""
+    from services import grid
+    d = grid.daily()
+    again = grid.by_seed(d["seed"])
+    assert again["rows"] == d["rows"] and again["cols"] == d["cols"]
+    top = grid.answers(d["rows"][2], d["cols"][1])[0]
+    assert grid.check(again, 7, top["id"])["ok"]
+    assert grid.by_seed("grid-2099-01-01") is None

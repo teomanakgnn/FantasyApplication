@@ -100,7 +100,8 @@
     const g = practice || D.daily;
     const isDaily = !practice;
     let st = isDaily ? load(KEY, null) : null;
-    if (!st || st.puzzle !== D.puzzle) st = { puzzle: D.puzzle, cells: Array(9).fill(null), left: D.guesses, wrong: [], done: false };
+    // v2: ilk gun cevaplar yanlis grid'e karsi kontrol ediliyordu; o kayitlar bir kez sifirlanir
+    if (!st || st.puzzle !== D.puzzle || st.v !== 2) st = { v: 2, puzzle: D.puzzle, cells: Array(9).fill(null), left: D.guesses, wrong: [], done: false };
     if (!isDaily) st = { cells: Array(9).fill(null), left: D.guesses, wrong: [], done: false };
     let reveal = null;
     const persist = () => { if (isDaily) save(KEY, st); };

@@ -131,16 +131,32 @@ def puzzle_number(day=None):
     return ((day or today()) - LAUNCH).days + 1
 
 
-@lru_cache(maxsize=8)
+DAILY_MIN = 4
+
+
 def daily(day=None):
-    day = day or today()
-    return build(f"grid-{day.isoformat()}", min_answers=4)
+    # Gun anahtari once hesaplanir: onbellek gun basina (gece yarisi eski gun takili kalmaz)
+    return _daily(day or today())
+
+
+@lru_cache(maxsize=8)
+def _daily(day):
+    return build(f"grid-{day.isoformat()}", min_answers=DAILY_MIN)
 
 
 def by_seed(seed):
+    """
+    Grid'i tohumundan yeniden kurar. Gunluk grid'in tohumu "grid-YYYY-MM-DD": ayni
+    kuralla (DAILY_MIN) kurulmali, yoksa farkli bir grid cikar ve dogru cevaplar reddedilir.
+    """
+    seed = str(seed or "")
     if seed == "daily":
         return daily()
-    if re.fullmatch(r"[a-z0-9-]{4,40}", str(seed or "")):
+    m = re.fullmatch(r"grid-(\d{4})-(\d{2})-(\d{2})", seed)
+    if m:
+        day = date(*map(int, m.groups()))
+        return _daily(day) if LAUNCH <= day <= today() else None
+    if re.fullmatch(r"p-[a-z0-9-]{4,40}", seed):
         return _cached(seed)
     return None
 
