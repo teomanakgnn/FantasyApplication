@@ -334,3 +334,18 @@ def test_sim_score_hit_needs_both_teams_within_two():
     assert _score_check(sim, {"away": 112, "home": 113})["hit"]
     assert not _score_check(sim, {"away": 107, "home": 115})["hit"]
     assert not _score_check(sim, {"away": 100, "home": 125})["hit"]      # dogru kazanan, yanlis skor
+
+
+def test_grid_builds_and_checks_answers():
+    """3x3 Grid: her hucrede yeterli cevap, dogru oyuncu kabul, yanlis red, XOX kazanani."""
+    from services import grid
+    g = grid.build("p-test-grid")
+    assert g and min(min(r) for r in g["counts"]) >= grid.MIN_ANSWERS
+    top = grid.answers(g["rows"][1], g["cols"][2])[0]
+    assert grid.check(g, 5, top["id"])["ok"]
+    wrong = next(p for p in grid.data()["players"].values()
+                 if not grid.categories()[g["rows"][1]]["test"](p))
+    assert not grid.check(g, 5, wrong["id"])["ok"]
+    assert grid.winner(["X", "X", "X", None, "O", "O", None, None, None]) == "X"
+    assert grid.final_result(["X", "O", None, None, None, None, None, None, None], grid.MAX_TURNS) == "draw"
+    assert grid.build("p-test-grid") == g          # ayni tohum ayni grid

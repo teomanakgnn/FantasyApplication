@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{% if room %}3x3 Grid - Play a Friend{% else %}NBA 3x3 Grid #{{ puzzle }} - Daily Basketball Trivia Game{% endif %} · HoopLife NBA{% endblock %}
+{% block description %}NBA 3x3 Grid: name a player who fits both the row and the column - teams, champions, All-Stars, MVPs and career stats. Play the daily grid, beat the bot at tic-tac-toe or challenge a friend live with chat.{% endblock %}
+{% block robots %}{% if room %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="gr-wrap">
+  <div class="page-head">
+    <div class="eyebrow">{% if room %}Live match{% else %}Daily game{% endif %}</div>
+    <h1>3x3 Grid{% if puzzle %} <span class="dim">#{{ puzzle }}</span>{% endif %}</h1>
+    <p>Every square needs a player who fits both its row and its column - a team he played for, a title, an award or a career stat. Players from 1985-86 to today.</p>
+  </div>
+  {% if not ready %}
+    <div class="note note-info">The grid is still loading. Refresh in a minute.</div>
+  {% else %}
+    {% if not room %}
+    <nav class="seg gr-modes" id="gr-modes">
+      <button class="is-on" data-mode="daily">Daily grid</button>
+      <button data-mode="bot">Vs bot</button>
+      <button data-mode="friend">Play a friend</button>
+    </nav>
+    {% endif %}
+    <div id="gr-app"></div>
+    <script id="gr-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/grid.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}
