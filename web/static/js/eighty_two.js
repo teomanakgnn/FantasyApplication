@@ -26,8 +26,12 @@
 
   const gameKey = (daily, span, easy) => (daily ? `hl_82_d${span}${easy ? "e" : ""}` : "hl_82_practice");
   const persist = () => { if (st) save(st.key, st); };
+  const pushLineup = (final) => { if (ROOM && window.HL82Room && st) window.HL82Room.lineup(st, !!final); };
+  // Odada iki saha yan yana: solda sen, sagda rakip(ler) (oda betigi doldurur)
+  const vs = (court) => `<div class="ez-vs"><div class="ez-side me"><div class="ez-side-h"><b>You</b><span>${filled()}/5${st.done ? " · locked" : ""}</span></div>${court}</div>
+    <div class="ez-side opp" id="ez-opp-slot">${window.HL82Room ? window.HL82Room.oppHtml() : ""}</div></div>`;
   const filled = () => Object.keys(st.lineup).length;
-  const effective = (slot) => { const x = st.lineup[slot]; return x ? x.ovr - (fits(x.pos, slot) ? 0 : C.penalty) : 0; };
+  const effective = (slot) => { const x = st.lineup[slot]; return x ? x.ovr - (fits(x.pos, slot) ? 0 : C.penalty) : (ROOM && st.done ? ROOM.filler : 0); };
   function rating() {
     const o = C.slots.map(effective).sort((a, b) => b - a);
     return o.reduce((a, v, i) => a + v * C.weights[i], 0);
@@ -139,10 +143,10 @@
         <span class="chip">${ROOM ? "Friend room" : st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
         <span class="chip">Spin ${Math.min(st.spin + 1, C.spins)} / ${C.spins}</span>
         <span class="ez-pips">${C.slots.map((s) => `<i class="${st.lineup[s] ? "on" : ""}">${s}</i>`).join("")}</span>
-        ${ROOM ? `<span class="chip chip-accent">Room · round ${st.round}</span>` : '<button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>'}
+        ${ROOM ? `<span class="chip ez-clock" id="ez-clock">${clockText()}</span>` : '<button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>'}
       </div>
-      <div class="ez-grid">
-        <div>${courtHtml(false)}
+      <div class="ez-grid ${ROOM ? "ez-grid-room" : ""}">
+        <div>${ROOM ? vs(courtHtml(false)) : courtHtml(false)}
           ${st.easy ? `<p class="tiny dim center" style="margin-top:6px">Easy mode: tap a placed player, then another spot to move him.</p>` : ""}
           ${st.easy && allIn ? `<button class="btn btn-primary btn-block" type="button" id="ez-finish" style="margin-top:10px">Play the season</button>` : ""}
         </div>
@@ -171,7 +175,6 @@
 
   function nextSpin() {
     st.spin += 1;
-    if (ROOM && window.HL82Room) window.HL82Room.progress(filled());
     if (filled() >= C.slots.length) {
       if (!st.easy) { st.done = true; persist(); return finish(); }
       persist(); return render();
@@ -189,6 +192,7 @@
       const sp = current();
       st.lineup[slot] = Object.assign({ team: sp.abbr, spin: st.spin }, selected.p);
       selected = null;
+      if (filled() < C.slots.length || st.easy) pushLineup(false);
       return nextSpin();
     }
     // Kolay mod: tasima / yer degistirme
@@ -197,7 +201,7 @@
     const a = st.lineup[from], b = st.lineup[slot];
     st.lineup[slot] = a;
     if (b) st.lineup[from] = b; else delete st.lineup[from];
-    selected = null; persist(); render();
+    selected = null; persist(); pushLineup(false); render();
   }
 
   // ---------------- cark ----------------
@@ -249,7 +253,8 @@
       return;
     }
     if (e.target.closest("[data-menu]")) { selected = null; return picker(); }
-    if (animating) return;
+    if (e.target.closest("[data-roomstart]")) { if (window.HL82Room) window.HL82Room.start(); return; }
+    if (animating || (ROOM && (!st || st.done || !st.begun))) return;
     const p = e.target.closest("[data-pid]");
     if (p && !p.disabled) {
       const pl = current().players.find((x) => x.id === p.dataset.pid);
@@ -274,7 +279,7 @@
 
   // ---------------- sonuc ----------------
   function finish() {
-    if (ROOM) { if (window.HL82Room) window.HL82Room.submit(st); return renderResult(true); }
+    if (ROOM) { pushLineup(true); return renderResult(true); }
     const [w] = record();
     const tag = `${data.puzzle}-${st.span}${st.easy ? "e" : ""}`;
     if (st.daily && stats.last !== tag) {
@@ -291,15 +296,16 @@
     root.innerHTML = `
       <div class="ez-bar"><span class="chip">${ROOM ? `Room · round ${st.round}` : st.daily ? `#${data.puzzle}` : "Random"} · ${modeText()}</span>
         ${ROOM ? "" : '<button class="btn btn-sm btn-ghost" type="button" data-menu>Change mode</button>'}</div>
-      <div class="ez-grid">
-        <div>${courtHtml(true)}</div>
+      <div class="ez-grid ${ROOM ? "ez-grid-room" : ""}">
+        <div>${ROOM ? vs(courtHtml(true)) : courtHtml(true)}</div>
         <section class="card ez-result">
           <div class="eyebrow">${ROOM ? "Your season - see the room below" : st.daily ? `82-0 #${data.puzzle}` : "Random game"}</div>
           <div class="ez-record"><span id="ez-w">${animate ? 0 : w}</span>-<span id="ez-l">${animate ? 0 : l}</span></div>
           <div class="ez-verdict ${w === 82 ? "perfect" : ""}">${verdictOf(w)}</div>
-          <p class="small muted">Team rating <b>${r.toFixed(1)}</b> · stars count most${C.slots.some((s) => !fits(st.lineup[s].pos, s)) ? " · off-position penalty applied" : ""}</p>
+          <p class="small muted">Team rating <b>${r.toFixed(1)}</b> · stars count most${C.slots.some((s) => st.lineup[s] && !fits(st.lineup[s].pos, s)) ? " · off-position penalty applied" : ""}${C.slots.some((s) => !st.lineup[s]) ? ` · time ran out: empty spots play as ${ROOM ? ROOM.filler : 0} OVR` : ""}</p>
           <div class="ez-reveal">${C.slots.map((s) => { const x = st.lineup[s], e2 = effective(s);
-            return `<div><span>${s}</span><b>${h(x.name)}</b><small>${h(x.team)} ${yy(x.season)}</small><i class="ez-ovr ${ovrClass(e2)}">${e2}</i></div>`; }).join("")}</div>
+            return x ? `<div><span>${s}</span><b>${h(x.name)}</b><small>${h(x.team)} ${yy(x.season)}</small><i class="ez-ovr ${ovrClass(e2)}">${e2}</i></div>`
+              : `<div class="empty"><span>${s}</span><b>Replacement player</b><small>empty spot</small><i class="ez-ovr">${e2}</i></div>`; }).join("")}</div>
           ${ROOM ? "" : `<div class="dp-actions">
             <button class="btn btn-primary" id="ez-share" type="button">Share season</button>
             <button class="btn" id="ez-again" type="button">Random game</button>
@@ -365,19 +371,78 @@
     return cv;
   }
 
-  // Oda turu: odanin cevirmeleri; ayni tur yarim kaldiysa bu cihazdan devam
+  // ---------------- oda turu ----------------
+  // Tur sunucuda baslar (herkes ayni anda, 3 sn geri sayim) ve toplam ROOM.secs saniye
+  // surer. Oda betigi her durumda sync() cagirir; sure yerelde biterse timeUp().
+  let roomClock = { deadline: null, startsAt: null }, countdownTimer = null;
+  function clockText() {
+    if (!roomClock.deadline) return `${ROOM ? ROOM.secs : 90}s`;
+    const s = Math.max(0, Math.ceil((roomClock.deadline - Date.now()) / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  function renderWaiting(text) {
+    root.innerHTML = `<div class="ez-bar"><span class="chip">Friend room · ${modeText()}</span><span class="chip ez-clock" id="ez-clock">${ROOM.secs}s</span></div>
+      <div class="ez-grid ez-grid-room"><div>${vs(courtHtml(false))}</div>
+      <section class="card ez-wait">${text}</section></div>`;
+  }
   async function roomRound() {
     try {
       const res = await api(`/api/82-0/room/${ROOM.code}`);
+      if (st && st.round === res.round) return;
       const key = `hl_82_room_${ROOM.code}_${res.round}`;
       const saved = load(key, null);
-      if (saved && saved.round === res.round) { st = saved; return st.done ? renderResult() : spinAnim(); }
-      st = { key, puzzle: -1, daily: false, round: res.round, span: res.span, easy: res.easy, spins: res.spins,
-             choice: {}, rr: { team: 1, year: 1 }, spin: 0, lineup: {}, done: false };
-      selected = null; persist(); spinAnim();
+      if (saved && saved.round === res.round) { st = saved; }
+      else {
+        st = { key, puzzle: -1, daily: false, round: res.round, span: res.span, easy: res.easy, spins: res.spins,
+               choice: {}, rr: { team: 1, year: 1 }, spin: 0, lineup: {}, done: false, begun: false };
+        selected = null; persist();
+      }
+      if (lastSync) sync(lastSync);
     } catch (err) { root.innerHTML = `<p class="muted">${h(err.message)} <a href="/82-0">Back to 82-0</a></p>`; }
   }
-  window.HL82 = { roomRound, state: () => st };
+  let lastSync = null;
+  function sync(S) {
+    lastSync = S;
+    if (!st || st.round !== S.round) return;
+    roomClock.deadline = S.left != null ? Date.now() + S.left * 1000 : null;
+    if (S.phase === "waiting") {
+      st.begun = false;
+      return renderWaiting(`<b>Waiting for your friend</b><p class="small muted">The clock starts for everyone at the same time once a second player joins: ${ROOM.secs} seconds for all five picks.</p>
+        <div class="dp-actions"><button class="btn btn-primary" data-roomstart>Start now</button></div>`);
+    }
+    if (S.phase === "done" && !st.done) { st.done = true; selected = null; persist(); return renderResult(true); }
+    // Sayfa tur ortasinda yenilendiyse: oyun ekranina don
+    if (S.phase === "live" && st.begun && !animating && !root.querySelector(".ez-spin, .ez-result")) return st.done ? renderResult() : spinAnim();
+    if (S.phase === "done" && st.done && !root.querySelector(".ez-result")) return renderResult();
+    if (S.phase === "live" && !st.begun && !st.done) {
+      const wait = Math.max(0, (S.starts_in || 0) * 1000);
+      clearInterval(countdownTimer);
+      const until = Date.now() + wait;
+      const tickCd = () => {
+        const n = Math.ceil((until - Date.now()) / 1000);
+        if (n <= 0) { clearInterval(countdownTimer); st.begun = true; persist(); return spinAnim(); }
+        renderWaiting(`<div class="ez-count">${n}</div><p class="small muted center">${ROOM.secs} seconds for all five picks. Go!</p>`);
+      };
+      tickCd(); countdownTimer = setInterval(tickCd, 200);
+    }
+  }
+  function timeUp() {
+    if (!st || st.done || !st.begun) return;
+    st.done = true; selected = null; animating = false; persist();
+    toast("Time's up - your lineup is locked.", true);
+    renderResult(true);
+  }
+  // Saat: yalnizca saat cipi guncellenir (cark animasyonu bozulmasin)
+  if (ROOM) setInterval(() => {
+    const el = document.getElementById("ez-clock");
+    if (!el || !roomClock.deadline) return;
+    el.textContent = clockText();
+    const left = (roomClock.deadline - Date.now()) / 1000;
+    el.classList.toggle("warn", left <= 20 && left > 10);
+    el.classList.toggle("bad", left <= 10);
+    if (left <= 0) timeUp();
+  }, 250);
+  window.HL82 = { roomRound, sync, state: () => st, filled: () => (st ? filled() : 0) };
 
   if (ROOM) {
     if (!ROOM.exists) root.innerHTML = '<div class="card"><b>This room has ended</b><p class="small muted">Rooms close a few hours after everyone leaves.</p><a class="btn btn-primary" href="/82-0">Back to 82-0</a></div>';

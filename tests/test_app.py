@@ -374,3 +374,5 @@ def test_eighty_two_room_scores_only_valid_lineups():
     assert score(spins, dict(lineup, PG={"spin": 0, "id": other}), {}, False)[1]          # baska takimin oyuncusu
     assert score(spins, lineup, {"0": "t", "1": "t"}, False)[1]                          # iki "takim" hakki
     assert score(spins, {k: v for k, v in lineup.items() if k != "C"}, {}, False)[1]     # eksik kadro
+    part, err = score(spins, {"PG": lineup["PG"]}, {}, partial=True)                      # sure doldu: yedekler
+    assert err is None and part["filled"] == 1 and sum(1 for x in part["lineup"] if x.get("filler")) == 4
