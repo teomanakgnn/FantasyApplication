@@ -178,8 +178,27 @@ async def pyramid_check(request: Request):
 @router.get("/tier-list")
 def tier_list(request: Request):
     players = minigames.tier_players(200)
+    u = current_user(request)
+    leagues = 0
+    if u:
+        try:
+            from services.database import db
+            leagues = sum(1 for lg in db.list_leagues(u["id"]) if lg["platform"] == "espn") if db.available else 0
+        except Exception:
+            leagues = 0
     return render(request, "tier_list.html", active="tiers", payload=_json({"players": players}),
-                  ready=bool(players))
+                  ready=bool(players), signed_in=bool(u), espn_leagues=leagues)
+
+
+@router.get("/api/tier-list/rosters")
+def tier_list_rosters(request: Request):
+    """Kayitli ESPN liglerimdeki takimlarin kadrolari (Tier List filtresi)."""
+    u = current_user(request)
+    if not u:
+        return _bad("Sign in to filter by your leagues.", 401)
+    from services.database import db
+    from services.league_rosters import league_rosters
+    return {"leagues": league_rosters(db.list_leagues(u["id"]) if db.available else [])}
 
 
 # ==================== 82-0 ====================

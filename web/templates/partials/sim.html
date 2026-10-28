@@ -48,6 +48,7 @@
     {% endfor %}
   </div>
   {% endif %}
+  {% if s.market %}<p class="tiny dim" style="margin:6px 0 0">Anchored to the market line{% if s.market.provider %} ({{ s.market.provider }}){% endif %}: total {{ s.market.total }}, {{ h.abbr if s.market.spread <= 0 else a.abbr }} -{{ s.market.spread|abs }}. Players-only model: {{ s.market.model.away|round|int }}-{{ s.market.model.home|round|int }}; the simulation blends {{ (100 * s.market.w)|round|int }}% market, {{ 100 - (100 * s.market.w)|round|int }}% model.</p>{% endif %}
   <h3 class="sim-h3">Final margin <span class="dim small">· share of the {{ '{:,}'.format(s.n) }} games</span></h3>
   {% set top = s.hist|map(attribute='p')|max %}
   <div class="sim-hist">

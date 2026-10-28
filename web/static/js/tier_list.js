@@ -13,6 +13,7 @@
   const empty = () => Object.fromEntries(TIERS.map(([t]) => [t, []]));
   let state = { title: "My 2026-27 fantasy tiers", tiers: empty() };
   let selected = null, poolLimit = 60, posFilter = "", query = "", dirty = false;
+  let roster = null;          // secili fantezi takiminin oyuncu kimlikleri (Set) ya da null
 
   function fromUrl() {
     const raw = new URLSearchParams(location.search).get("t");
@@ -46,12 +47,13 @@
     $("#tl-board").innerHTML = TIERS.map(([t, color]) => `
       <div class="tl-row" data-tier="${t}">
         <div class="tl-label" style="background:${color}">${t}</div>
-        <div class="tl-drop" data-tier="${t}">${state.tiers[t].map((id) => chip(byId.get(id))).join("") || '<span class="tl-empty">Drop players here</span>'}</div>
+        <div class="tl-drop" data-tier="${t}">${state.tiers[t].filter((id) => byId.has(id)).map((id) => chip(byId.get(id))).join("") || '<span class="tl-empty">Drop players here</span>'}</div>
       </div>`).join("");
     const used = placed();
     let list = players.filter((p) => !used.has(p.id));
     const left = list.length;
     if (posFilter) list = list.filter((p) => group(p.pos) === posFilter);
+    if (roster) list = list.filter((p) => roster.has(p.id));
     if (query) list = list.filter((p) => p.name.toLowerCase().includes(query));
     $("#tl-pool").innerHTML = list.slice(0, query ? 40 : poolLimit).map(chip).join("") || '<span class="tl-empty">No players left here.</span>';
     $("#tl-more").hidden = !!query || list.length <= poolLimit;
@@ -111,6 +113,34 @@
     posFilter = b.dataset.pos; $("#tl-pos").querySelectorAll("button").forEach((x) => x.classList.toggle("is-on", x === b)); render();
   });
   $("#tl-more").addEventListener("click", () => { poolLimit += 60; render(); });
+
+  // ---- lig kadrosu filtresi (kayitli ESPN ligleri) ----
+  const rsel = document.getElementById("tl-roster");
+  if (rsel) {
+    const teams = new Map();
+    window.HL.api("/api/tier-list/rosters").then((d) => {
+      let html = '<option value="">All players</option>';
+      (d.leagues || []).forEach((lg, li) => {
+        if (lg.error) { html += `<option disabled>${h(lg.name)} - could not load</option>`; return; }
+        html += `<optgroup label="${h(lg.name)}">` + lg.teams.map((t, ti) => {
+          const key = `${li}:${ti}`;
+          teams.set(key, t);
+          return `<option value="${key}">${t.mine ? "My team - " : ""}${h(t.name)}</option>`;
+        }).join("") + "</optgroup>";
+        // Ilk 200'de olmayan kadro oyunculari da secilebilsin
+        lg.teams.forEach((t) => t.players.forEach((p) => {
+          if (!byId.has(p.id)) { const q = { id: p.id, name: p.name, team: p.team, pos: p.pos, adp: 999 }; players.push(q); byId.set(p.id, q); }
+        }));
+      });
+      rsel.innerHTML = html;
+      render();
+    }).catch((err) => { rsel.innerHTML = '<option value="">All players</option>'; toast(err.message, true); });
+    rsel.addEventListener("change", () => {
+      const t = teams.get(rsel.value);
+      roster = t ? new Set(t.players.map((p) => p.id)) : null;
+      render();
+    });
+  }
   $("#tl-reset").addEventListener("click", () => { if (confirm("Clear every tier?")) { state.tiers = empty(); persist(); render(); } });
 
   $("#tl-link").addEventListener("click", async () => {
@@ -149,7 +179,7 @@
           const x = pad + label + (k % perRow) * cell, yy = y + Math.floor(k / perRow) * cell;
           const im = imgs.get(id); if (im) g.drawImage(im, x + 6, yy + 4, 92, 67);
           g.fillStyle = "#E8ECF4"; g.font = "700 14px Inter, system-ui, sans-serif"; g.textAlign = "center";
-          const last = byId.get(id).name.split(" ").slice(-1)[0];
+          const last = (byId.get(id) || { name: "" }).name.split(" ").slice(-1)[0];
           g.fillText(last.length > 12 ? last.slice(0, 11) + "." : last, x + 52, yy + 92); g.textAlign = "left";
         });
         y += hgt + 8;

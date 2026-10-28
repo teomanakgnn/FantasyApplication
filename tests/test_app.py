@@ -323,3 +323,14 @@ def test_game_sim_minutes_rotation():
     assert np.allclose(m.sum(axis=1), 240, atol=1e-6)
     assert m[:, 1].max() == 0
     assert m[:, 0].mean() > 32 and m[:, -1].mean() < 9   # yildiz sakat: kalanlar biraz artar
+
+
+def test_sim_score_hit_needs_both_teams_within_two():
+    """Basari = skor: iki takim da en fazla 2 sayi sapmali; kazanani bilmek yetmez."""
+    from services.game_sim import HIT_PTS, _score_check
+    sim = {"typical": {"score": {"away": 110, "home": 115}}}
+    assert HIT_PTS == 2
+    assert _score_check(sim, {"away": 110, "home": 115})["hit"]
+    assert _score_check(sim, {"away": 112, "home": 113})["hit"]
+    assert not _score_check(sim, {"away": 107, "home": 115})["hit"]
+    assert not _score_check(sim, {"away": 100, "home": 125})["hit"]      # dogru kazanan, yanlis skor

@@ -30,6 +30,13 @@
         <button class="is-on" data-pos="">All</button><button data-pos="G">G</button><button data-pos="F">F</button><button data-pos="C">C</button>
       </div>
       <input class="input" id="tl-search" type="search" placeholder="Search players" aria-label="Search players">
+      {% if espn_leagues %}
+      <select class="input tl-roster" id="tl-roster" aria-label="Filter by fantasy roster"><option value="">All players</option><option value="" disabled>Loading your leagues...</option></select>
+      {% elif signed_in %}
+      <a class="small" href="/league">Add your ESPN league to filter by rosters</a>
+      {% else %}
+      <a class="small" href="/login?next=/tier-list">Sign in to filter by your league rosters</a>
+      {% endif %}
     </div>
     <div class="tl-pool" id="tl-pool" data-tier=""></div>
     <button class="btn btn-sm btn-ghost" id="tl-more" type="button" style="margin-top:10px">Show more players</button>

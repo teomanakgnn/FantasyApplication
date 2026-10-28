@@ -317,3 +317,5 @@
   .py-chip img { width: 38px; height: 28px; }
   .py-chip b { font-size: .78rem; }
 }
+
+.tl-roster { flex: 1 1 200px; max-width: 320px; }

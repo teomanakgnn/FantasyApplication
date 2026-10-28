@@ -27,7 +27,7 @@
     <td>{{ s.typical.score.away }}-{{ s.typical.score.home }}</td>
     <td class="dim">{{ s.score.away.median|int }}-{{ s.score.home.median|int }}</td>
     <td>{% if r %}<b>{{ r.away }}-{{ r.home }}</b>{% else %}<span class="dim">-</span>{% endif %}</td>
-    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ 'Hit' if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
+    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ ('Exact' if off_a + off_h == 0 else 'Hit') if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
     <td>{{ r.margin_err|round(1) if r else '' }}</td>
     <td>{{ r.total_err|round(1) if r else '' }}</td>
     <td class="l">{{ it.lead.name }} <span class="dim">({{ (100 * (it.lead.p or 0))|round|int }}%)</span>{% if r and r.top_scorer %} / <b class="{{ 'good' if r.top_scorer.name == it.lead.name }}">{{ r.top_scorer.name }} {{ r.top_scorer.pts }}</b>{% endif %}</td>

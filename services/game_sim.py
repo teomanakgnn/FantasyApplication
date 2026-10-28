@@ -29,7 +29,7 @@ import numpy as np
 from services.cache import cache_data
 
 N_SIMS = 5000
-MODEL = "v4"
+MODEL = "v5"
 POSS_CAL = 0.975   # cop zamani eklemesi ve ev avantaji sonrasi lig ortalamasina kalibrasyon (v4: 2026-27 ilk 43 mac)
 EASTERN = ZoneInfo("America/New_York")
 LONDON = ZoneInfo("Europe/London")
@@ -39,7 +39,12 @@ LONDON = ZoneInfo("Europe/London")
 HOME_BOOST = 0.006
 HOME_FTA = 1.02
 # Basari: tahmin edilen (tipik mac) skorda iki takim da gercege bu kadar yakinsa isabet
-HIT_PTS = 5
+HIT_PTS = 2
+# v5: bahis piyasasi (ESPN pickcenter: toplam sayi + handikap) takim skorunun ortalamasina
+# capa. 2026-27'nin ilk 56 macinda piyasa takim skorunu 9.2, model 10.1 sayi hatayla
+# tahmin etti (kazanan: %71'e %64). Hedef = MARKET_W * piyasa + (1 - MARKET_W) * model;
+# oyuncu kutu skorlari tutarli kalsin diye skor kaydirilmaz, sut hacmi olceklenip yeniden oynanir.
+MARKET_W = 0.8
 LG = {"p2": 0.54, "p3": 0.36, "pft": 0.78}
 PLAY_PROB = {"out": 0.0, "doubtful": 0.2, "questionable": 0.6, "day-to-day": 0.6, "probable": 0.9}
 WEIGHTS = {"pts": 0.75, "reb": 0.5, "ast": 0.8, "stl": 1.7, "blk": 1.6, "to": -1.5, "fga": -0.9, "fgm": 1.2,
@@ -286,8 +291,26 @@ def _rest_days(abbr, day):
 ALTITUDE = {"DEN", "UTAH"}      # yuksek rakim: ev sahibi avantaji daha buyuk
 
 
-def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
-    rng = np.random.default_rng(seed if seed is not None else zlib.crc32(f"{game_id}-{MODEL}".encode()))
+def market_line(game_id):
+    """ESPN pickcenter: {away, home} beklenen sayi, toplam ve handikap (ev sahibine gore); yoksa None."""
+    try:
+        from services.nba_pages import _summary
+        for pc in _summary(str(game_id)).get("pickcenter") or []:
+            ou, sp = pc.get("overUnder"), pc.get("spread")
+            if ou is None or sp is None:
+                continue
+            ou, sp = float(ou), float(sp)
+            if not 180 <= ou <= 290 or abs(sp) > 30:
+                continue
+            return {"away": (ou + sp) / 2, "home": (ou - sp) / 2, "total": ou, "spread": sp,
+                    "provider": (pc.get("provider") or {}).get("name") or ""}
+    except Exception as exc:
+        print(f"sim: market line unavailable ({exc})")
+    return None
+
+
+def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None, market=True):
+    seed_val = seed if seed is not None else zlib.crc32(f"{game_id}-{MODEL}".encode())
     teams = {"away": _profiles(away, season), "home": _profiles(home, season)}
     if len(teams["away"]) < 7 or len(teams["home"]) < 7:
         return None
@@ -303,31 +326,50 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
     blk_avg = (blk["away"] + blk["home"]) / 2 or 1.0
     # Tempo: iki takimin temposunun ortalamasi (hizli takimlar daha cok topa sahip olur)
     pace = (tf["away"]["pace"] + tf["home"]["pace"]) / 2
-    game_poss = _league_poss(season) * POSS_CAL * pace * rng.normal(1.0, 0.03, n)
     # Rakibin top calma baskisi: oyuncularinin dakika basi top calmasi / lig ortalamasi
     stl = {s: sum(p["rates"].get("stl", 0) * p["min"] * p["play"] for p in teams[s]) for s in teams}
     stl_avg = (stl["away"] + stl["home"]) / 2 or 1.0
-    box, score = {}, {}
-    for side in ("away", "home"):
-        opp = "home" if side == "away" else "away"
-        mins = _minutes(rng, teams[side], n)
-        usage = (mins * _usage_rate(teams[side])).sum(axis=1)          # senaryo basina toplam kullanim
-        ctx = {"def": 1 + 0.85 * (tf[opp]["def"] - 1), "press": (stl[opp] / stl_avg) ** 0.5, "b2b": b2b[side],
-               "form2": rng.normal(0, 0.012, n), "form3": rng.normal(0, 0.03, n)}
-        share = reb[side] / max(reb[side] + reb[opp], 1e-6)
-        ctx.update({"rim": 1 - 0.04 * (blk[opp] / blk_avg - 1),
-                    "fresh": -0.012 if rest[side] == 0 else 0.004 if rest[side] >= 2 else 0.0,
-                    "home_boost": HOME_BOOST + (0.006 if abbr["home"] in ALTITUDE else 0.0)})
-        side_poss = game_poss * (1 + 0.2 * (share - 0.5))
-        box[side] = _team(rng, teams[side], mins, side_poss / np.maximum(usage, 1e-6), ctx, side == "home")
-        score[side] = box[side]["pts"].sum(axis=1).astype(float)
-    # Mac gidisati: buyuk farkta yildizlar dinlenir, geride kalan takim cop zamaninda
-    # farki kapatir. 8 sayiyi asan farkin %35'i geride kalana doner (gercek NBA'de skor
-    # farkinin sapmasi ~13.5; saf isabet rastgeleligi ~17 veriyordu).
-    m = score["home"] - score["away"]
-    give = np.round(np.clip(np.abs(m) - 8, 0, None) * 0.35)
-    score["home"] += np.where(m < 0, give, 0)
-    score["away"] += np.where(m > 0, give, 0)
+    league_poss = _league_poss(season)
+
+    def play(adj):
+        """Bir tur: adj = takim basi sut hacmi carpani (piyasa capasi icin)."""
+        rng = np.random.default_rng(seed_val)
+        game_poss = league_poss * POSS_CAL * pace * rng.normal(1.0, 0.03, n)
+        box, score = {}, {}
+        for side in ("away", "home"):
+            opp = "home" if side == "away" else "away"
+            mins = _minutes(rng, teams[side], n)
+            usage = (mins * _usage_rate(teams[side])).sum(axis=1)          # senaryo basina toplam kullanim
+            ctx = {"def": 1 + 0.85 * (tf[opp]["def"] - 1), "press": (stl[opp] / stl_avg) ** 0.5, "b2b": b2b[side],
+                   "form2": rng.normal(0, 0.012, n), "form3": rng.normal(0, 0.03, n)}
+            share = reb[side] / max(reb[side] + reb[opp], 1e-6)
+            ctx.update({"rim": 1 - 0.04 * (blk[opp] / blk_avg - 1),
+                        "fresh": -0.012 if rest[side] == 0 else 0.004 if rest[side] >= 2 else 0.0,
+                        "home_boost": HOME_BOOST + (0.006 if abbr["home"] in ALTITUDE else 0.0)})
+            side_poss = game_poss * (1 + 0.2 * (share - 0.5)) * adj[side]
+            box[side] = _team(rng, teams[side], mins, side_poss / np.maximum(usage, 1e-6), ctx, side == "home")
+            score[side] = box[side]["pts"].sum(axis=1).astype(float)
+        # Mac gidisati: buyuk farkta yildizlar dinlenir, geride kalan takim cop zamaninda
+        # farki kapatir. 8 sayiyi asan farkin %35'i geride kalana doner (gercek NBA'de skor
+        # farkinin sapmasi ~13.5; saf isabet rastgeleligi ~17 veriyordu).
+        m = score["home"] - score["away"]
+        give = np.round(np.clip(np.abs(m) - 8, 0, None) * 0.35)
+        score["home"] += np.where(m < 0, give, 0)
+        score["away"] += np.where(m > 0, give, 0)
+        return rng, box, score
+
+    rng, box, score = play({"away": 1.0, "home": 1.0})
+    line = market_line(game_id) if market else None
+    model_med = {s: float(np.median(score[s])) for s in ("away", "home")}
+    if line:
+        target = {s: MARKET_W * line[s] + (1 - MARKET_W) * model_med[s] for s in ("away", "home")}
+        adj = {s: target[s] / max(model_med[s], 1.0) for s in ("away", "home")}
+        rng, box, score = play(adj)
+        # Olcek sayiyla birebir degil (serbest atis, cop zamani): bir kez daha duzelt
+        med = {s: float(np.median(score[s])) for s in ("away", "home")}
+        adj = {s: adj[s] * target[s] / max(med[s], 1.0) for s in ("away", "home")}
+        rng, box, score = play(adj)
+
     # Uzatma: beraberlikte 5 dakikalik ek bolum (takim ortalamasinin 5/48'i)
     ot = np.zeros(n, dtype=int)
     tied = score["away"] == score["home"]
@@ -374,11 +416,11 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
     # En tipik mac
     # Tipik mac oyuncu kutusuyla tutarli olsun: uzatmasiz senaryolar, skor = oyuncu sayilari toplami
     raw_away, raw_home = box["away"]["pts"].sum(axis=1), box["home"]["pts"].sum(axis=1)
-    # Skor tahmini olarak yayinlanir: once her iki takimin medyan skoruna +-2 icindeki senaryolar
+    # Skor tahmini olarak yayinlanir: once her iki takimin medyan skoruna +-1 icindeki senaryolar
     med_a, med_h = float(np.median(score["away"])), float(np.median(score["home"]))
     same = (home_win == fav_home) & (ot == 0) & ((raw_home > raw_away) == fav_home)
     idx = np.array([], dtype=int)
-    for tol in (2, 3, 5):
+    for tol in (1, 2, 3, 5):
         idx = np.where(same & (np.abs(raw_away - med_a) <= tol) & (np.abs(raw_home - med_h) <= tol))[0]
         if len(idx) >= 20:
             break
@@ -433,6 +475,7 @@ def simulate(game_id, away, home, season, n=N_SIMS, seed=None, day=None):
                         "rim": round(blk[s] / blk_avg, 2), "proj_only": [p["name"] for p in teams[s] if p.get("rookie")],
                         "doubtful": [p["name"] for p in teams[s] if 0 < p["play"] < 1]} for s in ("away", "home")},
         "altitude": abbr["home"] in ALTITUDE,
+        "market": dict(line, w=MARKET_W, model={s: round(model_med[s], 1) for s in model_med}) if line else None,
     }
 
 

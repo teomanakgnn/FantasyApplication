@@ -6,7 +6,7 @@
 <div class="page-head">
   <div class="eyebrow">2026-27 NBA season</div>
   <h1>NBA Game Simulations</h1>
-  <p>Every morning two games are played 5,000 times each - from every player's numbers, today's injury report, tempo, defense, rest and home court - and updated about an hour before tip-off. Here is every simulation and how it turned out.</p>
+  <p>Every morning two games are played 5,000 times each - from every player's numbers, today's injury report, tempo, defense, rest and home court, anchored to the betting market's total and spread - and updated about an hour before tip-off. Here is every simulation and how it turned out.</p>
 </div>
 {% if rec %}
 <div class="sim-kpis" style="margin-bottom:14px">
@@ -26,8 +26,8 @@
     <td><b>{{ it.fav }}</b> {{ (100 * it.p_fav)|round|int }}%</td>
     <td>{{ s.typical.score.away }}-{{ s.typical.score.home }}</td>
     <td>{% if r %}{{ r.away }}-{{ r.home }}{% else %}<span class="dim">-</span>{% endif %}</td>
-    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ 'Hit' if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
+    <td>{% if r %}{% set off_a = (s.typical.score.away - r.away)|abs %}{% set off_h = (s.typical.score.home - r.home)|abs %}{% set hit = [off_a, off_h]|max <= hit_pts %}<span class="{{ 'good' if hit else 'dim' }}" title="Predicted score off by {{ off_a }} and {{ off_h }} points">{{ ('Exact' if off_a + off_h == 0 else 'Hit') if hit else 'Off by ' ~ (((off_a + off_h) / 2)|round(1)) }}</span>{% else %}<span class="dim">upcoming</span>{% endif %}</td>
   </tr>{% endfor %}</tbody>
 </table></div>
-<p class="tiny dim" style="margin-top:8px">A simulation counts as a hit only when its predicted score is within {{ hit_pts }} points of the final for both teams - picking the winner alone does not count. For fun and fantasy decisions - not betting advice.</p>
+<p class="tiny dim" style="margin-top:8px">A simulation counts as a hit only when its predicted score is exact or within {{ hit_pts }} points of the final for both teams - picking the winner alone does not count. For fun and fantasy decisions - not betting advice.</p>
 {% endblock %}
