@@ -321,7 +321,7 @@
 .tl-roster { flex: 1 1 200px; max-width: 320px; }
 
 /* ==================== 3x3 Grid ==================== */
-.gr-wrap { max-width: 980px; margin: 0 auto; }
+.gr-wrap { max-width: 980px; margin: 0 auto; width: 100%; min-width: 0; }
 .gr-modes { margin-bottom: 14px; }
 .gr-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: .9rem; color: var(--muted); }
 .gr-status b { color: var(--text, #E8ECF4); font-size: 1rem; }
@@ -450,7 +450,7 @@
 }
 
 /* ==================== NBA Career ==================== */
-.cr-wrap { max-width: 980px; margin: 0 auto; }
+.cr-wrap { max-width: 980px; margin: 0 auto; width: 100%; min-width: 0; }
 .cr-create .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .cr-create .field > span { font-size: .78rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .cr-archs { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
@@ -517,4 +517,29 @@
   .cr-offers { grid-template-columns: 1fr; }
   .cr-meters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cr-money { grid-template-columns: 1fr; }
+}
+
+/* Kariyer: telefonda */
+.cr-wrap .card, .cr-wrap section { min-width: 0; }
+.cr-lang { display: flex; justify-content: flex-end; margin: -6px 0 10px; }
+.cr-lang .seg { width: auto; }
+@media (max-width: 640px) {
+  .cr-who { align-items: flex-start; }
+  .cr-who h2 { font-size: 1.35rem; }
+  .cr-meters b { font-size: 1.15rem; }
+  .cr-season h3 { font-size: 1.02rem; }
+  .cr-season-h { flex-direction: column; gap: 6px; }
+  .cr-rec { text-align: left; flex-direction: row; align-items: baseline; gap: 8px; }
+  .cr-rec b { font-size: 1.15rem; }
+  .cr-next { flex-direction: column; align-items: stretch; }
+  .cr-next .btn { width: 100%; }
+  .cr-choices { grid-template-columns: 1fr; }
+  .cr-end h2 { font-size: 1.6rem; }
+  .cr-money b { font-size: 1.5rem; }
+  .cr-table { font-size: .76rem; }
+  .cr-table td, .cr-table th { padding: 6px 7px; }
+  .cr-log { font-size: .82rem; }
+  .cr-archs { grid-template-columns: 1fr 1fr; }
+  .cr-arch small { font-size: .7rem; }
+  .gr-actions .btn { flex: 1 1 auto; }
 }
