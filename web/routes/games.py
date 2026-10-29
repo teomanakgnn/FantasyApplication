@@ -229,6 +229,39 @@ def career_page(request: Request):
     return render(request, "career.html", active="career", payload=_json(payload), ready=len(teams) >= 20)
 
 
+@router.get("/api/career/leaderboard")
+def career_leaderboard():
+    from services.database import db
+    if not db.available:
+        return {"top": [], "total": 0}
+    top = db.career_top(5)
+    _, total = db.career_rank(10 ** 9)
+    return {"top": [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(r).items()} for r in top],
+            "total": total or 0}
+
+
+@router.post("/api/career/submit")
+async def career_submit(request: Request):
+    """Biten kariyer liderlik tablosuna: dogrulanir, puan sunucuda hesaplanir."""
+    from services.career_board import validate
+    from services.database import db
+    from web.core import client_ip
+    if not db.available:
+        return _bad("Leaderboard is unavailable right now.", 503)
+    body = await request.json()
+    row, err = validate(body)
+    if err:
+        return _bad(err)
+    ip = client_ip(request) or ""
+    if db.career_recent_from_ip(ip, 20) >= 3:
+        return _bad("Slow down a little.", 429)
+    u = current_user(request)
+    row.update({"user_id": u["id"] if u else None, "owner": u["username"] if u else "Guest", "ip": ip[:64]})
+    db.add_career_score(row)
+    rank, total = db.career_rank(row["score"])
+    return {"rank": rank, "total": total, "score": row["score"], "hof": row["hof"]}
+
+
 # ==================== 82-0 ====================
 
 @router.get("/82-0")

@@ -543,3 +543,16 @@
   .cr-arch small { font-size: .7rem; }
   .gr-actions .btn { flex: 1 1 auto; }
 }
+
+/* Kariyer liderlik tablosu */
+.cr-board { margin-top: 12px; }
+.cr-lb { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cr-lb li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.cr-lb li.first { border-color: rgba(245, 181, 68, .5); background: color-mix(in srgb, var(--warn) 9%, var(--surface-2)); }
+.cr-rank { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: rgba(255, 255, 255, .07); }
+.cr-lb li.first .cr-rank { background: var(--warn); color: #1B1300; }
+.cr-lb-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cr-lb-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-lb-main small { font-size: .74rem; color: var(--muted); }
+.cr-lb-hof { display: flex; flex-direction: column; align-items: flex-end; font-weight: 900; font-size: 1.05rem; color: var(--good); }
+.cr-lb-hof small { font-size: .62rem; color: var(--muted); font-weight: 800; }

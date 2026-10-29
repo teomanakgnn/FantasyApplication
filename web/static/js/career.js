@@ -105,6 +105,9 @@
       best_line: "{ppg} PPG{extra} · HOF {hof}%", bx_ring: "{n}x champ", bx_mvp: "{n}x MVP", bx_as: "{n}x All-Star",
       card_title: "NBA CAREER", card_pick: "{ord} PICK", card_seasons: "{n} SEASONS", card_earn: "CAREER EARNINGS", card_hof: "HALL OF FAME CHANCE", card_tag: "Build your own career",
       cd_ring: "CHAMPIONSHIPS", cd_mvp: "MVP", cd_fmvp: "FINALS MVP", cd_as: "ALL-STAR", cd_allnba: "ALL-NBA", cd_dpoy: "DPOY", cd_roy: "ROOKIE OF THE YEAR", cd_scoring: "SCORING TITLES",
+      lb_title: "Leaderboard", lb_sub: "Top 5 careers by every player · {n} careers played", lb_empty: "No finished careers yet - be the first.",
+      lb_you: "Your career ranks #{rank} of {total} on the leaderboard.", lb_top: "Top 5 all-time! Your career is #{rank} of {total}.",
+      lb_seasons: "{n} seasons", lb_rings: "{n} rings", lb_ring1: "1 ring", lb_mvp: "{n} MVP", lb_as: "{n}x All-Star", lb_guest: "guest", lb_failed: "Could not save to the leaderboard.",
     },
     tr: {
       head_eyebrow: "Kariyer oyunu", head_title: "NBA Kariyeri",
@@ -184,6 +187,9 @@
       best_line: "maç başı {ppg} sayı{extra} · HOF %{hof}", bx_ring: "{n} şampiyonluk", bx_mvp: "{n} MVP", bx_as: "{n} All-Star",
       card_title: "NBA KARİYERİ", card_pick: "{ord} SIRA", card_seasons: "{n} SEZON", card_earn: "KARİYER KAZANCI", card_hof: "HALL OF FAME ŞANSI", card_tag: "Kendi kariyerini kur",
       cd_ring: "ŞAMPİYONLUK", cd_mvp: "MVP", cd_fmvp: "FİNALLER MVP'Sİ", cd_as: "ALL-STAR", cd_allnba: "ALL-NBA", cd_dpoy: "YILIN SAVUNMACISI", cd_roy: "YILIN ÇAYLAĞI", cd_scoring: "SAYI KRALLIĞI",
+      lb_title: "Liderlik tablosu", lb_sub: "Tüm oyuncuların en iyi 5 kariyeri · {n} kariyer oynandı", lb_empty: "Henüz biten kariyer yok - ilk sen ol.",
+      lb_you: "Kariyerin liderlik tablosunda {total} kariyer içinde {rank}. sırada.", lb_top: "Tüm zamanların ilk 5'inde! Kariyerin {total} kariyer içinde {rank}. sırada.",
+      lb_seasons: "{n} sezon", lb_rings: "{n} yüzük", lb_ring1: "1 yüzük", lb_mvp: "{n} MVP", lb_as: "{n} All-Star", lb_guest: "misafir", lb_failed: "Liderlik tablosuna kaydedilemedi.",
     },
   };
   function t(k, v) {
@@ -273,6 +279,7 @@
   }
 
   function screenCreate() {
+    if (!board) loadBoard().then(paintBoard);
     const best = load(BEST, []);
     let pos = "SG", arch = "scorer";
     app.innerHTML = langSwitch() + `
@@ -283,6 +290,7 @@
         <div class="field"><span>${t("ptype")}</span><div class="cr-archs" id="cr-arch">${Object.keys(ARCH).map((k) => `<button type="button" data-arch="${k}" class="cr-arch ${k === arch ? "is-on" : ""}"><b>${t("a_" + k)}</b><small>${t("d_" + k)}</small></button>`).join("")}</div></div>
         <button class="btn btn-primary btn-block" id="cr-go">${t("enter_draft")}</button>
       </section>
+      ${boardHtml()}
       ${best.length ? `<section class="card" style="margin-top:12px"><div class="card-title">${t("best")}</div>
         <div class="cr-best">${best.map((b) => `<div><b>${h(b.name)}</b> <span class="dim small">${h(b.pos)} · ${t("seasons_n", { n: b.seasons })}</span><span>${h(bestLine(b))}</span></div>`).join("")}</div></section>` : ""}`;
     app.onclick = (e) => {
@@ -299,8 +307,56 @@
     };
   }
 
+  const newId = () => Array.from({ length: 20 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(rnd() * 36)]).join("");
+
+  // ---------------- liderlik tablosu (tum oyuncular) ----------------
+  let board = null;
+  async function loadBoard(force) {
+    if (board && !force) return board;
+    try { board = await window.HL.api("/api/career/leaderboard"); } catch (e) { board = { top: [], total: 0 }; }
+    return board;
+  }
+  function boardHtml() {
+    if (!board) return `<section class="card cr-board" id="cr-board"><div class="card-title">${t("lb_title")}</div><div class="spinner"></div></section>`;
+    const rows = board.top.map((r, i) => {
+      const bits = [t("lb_seasons", { n: r.seasons }), `${Number(r.ppg).toFixed(1)} PPG`];
+      if (r.rings) bits.push(r.rings === 1 ? t("lb_ring1") : t("lb_rings", { n: r.rings }));
+      if (r.mvps) bits.push(t("lb_mvp", { n: r.mvps }));
+      if (r.allstars) bits.push(t("lb_as", { n: r.allstars }));
+      return `<li class="${i === 0 ? "first" : ""}"><span class="cr-rank">${i + 1}</span>
+        <div class="cr-lb-main"><b>${h(r.name)}</b> <span class="dim small">${h(r.owner === "Guest" ? t("lb_guest") : r.owner)} · ${h(r.pos)} · ${t("a_" + r.arch)}</span>
+          <small>${bits.join(" · ")} · ${money(Number(r.earnings))}</small></div>
+        <span class="cr-lb-hof">${r.hof}%<small>HOF</small></span></li>`;
+    }).join("");
+    return `<section class="card cr-board" id="cr-board"><div class="card-title">${t("lb_title")} <span class="dim small">· ${t("lb_sub", { n: num(board.total || 0) })}</span></div>
+      ${st && st.board && st.board.rank ? `<p class="small ${st.board.rank <= 5 ? "good" : "muted"}" style="margin:0 0 8px">${t(st.board.rank <= 5 ? "lb_top" : "lb_you", { rank: num(st.board.rank), total: num(st.board.total) })}</p>` : ""}
+      ${rows ? `<ol class="cr-lb">${rows}</ol>` : `<p class="small muted" style="margin:0">${t("lb_empty")}</p>`}</section>`;
+  }
+  function paintBoard() {
+    const el = document.getElementById("cr-board");
+    if (el) el.outerHTML = boardHtml();
+  }
+  // Eski kayitlardaki ingilizce odul adlari -> anahtar
+  const awardKey = (a) => (typeof a !== "string" ? a.k : /^All-NBA/.test(a) ? "allnba" : ({ "Rookie of the Year": "roy", "Most Improved Player": "mip",
+    "Sixth Man of the Year": "smoy", "All-Star": "as", "MVP": "mvp", "Defensive Player of the Year": "dpoy", "Scoring title": "scoring",
+    "NBA Champion": "ring", "Finals MVP": "fmvp" })[a]);
+  async function submitCareer() {
+    if (st.submitted || st.submitting) return;
+    st.submitting = true;
+    st.id = st.id || newId();
+    const body = { id: st.id, name: st.name, pos: st.pos, arch: st.arch, gold: st.awards.gold || 0,
+      earnings: st.earnings.salary + st.earnings.endorse,
+      seasons: st.seasons.map((x) => ({ gp: x.gp, pts: x.pts, age: x.age, aw: x.awards.map(awardKey).filter(Boolean) })) };
+    try {
+      const r = await window.HL.api("/api/career/submit", { method: "POST", body });
+      st.submitted = true; st.board = { rank: r.rank, total: r.total }; persist();
+      await loadBoard(true); paintBoard();
+    } catch (e) { toast(t("lb_failed"), true); }
+    finally { if (st) st.submitting = false; }
+  }
+
   function newCareer(name, pos, arch) {
-    st = { v: 2, name, pos, arch, age: 19 + (rnd() < 0.35 ? 1 : 0) + (rnd() < 0.15 ? 1 : 0), year: FIRST_YEAR,
+    st = { v: 2, id: newId(), name, pos, arch, age: 19 + (rnd() < 0.35 ? 1 : 0) + (rnd() < 0.15 ? 1 : 0), year: FIRST_YEAR,
            ovr: 0, pot: clamp(Math.round(gauss(85.5, 6)), 72, 99), dur: clamp(0.82 + gauss(0, 0.07), 0.6, 0.98),
            fame: 0, team: null, pick: 0, contract: null, seasons: [], awards: {}, earnings: { salary: 0, endorse: 0 },
            phase: "draft", pending: null, forcedRole: null, training: null, rushed: false, flags: {},
@@ -769,7 +825,8 @@
           <div><span>${t("hof")}</span><b class="${H.p >= 70 ? "good" : H.p >= 30 ? "warn" : ""}">${H.p}%</b><small>${h(t("pts_place", { pts: num(x.pts), place: scoringPlace(x.pts) }))}</small></div>
         </div>
         <div class="gr-actions"><button class="btn btn-primary" id="cr-share">${t("share")}</button><button class="btn" id="cr-new">${t("new_career")}</button></div>
-      </section>` + seasonRows() + logHtml();
+      </section>` + boardHtml() + seasonRows() + logHtml();
+    if (!st.submitted) submitCareer(); else if (!board) loadBoard().then(paintBoard);
     app.onclick = async (e) => {
       if (e.target.closest("#cr-new")) { st = null; save(KEY, null); return render(); }
       if (e.target.closest("#cr-share")) return share(x, H, earned);

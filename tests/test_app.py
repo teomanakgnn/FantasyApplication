@@ -400,3 +400,39 @@ def test_rotation_rebuilds_stints_from_substitutions():
     assert any(s["a"] == 720 for s in by["1"]["stints"])                             # Q2 basinda geri
     assert by["6"]["stints"][0]["a"] == 360 and by["6"]["stints"][0]["b"] == 720 + 420  # Q1 6:00 -> Q2 5:00
     assert by["11"]["min"] == 48.0
+
+
+def test_career_leaderboard_validates_and_scores():
+    """Kariyer liderligi: tutarsiz kariyer reddedilir, puan sunucuda hesaplanir."""
+    from services.career_board import validate
+    seasons = [{"gp": 80, "pts": 25.0, "age": 20 + i, "aw": (["as"] if i else ["roy"]) + (["ring", "fmvp"] if i == 3 else [])} for i in range(10)]
+    body = {"id": "abc123def456ghi789jk", "name": "Kerem Yilmaz", "pos": "SG", "arch": "scorer", "gold": 1,
+            "earnings": 400.0, "seasons": seasons}
+    row, err = validate(body)
+    assert err is None and row["rings"] == 1 and row["allstars"] == 9 and row["pts"] == 20000 and row["seasons"] == 10
+    assert row["score"] == 15 * 0 + 8 * 1 + 6 * 1 + 3 * 9 + 2 * 1 + 2 * 1 + 20000 / 2000
+    bad = [dict(seasons[0], aw=["fmvp"])] + seasons[1:]                       # sampiyonluksuz Finals MVP
+    assert validate(dict(body, seasons=bad))[1]
+    assert validate(dict(body, seasons=[dict(seasons[0], gp=90)]))[1]        # 82'den fazla mac
+    assert validate(dict(body, seasons=[dict(s, age=25) for s in seasons]))[1]  # yaslar artmali
+    assert validate(dict(body, name="<b>"))[1]
+
+
+def test_career_submit_api(monkeypatch):
+    from fastapi.testclient import TestClient
+    from services.database import db
+    from web.app import app
+    store = []
+    monkeypatch.setattr(type(db), "available", property(lambda self: True), raising=False)
+    monkeypatch.setattr(db, "career_recent_from_ip", lambda ip, s=20: 0)
+    monkeypatch.setattr(db, "add_career_score", lambda row: store.append(row) or {"id": len(store)})
+    monkeypatch.setattr(db, "career_rank", lambda score: (1 + sum(1 for r in store if r["score"] > score), len(store)))
+    monkeypatch.setattr(db, "career_top", lambda n=5: sorted(store, key=lambda r: -r["score"])[:n])
+    c = TestClient(app)
+    seasons = [{"gp": 70, "pts": 20.0, "age": 21 + i, "aw": []} for i in range(8)]
+    r = c.post("/api/career/submit", json={"id": "zzzzzzzzzzzzzzzzzzzz", "name": "Test Guy", "pos": "C", "arch": "rim",
+                                           "earnings": 200, "seasons": seasons})
+    assert r.status_code == 200 and r.json()["rank"] == 1 and store[0]["owner"] == "Guest"
+    assert c.post("/api/career/submit", json={"id": "x"}).status_code == 400
+    lb = c.get("/api/career/leaderboard").json()
+    assert lb["top"][0]["name"] == "Test Guy"

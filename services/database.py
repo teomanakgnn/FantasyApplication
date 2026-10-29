@@ -396,6 +396,21 @@ class Database:
                    redeemed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                    PRIMARY KEY (code, user_id)
                )""",
+            # NBA Career liderlik tablosu (biten kariyerler; sunucu dogrulayip puanlar)
+            """CREATE TABLE IF NOT EXISTS career_scores (
+                   id SERIAL PRIMARY KEY,
+                   career_id TEXT UNIQUE NOT NULL,
+                   user_id INTEGER,
+                   owner TEXT NOT NULL,
+                   name TEXT NOT NULL,
+                   pos TEXT, arch TEXT,
+                   seasons INTEGER, ppg REAL, pts INTEGER,
+                   rings INTEGER, mvps INTEGER, allstars INTEGER,
+                   earnings REAL, hof INTEGER, score REAL NOT NULL,
+                   ip TEXT,
+                   created_at TIMESTAMP NOT NULL DEFAULT NOW()
+               )""",
+            "CREATE INDEX IF NOT EXISTS career_scores_score ON career_scores (score DESC)",
             # Kayitli mock draftlar (eskiden ilk kayitta tembel olusturuluyordu)
             """CREATE TABLE IF NOT EXISTS mock_drafts (
                    id SERIAL PRIMARY KEY,
@@ -1106,6 +1121,27 @@ class Database:
     def sims_for_day(self, day):
         rows = self._run("SELECT game_id FROM game_sims WHERE day = %s", (day,), fetch="all") or []
         return {r["game_id"] for r in rows}
+
+    # ---------------- NBA Career liderlik ----------------
+    def add_career_score(self, row):
+        cols = ["career_id", "user_id", "owner", "name", "pos", "arch", "seasons", "ppg", "pts", "rings", "mvps",
+                "allstars", "earnings", "hof", "score", "ip"]
+        return self._run(f"INSERT INTO career_scores ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) "
+                         "ON CONFLICT (career_id) DO NOTHING RETURNING id", tuple(row.get(c) for c in cols), fetch="one")
+
+    def career_top(self, limit=5):
+        return self._run("SELECT name, owner, pos, arch, seasons, ppg, pts, rings, mvps, allstars, earnings, hof, score, "
+                         "created_at FROM career_scores ORDER BY score DESC, created_at ASC LIMIT %s", (int(limit),),
+                         fetch="all") or []
+
+    def career_rank(self, score):
+        r = self._run("SELECT (SELECT COUNT(*) FROM career_scores WHERE score > %s) + 1 AS rank, "
+                      "(SELECT COUNT(*) FROM career_scores) AS total", (float(score),), fetch="one")
+        return (int(r["rank"]), int(r["total"])) if r else (None, None)
+
+    def career_recent_from_ip(self, ip, seconds=20):
+        return self._run("SELECT COUNT(*) FROM career_scores WHERE ip = %s AND created_at > NOW() - (%s * INTERVAL '1 second')",
+                         (ip, int(seconds)), fetch="value") or 0
 
     def all_sims(self, limit=200):
         import json
