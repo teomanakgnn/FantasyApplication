@@ -107,6 +107,7 @@
 <div class="tabs" data-tabs="league" data-hash style="margin-top:18px">
   {% if platform == 'espn' and team %}<button class="tab" data-tab="today">Today</button>{% endif %}
   {% if platform == 'espn' and league_id %}<button class="tab" data-tab="night">Last night</button>{% endif %}
+  {% if platform == 'espn' and team %}<button class="tab" data-tab="tradefit">Trade Fit</button>{% endif %}
   {% if wk %}<button class="tab" data-tab="week">This week</button>{% endif %}
   {% if insights %}<button class="tab" data-tab="insights">Insights</button>{% endif %}
   <button class="tab" data-tab="standings">Standings</button>
@@ -119,6 +120,12 @@
 {% if platform == 'espn' and team %}
 <div class="tab-panel" data-panel-of="league" data-panel="today">
   <div id="lu-box" data-src="/api/league/{{ league_id }}/today?team={{ team }}"><div class="spinner"></div></div>
+</div>
+{% endif %}
+
+{% if platform == 'espn' and team %}
+<div class="tab-panel" data-panel-of="league" data-panel="tradefit">
+  {% include "partials/trade_fit_panel.html" %}
 </div>
 {% endif %}
 
@@ -401,4 +408,5 @@ document.getElementById("league-share").addEventListener("click", async (e) => {
 });
 </script>
 {% endif %}
+{% if platform == 'espn' and team %}<script src="/static/js/trade_fit.js?v={{ asset_version }}"></script>{% endif %}
 {% endblock %}

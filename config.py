@@ -58,6 +58,8 @@ PRODUCTION = flag("PRODUCTION", default=bool(os.environ.get("RAILWAY_ENVIRONMENT
 
 SITE_URL = get("SITE_URL", "https://app.hooplifenba.com")
 GOOGLE_ANALYTICS_ID = get("GOOGLE_ANALYTICS_ID")
+# "Buy me a coffee" dugmesi (bos ise gizli): ornek https://buymeacoffee.com/kullanici
+BUYMEACOFFEE_URL = get("BUYMEACOFFEE_URL") or ""
 # Google Ads: etiket (AW-...) ve istege bagli kayit donusumu etiketi
 # (Ads > Donusumler > etiket kurulumu > "send_to" degerinin / sonrasi).
 GOOGLE_ADS_ID = get("GOOGLE_ADS_ID")

@@ -318,44 +318,56 @@ def draft_assist_api(request: Request, league: str = "", team: str = ""):
         return JSONResponse({"error": f"Could not read the draft: {exc}"[:200]}, 502)
 
 
-# ==================== TRADE FIT (yonetici) ====================
+# ==================== TRADE FIT + TRADE BUL (My League) ====================
 
 @router.get("/admin/trade-fit")
 def trade_fit_page(request: Request):
-    gate = login_required(request)
-    if gate:
-        return gate
-    if not _is_admin(request):
-        return redirect("/", "Not available.", "error")
-    leagues = [r for r in db.list_leagues(current_user(request)["id"]) if r["platform"] == "espn" and r["team_id"]]
-    return render(request, "trade_fit.html", active="league", leagues=leagues)
+    # Trade Fit artik herkese acik: My League'de "Trade Fit" sekmesi
+    return redirect("/league#tradefit", "Trade Fit now lives in My League (Trade Fit tab).", "info")
 
 
-@router.get("/api/admin/trade-fit/rosters")
-def trade_fit_rosters(request: Request, league: str = ""):
+def _punts(b):
+    return [str(x) for x in b.get("punts") or []][:4]
+
+
+@router.get("/api/league/{league_id}/trade-fit/rosters")
+def trade_fit_rosters(league_id: int):
     from fastapi.responses import JSONResponse
-    if not _is_admin(request):
-        return JSONResponse({"error": "Not available."}, 403)
     try:
         from services.trade_fit import rosters
-        return rosters(int(league))
+        return rosters(int(league_id))
     except Exception as exc:
         return JSONResponse({"error": f"Could not read the league: {exc}"[:200]}, 502)
 
 
-@router.post("/api/admin/trade-fit")
-async def trade_fit_eval(request: Request):
+@router.post("/api/league/{league_id}/trade-fit")
+async def trade_fit_eval(request: Request, league_id: int):
     from fastapi.responses import JSONResponse
-    if not _is_admin(request):
-        return JSONResponse({"error": "Not available."}, 403)
     b = await request.json()
     try:
         from services.trade_fit import evaluate
-        return evaluate(int(b["league"]), int(b["team"]), b.get("partner"), b.get("send") or [], b.get("get") or [],
-                        punts=[str(x) for x in b.get("punts") or []][:4])
+        return evaluate(int(league_id), int(b["team"]), b.get("partner"), b.get("send") or [], b.get("get") or [],
+                        punts=_punts(b))
     except Exception as exc:
         print(f"trade fit failed: {exc}")
         return JSONResponse({"error": f"Could not evaluate: {exc}"[:200]}, 502)
+
+
+@router.post("/api/league/{league_id}/trade-finder")
+async def trade_finder(request: Request, league_id: int):
+    """Kadromu guclendirecek 3 gercekci takas (services/trade_fit.find_trades)."""
+    from fastapi.responses import JSONResponse
+    from starlette.concurrency import run_in_threadpool
+    b = await request.json()
+    try:
+        from services.trade_fit import find_trades
+        res = await run_in_threadpool(find_trades, int(league_id), int(b["team"]), 3, tuple(sorted(_punts(b))))
+    except Exception as exc:
+        print(f"trade finder failed: {exc}")
+        return JSONResponse({"error": "Could not search trades right now. Try again in a minute."}, 502)
+    if "error" in res:
+        return JSONResponse(res, 400)
+    return res
 
 
 # ==================== HAFTALIK TAHMIN ====================

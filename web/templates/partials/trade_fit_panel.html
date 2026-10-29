@@ -1,0 +1,25 @@
+{# Trade Fit + Trade bul (My League, ESPN ligi ve takim secili) #}
+<div class="tf-app" id="tf-app" data-league="{{ league_id }}" data-team="{{ team }}">
+  <section class="card tf-find">
+    <div class="tf-find-h"><div><div class="card-title" style="margin:0">Find me a trade</div>
+      <p class="small muted" style="margin:4px 0 0">Three realistic trades in your league that make your team stronger - fair player value, and the other team doesn't get worse, so they could say yes.</p></div>
+      <button class="btn btn-primary" type="button" id="tf-find">Find 3 trades</button></div>
+    <div id="tf-found"></div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <div class="card-title">Trade Fit <span class="dim small">· does this trade help your team in your league?</span></div>
+    <p class="small muted" style="margin:0 0 10px">Real rosters, ESPN projections and the next 3 weeks of NBA games; your team plays every other team.</p>
+    <div class="tf-top">
+      <label class="field"><span>Trade with</span><select class="input" id="tf-partner"><option>Loading...</option></select></label>
+      <div class="field"><span>Punt <small class="dim">(categories you give up)</small></span>
+        <div class="tf-punts">{% for c in ['FG%', 'FT%', '3PM', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO'] %}<button type="button" class="btn btn-sm btn-ghost" data-punt="{{ c }}">{{ c }}</button>{% endfor %}</div></div>
+    </div>
+    <div class="tf-grid">
+      <div><div class="tf-sub">You send <span class="dim small" id="tf-me-name"></span></div><div id="tf-mine" class="tf-list"><div class="spinner"></div></div></div>
+      <div><div class="tf-sub">You get</div><div id="tf-theirs" class="tf-list"></div></div>
+    </div>
+    <button class="btn btn-primary btn-block" type="button" id="tf-go" style="margin-top:12px" disabled>Check the trade</button>
+  </section>
+  <section id="tf-res" hidden style="margin-top:12px"></section>
+</div>

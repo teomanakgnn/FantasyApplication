@@ -468,3 +468,10 @@ td.sticky-col .pc-link, td.sticky-col .player-name { display: inline-block; max-
   .install-card { flex-wrap: wrap; }
   .install-card .btn { width: 100%; }
 }
+
+/* Buy me a coffee */
+.coffee-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 9px 12px; border-radius: 12px;
+  background: #FFDD00; color: #0B0F17; font-weight: 800; font-size: .9rem; text-decoration: none; transition: transform .1s, filter .15s; }
+.coffee-btn:hover { filter: brightness(1.05); text-decoration: none; }
+.coffee-btn:active { transform: scale(.98); }
+.coffee-link { display: inline-flex; align-items: center; gap: 5px; color: #FFDD00; font-weight: 700; }

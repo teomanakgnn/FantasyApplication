@@ -362,6 +362,7 @@
     window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; showInstall(true); });
     if (ios) showInstall(true);
   }
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-coffee]") && window.gtag) gtag("event", "coffee_click"); });
   window.addEventListener("appinstalled", () => { showInstall(false); if (window.gtag) gtag("event", "pwa_installed"); });
   const shareIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
   document.addEventListener("click", async (e) => {

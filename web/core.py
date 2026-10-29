@@ -297,3 +297,4 @@ templates.env.globals["min"] = min
 templates.env.globals["face"] = lambda pid, w=110, h=80: (
     f"https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{pid}.png&w={w}&h={h}" if pid else "/static/img/player.svg")
 templates.env.globals["max"] = max
+templates.env.globals["coffee_url"] = config.BUYMEACOFFEE_URL
