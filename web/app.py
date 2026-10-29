@@ -133,7 +133,7 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/nba/simulations", "/waiver-wire", "/over-under", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/pyramid", "/grid", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/pyramid", "/grid", "/career", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
 
 
 @app.get("/privacy", include_in_schema=False)
@@ -235,6 +235,7 @@ def llms():
 - [Starting Five]({base}/starting-five): name the missing starters of a real playoff game.
 - [82-0 Challenge]({base}/82-0): build a five from random teams and eras and try to go 82-0.
 - [Pyramid]({base}/pyramid): rank ten NBA players by a stat (e.g. last season's steals) into a 1-2-3-4 pyramid, most at the top.
+- [NBA Career]({base}/career): choose-your-path NBA career game - pick your draft team, make offseason decisions, win awards, survive injuries and see your Hall of Fame odds and career earnings.
 - [3x3 Grid]({base}/grid): name a player who fits both the row and the column (teams, titles, All-Stars, MVPs, career stats); daily grid, tic-tac-toe vs a bot, or a live match against a friend with chat.
 - [NBA over/under win totals]({base}/over-under): preseason Las Vegas win totals for all 30 teams and how each team is tracking.
 """)

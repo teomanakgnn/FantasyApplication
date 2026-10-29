@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}NBA Career Simulator - Build Your Own NBA Career · HoopLife NBA{% endblock %}
+{% block description %}Choose your NBA career: pick your draft team, make offseason decisions, win MVPs and rings, survive injuries - then see your Hall of Fame odds and career earnings and share your career.{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="cr-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Career game</div>
+    <h1>NBA Career</h1>
+    <p>Draft night to retirement in a few minutes. Every summer you make the calls - teams, contracts, training, injuries. Win awards, chase rings, get paid, and see if you make the Hall of Fame.</p>
+  </div>
+  {% if not ready %}
+    <div class="note note-info">The league is still loading. Refresh in a minute.</div>
+  {% else %}
+    <div id="cr-app"></div>
+    <script id="cr-data" type="application/json">{{ payload|safe }}</script>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if ready %}<script src="/static/js/share_card.js?v={{ asset_version }}"></script><script src="/static/js/career.js?v={{ asset_version }}"></script>{% endif %}{% endblock %}

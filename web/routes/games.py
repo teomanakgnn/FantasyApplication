@@ -201,6 +201,34 @@ def tier_list_rosters(request: Request):
     return {"leagues": league_rosters(db.list_leagues(u["id"]) if db.available else [])}
 
 
+# ==================== NBA KARIYER ====================
+
+def _career_teams():
+    """30 takim: ad, logo, renk ve guc (gecen sezon mac basi sayi farki; kariyer oyununda takim gucu)."""
+    from services import team_pages as tp
+    from services.game_sim import _standings
+    from services.nba_season import get_current_season_year
+    try:
+        st = _standings(get_current_season_year() - 1)
+    except Exception:
+        st = {}
+    out = []
+    for t in tp.teams():
+        s = st.get(t["abbr"]) or {}
+        net = (s.get("pf") or 0) - (s.get("pa") or 0) if s else 0.0
+        out.append({"abbr": t["abbr"], "name": t["name"], "nick": t["nick"], "color": t["color"],
+                    "logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{(t['abbr'] or '').lower()}.png",
+                    "s": round(max(-12.0, min(12.0, net)), 1)})
+    return out
+
+
+@router.get("/career")
+def career_page(request: Request):
+    teams = _career_teams()
+    payload = {"teams": teams, "signed_in": bool(current_user(request))}
+    return render(request, "career.html", active="career", payload=_json(payload), ready=len(teams) >= 20)
+
+
 # ==================== 82-0 ====================
 
 @router.get("/82-0")
