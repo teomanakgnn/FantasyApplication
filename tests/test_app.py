@@ -376,3 +376,27 @@ def test_eighty_two_room_scores_only_valid_lineups():
     assert score(spins, {k: v for k, v in lineup.items() if k != "C"}, {}, False)[1]     # eksik kadro
     part, err = score(spins, {"PG": lineup["PG"]}, {}, partial=True)                      # sure doldu: yedekler
     assert err is None and part["filled"] == 1 and sum(1 for x in part["lineup"] if x.get("filler")) == 4
+
+
+def test_rotation_rebuilds_stints_from_substitutions():
+    """Rotasyon: ilk bes + degisiklikler; ceyrek basi kaydi olmayan degisiklik ilk izden cikarilir."""
+    from services.rotation import build
+
+    def ath(pid, starter):
+        return {"athlete": {"id": pid, "displayName": f"P{pid}", "shortName": f"P{pid}"}, "starter": starter,
+                "stats": ["0"]}
+    team = lambda tid, ids: {"team": {"id": tid, "abbreviation": f"T{tid}"},
+                             "statistics": [{"keys": ["minutes"], "athletes": [ath(i, n < 5) for n, i in enumerate(ids)]}]}
+    a_ids, b_ids = [str(i) for i in range(1, 7)], [str(i) for i in range(11, 16)]
+    play = lambda per, clock, kind, parts: {"period": {"number": per}, "clock": {"displayValue": clock},
+                                            "type": {"text": kind}, "participants": [{"athlete": {"id": p}} for p in parts]}
+    plays = [play(1, "6:00", "Substitution", ["6", "1"])]                          # Q1 6:00: 6 girer, 1 cikar
+    plays += [play(n, "11:00", "Jump Shot", ["11"]) for n in (2, 3, 4)]
+    plays += [play(2, "10:00", "Jump Shot", ["1"])]                                 # Q2: 1 sessizce geri (kayit yok)
+    plays += [play(2, "5:00", "Substitution", ["2", "6"])]                          # Q2 5:00: 2 girer, 6 cikar
+    r = build({"plays": plays, "boxscore": {"players": [team("1", a_ids), team("2", b_ids)]}})
+    by = {p["id"]: p for t in r["teams"] for p in t["players"]}
+    assert by["1"]["stints"][0]["a"] == 0 and by["1"]["stints"][0]["b"] == 360       # Q1 ilk 6 dk
+    assert any(s["a"] == 720 for s in by["1"]["stints"])                             # Q2 basinda geri
+    assert by["6"]["stints"][0]["a"] == 360 and by["6"]["stints"][0]["b"] == 720 + 420  # Q1 6:00 -> Q2 5:00
+    assert by["11"]["min"] == 48.0

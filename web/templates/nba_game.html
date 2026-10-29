@@ -76,6 +76,8 @@
 </section>
 {% endif %}{% endfor %}
 
+{% if rot and rot.teams %}{% include "partials/rotation.html" %}{% endif %}
+
 {% if sim and g.started %}<div style="margin-top:12px">{% with s = sim %}{% include "partials/sim.html" %}{% endwith %}</div>{% endif %}
 
 {% if not g.started %}<div class="empty" style="margin-top:12px">The box score and shot charts appear here once the game tips off.</div>{% endif %}

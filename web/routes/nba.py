@@ -59,6 +59,23 @@ def _game(game_id):
     return g
 
 
+def _rot_colors(away, home):
+    """Rotasyon cubuklari: iki takimin ana rengi cok yakinsa (Heat - Hawks) ev sahibi ikinci rengini alir."""
+    def rgb(c):
+        c = (c or "#9AA6BD").lstrip("#")
+        try:
+            return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return (154, 166, 189)
+    dist = lambda x, y: sum((p - q) ** 2 for p, q in zip(rgb(x), rgb(y))) ** 0.5
+    hc = home.get("color")
+    if dist(away.get("color"), hc) < 90:
+        alt = home.get("alt")
+        # ikinci renk de yakin ya da cok acik/koyu degilse notr gri
+        hc = alt if alt and dist(alt, away.get("color")) >= 90 and 60 < sum(rgb(alt)) / 3 < 235 else "#9AA6BD"
+    return {away["abbr"]: away.get("color"), home["abbr"]: hc}
+
+
 @router.get("/nba/game/{game_id}/{slug}")
 def game_page(request: Request, game_id: str, slug: str):
     g = _game(game_id)
@@ -72,7 +89,11 @@ def game_page(request: Request, game_id: str, slug: str):
     from services import game_sim
     from services import team_pages as tp
     g["away"]["page"], g["home"]["page"] = tp.path(g["away"]["abbr"]), tp.path(g["home"]["abbr"])
-    return render(request, "nba_game.html", active="scores", g=g, sim=sim,
+    from services.rotation import rotation
+    rot = rotation(game_id) if g.get("started") else None
+    if rot:
+        rot = dict(rot, colors=_rot_colors(g["away"], g["home"]))
+    return render(request, "nba_game.html", active="scores", g=g, sim=sim, rot=rot,
                   sim_record=game_sim.record() if sim and db.available else None,
                   is_admin=bool(u and u.get("username") in __import__("config").ADMIN_USERNAMES),
                   open_ids=None if current_user(request) else stats.top_scorer_ids(rows),

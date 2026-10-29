@@ -1,0 +1,23 @@
+{# Rotasyon: oyuncu basina sahada oldugu araliklar (rot = services.rotation) #}
+<section class="card nb-rot-card" style="margin-top:12px">
+  <h2 class="card-title">Rotation <span class="dim small">· who was on the floor, quarter by quarter</span></h2>
+  {% for t in rot.teams %}{% set tm = a if t.abbr == a.abbr else h %}
+  <div class="nb-rot" style="--tc:{{ rot.colors[t.abbr] if rot.colors and rot.colors.get(t.abbr) else tm.color }}">
+    <div class="nb-rot-head"><b>{{ tm.name }}</b></div>
+    <div class="nb-rot-row nb-rot-axis"><span class="nb-rot-name"></span>
+      <div class="nb-rot-track">{% for p in rot.periods %}<i class="nb-rot-q" style="left:{{ 100 * p.start / rot.total }}%;width:{{ 100 * p.len / rot.total }}%">{{ p.label }}</i>{% endfor %}</div>
+      <span class="nb-rot-min">MIN</span></div>
+    {% for pl in t.players %}
+    <div class="nb-rot-row">
+      <span class="nb-rot-name" title="{{ pl.name }}">{{ pl.short or pl.name }}{% if pl.starter %} <i class="dim">S</i>{% endif %}</span>
+      <div class="nb-rot-track">
+        {% for p in rot.periods[1:] %}<i class="nb-rot-div" style="left:{{ 100 * p.start / rot.total }}%"></i>{% endfor %}
+        {% for s in pl.stints %}<b class="nb-rot-bar" style="left:{{ 100 * s.a / rot.total }}%;width:{{ 100 * (s.b - s.a) / rot.total }}%" title="{{ pl.name }}: {{ s.label }}"></b>{% endfor %}
+      </div>
+      <span class="nb-rot-min">{{ '%.0f'|format(pl.min) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <p class="tiny dim" style="margin:6px 0 0">Bars show when each player was on the court (hover or tap for the exact clock). S = starter. Rebuilt from the play-by-play substitutions.</p>
+</section>
