@@ -152,6 +152,28 @@ def _stats_for(team, categories):
     return out
 
 
+def _week_stats(entry, categories):
+    """
+    Eslesme haftasinin kategori degerleri (ESPN cumulativeScore.scoreByStat). FG% ve
+    FT% isabet / deneme sayilarindan hesaplanir (yuvarlanmis yuzde sahte esitlik yaratmasin).
+    """
+    sbs = (entry.get("cumulativeScore") or {}).get("scoreByStat") or {}
+    raw = {}
+    for stat_id, label in STAT_IDS.items():
+        v = (sbs.get(str(stat_id)) or {}).get("score")
+        if v is not None:
+            raw[label] = float(v)
+    out = {}
+    for label in categories:
+        if label == "FG%" and raw.get("FGA"):
+            out[label] = round(raw["FGM"] / raw["FGA"], 4)
+        elif label == "FT%" and raw.get("FTA"):
+            out[label] = round(raw["FTM"] / raw["FTA"], 4)
+        elif label in raw:
+            out[label] = raw[label]
+    return out
+
+
 def matchup_periods(league_id, season=None):
     data = fetch_league(league_id, season, views=("mMatchupScore",))
     periods = {m.get("matchupPeriodId") for m in (data.get("schedule") or [])}
@@ -165,13 +187,14 @@ def get_league_matchups(league_id, season=None, matchup_period=None):
     Donen sekil kazima surumuyle ayni: her eslesme icin ``home_team`` ve
     ``away_team``, her birinde ``name`` ve ``stats``.
 
-    Not: ESPN gecmis haftalar icin haftalik kategori kirilimi vermiyor,
-    bu yuzden ``stats`` sezon basindan bugune toplamdir. Eslesmenin
-    kendi hafta sonucu (galibiyet/beraberlik/maglubiyet) ayrica
-    ``period_score`` altinda dondurulur.
+    ``stats`` o haftanin kategori degerleridir (mMatchup gorunumu, gecmis ve
+    devam eden haftalar). Eskiden sezon basindan bugune toplamlar kullaniliyordu;
+    power rank ve roto bu yuzden haftanin gercek skoruyla celisiyordu. Eslesmenin
+    kendi hafta sonucu (galibiyet/beraberlik/maglubiyet) ``period_score`` altinda.
+    Hafta verilmezse ESPN'in icinde bulunulan haftasi (status.currentMatchupPeriod).
     """
     data = fetch_league(league_id, season,
-                        views=("mTeam", "mSettings", "mMatchupScore"))
+                        views=("mTeam", "mSettings", "mMatchupScore", "mMatchup"))
     categories = league_categories(league_id, season)
     teams = {t.get("id"): t for t in (data.get("teams") or [])}
     schedule = data.get("schedule") or []
@@ -179,7 +202,8 @@ def get_league_matchups(league_id, season=None, matchup_period=None):
         return []
 
     if matchup_period is None:
-        matchup_period = max((m.get("matchupPeriodId") or 0) for m in schedule)
+        matchup_period = ((data.get("status") or {}).get("currentMatchupPeriod")
+                          or max((m.get("matchupPeriodId") or 0) for m in schedule))
 
     out = []
     for match in schedule:
@@ -197,7 +221,7 @@ def get_league_matchups(league_id, season=None, matchup_period=None):
                 "id": team.get("id"),
                 "name": _team_name(team),
                 "abbrev": team.get("abbrev"),
-                "stats": _stats_for(team, categories),
+                "stats": _week_stats(entry, categories),
                 "period_score": {
                     "wins": score.get("wins") or 0,
                     "losses": score.get("losses") or 0,

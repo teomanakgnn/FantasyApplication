@@ -436,3 +436,16 @@ def test_career_submit_api(monkeypatch):
     assert c.post("/api/career/submit", json={"id": "x"}).status_code == 400
     lb = c.get("/api/career/leaderboard").json()
     assert lb["top"][0]["name"] == "Test Guy"
+
+
+def test_espn_week_stats_use_matchup_scores():
+    """Power rank / roto: haftanin kategori degerleri (sezon toplami degil); FG% isabet/denemeden."""
+    from services.espn_league import NINE_CAT, _week_stats
+    entry = {"cumulativeScore": {"scoreByStat": {
+        "0": {"score": 317}, "1": {"score": 16}, "2": {"score": 21}, "3": {"score": 49}, "6": {"score": 143},
+        "11": {"score": 41}, "13": {"score": 110}, "14": {"score": 226}, "15": {"score": 55}, "16": {"score": 71},
+        "17": {"score": 42}, "19": {"score": 0.487}, "20": {"score": 0.775}}}}
+    s = _week_stats(entry, NINE_CAT)
+    assert s["PTS"] == 317 and s["TO"] == 41 and s["3PTM"] == 42
+    assert s["FG%"] == round(110 / 226, 4) and s["FT%"] == round(55 / 71, 4)
+    assert _week_stats({}, NINE_CAT) == {}

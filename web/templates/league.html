@@ -37,7 +37,7 @@
       <input class="input" type="number" name="week" min="0" max="30" value="{{ week }}"></label>
     <button class="btn btn-primary" type="submit">Load league</button>
   </form>
-  <p class="tiny dim">Category totals are season to date; the week picker changes which matchups are shown. Private leagues need the site's ESPN cookies configured.</p>
+  <p class="tiny dim">Category totals are for the selected week (the current week by default); power rank and roto use the same week. Private leagues need the site's ESPN cookies configured.</p>
 {% else %}
   {% if not yahoo_ready %}
     <div class="note note-warn">Yahoo is not configured on this server yet.</div>
