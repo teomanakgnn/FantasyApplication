@@ -475,3 +475,7 @@ td.sticky-col .pc-link, td.sticky-col .player-name { display: inline-block; max-
 .coffee-btn:hover { filter: brightness(1.05); text-decoration: none; }
 .coffee-btn:active { transform: scale(.98); }
 .coffee-link { display: inline-flex; align-items: center; gap: 5px; color: #FFDD00; font-weight: 700; }
+
+/* Oyuncu donem paylasimi (son 7 / 15 / 30 gun) */
+.pp-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 4px; }
+.pp-share > span { font-size: .78rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }

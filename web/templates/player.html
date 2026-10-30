@@ -22,6 +22,7 @@
     <div><b>{{ '%.1f'|format(av.fg) if av.fg is not none else '-' }}%</b><span>FG%</span></div>
     <div><b>{{ '%.1f'|format(av.ft) if av.ft is not none else '-' }}%</b><span>FT%</span></div>
   </div>
+  {% if p.id %}<div class="pp-share" data-pid="{{ p.id }}"><span>Share averages</span><button class="btn btn-sm" type="button" data-pp-share="7">7 days</button><button class="btn btn-sm" type="button" data-pp-share="15">15 days</button><button class="btn btn-sm" type="button" data-pp-share="30">30 days</button></div>{% endif %}
   <h3 class="pl-h3">Game log</h3>
   <div class="table-wrap"><table class="table small">
     <thead><tr><th class="l">Date</th><th class="l">Opp</th><th>Result</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>FG</th><th>3PT</th><th>FT</th></tr></thead>

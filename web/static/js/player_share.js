@@ -102,6 +102,85 @@
     return `${d.name}: ${line}${when} - shot chart and fantasy line\n${location.origin}${d.page}?ref=player-card${window.HL.inv()}`;
   }
 
+  // ---------------- donem ortalamalari karti (son 7 / 15 / 30 gun) ----------------
+  const CATS = [["PTS", "pts"], ["REB", "reb"], ["AST", "ast"], ["STL", "stl"], ["BLK", "blk"], ["3PM", "tpm"], ["FG%", "fg"], ["FT%", "ft"], ["TO", "to"]];
+  const fmt = (v, k) => (v == null ? "-" : k === "fg" || k === "ft" ? `${v.toFixed(1)}` : v.toFixed(1));
+  async function drawPeriod(d, key) {
+    await needCard();
+    const K = window.HLCard, { W, C } = K;
+    const P = d.periods[key], B = d.periods[d.base] || null;
+    const { cv, g } = await K.base("Player form");
+    const img = await K.loadImg(d.photo);
+    K.disc(g, img, 170, 270, 100, { ring: C.brand, ringW: 6, name: d.name });
+    K.text(g, d.name, 300, 245, { weight: 900, size: 56, max: 520 });
+    K.text(g, `${d.team}${d.pos ? " · " + d.pos : ""} · ${P.label.toUpperCase()}`, 300, 292, { weight: 800, size: 30, color: C.muted, max: 520 });
+    K.text(g, `${P.gp} game${P.gp === 1 ? "" : "s"} · ${P.min.toFixed(1)} MIN${B ? ` · vs ${B.label.toLowerCase()}` : ""}`, 300, 336, { weight: 700, size: 27, color: C.dim, max: 520 });
+    K.text(g, P.fp.toFixed(1), W - 60, 280, { weight: 900, size: 88, color: C.good, align: "right" });
+    K.text(g, "FANTASY PTS / GAME", W - 60, 318, { weight: 800, size: 20, color: C.dim, align: "right" });
+
+    // 9 kategori: deger + karsilastirma donemine gore fark (TO'da dusus iyi)
+    const top = 400, bw = (W - 120 - 8 * 10) / 9, bh = 140;
+    CATS.forEach(([cat, k], i) => {
+      const v = P[k], b = B ? B[k] : null;
+      const diff = v != null && b != null ? v - b : null;
+      const better = diff == null ? 0 : (k === "to" ? -diff : diff);
+      const thr = k === "fg" || k === "ft" ? 2 : k === "pts" ? 1.5 : 0.4;
+      const tier = better >= thr ? "good" : better <= -thr ? "bad" : "";
+      const x = 60 + i * (bw + 10);
+      K.rr(g, x, top, bw, bh, 16);
+      g.fillStyle = tier === "good" ? "rgba(52,211,153,.14)" : tier === "bad" ? "rgba(239,100,100,.13)" : "rgba(255,255,255,.05)"; g.fill();
+      g.lineWidth = 2; g.strokeStyle = tier === "good" ? "rgba(52,211,153,.6)" : tier === "bad" ? "rgba(239,100,100,.55)" : "rgba(255,255,255,.10)"; g.stroke();
+      const cx = x + bw / 2;
+      K.text(g, cat, cx, top + 34, { weight: 800, size: 20, color: C.muted, align: "center" });
+      const val = fmt(v, k);
+      K.text(g, val, cx, top + 86, { weight: 900, size: val.length > 4 ? 30 : 38, align: "center", color: tier === "good" ? C.good : tier === "bad" ? C.bad : C.text });
+      if (diff != null) K.text(g, `${diff > 0 ? "+" : ""}${diff.toFixed(1)}`, cx, top + 120, { weight: 700, size: 19, color: C.dim, align: "center" });
+    });
+
+    // Form tablosu: 7 / 15 / 30 gun ve karsilastirma donemi
+    const keys = ["7", "15", "30", d.base].filter((k, i, arr) => d.periods[k] && arr.indexOf(k) === i);
+    const cols = [["GP", "gp"], ["MIN", "min"], ["PTS", "pts"], ["REB", "reb"], ["AST", "ast"], ["STL", "stl"], ["BLK", "blk"], ["3PM", "tpm"], ["FP", "fp"]];
+    const ty = 600, rowH = 84, lx = 60, labelW = 250, cw2 = (W - 120 - labelW) / cols.length;
+    K.rr(g, 60, ty, W - 120, 70 + keys.length * rowH, 22); g.fillStyle = "rgba(255,255,255,.04)"; g.fill();
+    cols.forEach(([c], j) => K.text(g, c, lx + labelW + cw2 * j + cw2 / 2, ty + 46, { weight: 800, size: 22, color: C.muted, align: "center" }));
+    keys.forEach((k, i) => {
+      const r = d.periods[k], y = ty + 70 + i * rowH, on = k === key;
+      if (on) { K.rr(g, 70, y + 6, W - 140, rowH - 12, 16); g.fillStyle = "rgba(208,17,43,.22)"; g.fill(); }
+      K.text(g, r.label, lx + 28, y + rowH / 2 + 10, { weight: on ? 900 : 700, size: 28, color: on ? C.text : C.muted });
+      cols.forEach(([, f], j) => {
+        const v = r[f];
+        K.text(g, f === "gp" ? String(v) : Number(v).toFixed(1), lx + labelW + cw2 * j + cw2 / 2, y + rowH / 2 + 12,
+               { weight: f === "fp" || on ? 900 : 700, size: 30, color: f === "fp" ? C.good : on ? C.text : C.muted, align: "center" });
+      });
+    });
+    K.footer(g, d.page || "/rankings", "Recent form");
+    return cv;
+  }
+
+  document.addEventListener("click", async (e) => {
+    const pb = e.target.closest("[data-pp-share]");
+    if (!pb) return;
+    const box = pb.closest("[data-pid]");
+    const key = pb.dataset.ppShare;
+    pb.classList.add("is-loading");
+    try {
+      const d = await window.HL.api(`/api/player-period/${box.dataset.pid}`);
+      if (!d.periods[key]) throw new Error(`No games for ${d.name} in that window.`);
+      const P = d.periods[key];
+      const cv = await drawPeriod(d, key);
+      const text = `${d.name}, ${P.label.toLowerCase()} (${P.gp} game${P.gp === 1 ? "" : "s"}): ${P.pts.toFixed(1)} PTS, ${P.reb.toFixed(1)} REB, ${P.ast.toFixed(1)} AST, `
+        + `${P.stl.toFixed(1)} STL, ${P.blk.toFixed(1)} BLK, ${P.tpm.toFixed(1)} 3PM
+${location.origin}${d.page}?ref=player-form${window.HL.inv()}`;
+      const slug = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      await window.HLCard.share(cv, { filename: `${slug}-last-${key}-days.png`, text, title: `${d.name} - ${P.label}` });
+      if (window.gtag) gtag("event", "player_form_share", { window: key });
+    } catch (err) {
+      window.HL.toast(err.message || "Could not build the image. Try again.", true);
+    } finally {
+      pb.classList.remove("is-loading");
+    }
+  });
+
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-pc-share]");
     if (!btn) return;

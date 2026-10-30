@@ -152,6 +152,21 @@ def boxscore(request: Request, game_id: str, final: int = 1):
         "google_enabled": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET)})
 
 
+@router.get("/api/player-period/{player_id}")
+def player_period(player_id: str):
+    """Son 7 / 15 / 30 gun ortalamalari (paylasim karti icin)."""
+    from fastapi.responses import JSONResponse
+    from services.waiver import player_periods
+    d = player_periods(player_id) if player_id.isdigit() else None
+    if not d or not d["periods"]:
+        return JSONResponse({"error": "No recent stats for this player yet."}, 404)
+    d["photo"] = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{d['id']}.png&w=350&h=254"
+    from services import player_pages as pp
+    slug = pp.slugify(d["name"])
+    d["page"] = f"/players/{slug}" if slug in pp.table()[1] else "/rankings"
+    return d
+
+
 @router.get("/api/player-card/{game_id}/{player_id}", response_class=HTMLResponse)
 def player_card(request: Request, game_id: str, player_id: str, final: int = 1):
     card = stats.player_game_card(game_id, player_id, final=bool(final))

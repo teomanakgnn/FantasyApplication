@@ -28,7 +28,7 @@ STAT = {"pts": "0", "blk": "1", "stl": "2", "ast": "3", "reb": "6", "to": "11", 
 def _pool():
     season = get_current_season_year()
     flt = {"players": {"limit": 650, "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
-                       "filterStatsForSourceIds": {"value": [0]}, "filterStatsForSplitTypeIds": {"value": [0, 1, 2]}}}
+                       "filterStatsForSourceIds": {"value": [0]}, "filterStatsForSplitTypeIds": {"value": [0, 1, 2, 3]}}}
     r = get_session().get(f"{FANTASY_BASE}/{season}/segments/0/leaguedefaults/3?view=kona_player_info",
                           headers={"Accept": "application/json", "x-fantasy-filter": json.dumps(flt)}, timeout=45)
     r.raise_for_status()
@@ -43,7 +43,7 @@ def _pool():
             if s.get("statSourceId") != 0 or not avg:
                 continue
             key = ("last" if s.get("seasonId") == season - 1 and s.get("statSplitTypeId") == 0 else
-                   {0: "season", 1: "7", 2: "15"}.get(s.get("statSplitTypeId")) if s.get("seasonId") == season else None)
+                   {0: "season", 1: "7", 2: "15", 3: "30"}.get(s.get("statSplitTypeId")) if s.get("seasonId") == season else None)
             if key:
                 splits[key] = {k: float(avg.get(v) or 0) for k, v in STAT.items()}
         out.append({"id": p.get("id"), "name": p.get("fullName"), "team": teams.get(p.get("proTeamId"), "FA"),
@@ -127,3 +127,32 @@ def risers(limit=8):
     """Bu hafta en hizli eklenenler (sahiplenilme degisimi)."""
     rows = [r for r in board("15") if r["owned"] < 80 and r["change"] > 0]
     return sorted(rows, key=lambda r: -r["change"])[:limit]
+
+
+# ==================== DONEM ORTALAMALARI (paylasim karti) ====================
+
+PERIOD_LABELS = {"7": "Last 7 days", "15": "Last 15 days", "30": "Last 30 days", "season": "Season", "last": "Last season"}
+
+
+def player_periods(player_id):
+    """Oyuncunun son 7 / 15 / 30 gun ve sezon mac basi ortalamalari (ESPN), fantezi puaniyla."""
+    from web import stats
+    p = next((x for x in _pool() if str(x["id"]) == str(player_id)), None)
+    if not p:
+        return None
+    w = stats.BASE_WEIGHTS
+    out = {}
+    for key, s in (p.get("splits") or {}).items():
+        if key not in PERIOD_LABELS or not s.get("gp"):
+            continue
+        fp = (w["PTS"] * s["pts"] + w["REB"] * s["reb"] + w["AST"] * s["ast"] + w["STL"] * s["stl"] + w["BLK"] * s["blk"]
+              + w["TO"] * s["to"] + w["FGA"] * s["fga"] + w["FGM"] * s["fgm"] + w["FTA"] * s["fta"] + w["FTM"] * s["ftm"]
+              + w["3Pts"] * s["tpm"])
+        out[key] = {"label": PERIOD_LABELS[key], "gp": int(s["gp"]), "min": round(s["min"], 1),
+                    **{k: round(s[k], 1) for k in ("pts", "reb", "ast", "stl", "blk", "to", "tpm")},
+                    "fg": round(100 * s["fgm"] / s["fga"], 1) if s["fga"] else None,
+                    "ft": round(100 * s["ftm"] / s["fta"], 1) if s["fta"] else None,
+                    "fga": round(s["fga"], 1), "fta": round(s["fta"], 1), "fp": round(fp, 1)}
+    # Karsilastirma: sezonda 15+ mac varsa sezon, yoksa gecen sezon (sezon basinda donemler sezonla ayni olur)
+    base = "season" if (out.get("season") or {}).get("gp", 0) >= 15 or "last" not in out else "last"
+    return {"id": str(p["id"]), "name": p["name"], "team": p["team"], "pos": p["pos"], "periods": out, "base": base}
