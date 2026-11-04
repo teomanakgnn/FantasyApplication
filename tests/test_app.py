@@ -449,3 +449,35 @@ def test_espn_week_stats_use_matchup_scores():
     assert s["PTS"] == 317 and s["TO"] == 41 and s["3PTM"] == 42
     assert s["FG%"] == round(110 / 226, 4) and s["FT%"] == round(55 / 71, 4)
     assert _week_stats({}, NINE_CAT) == {}
+
+
+def test_scratch_card_hides_games_until_found(monkeypatch):
+    """Kazi kazan: kart oyunlari soylemez; kazinmadan ipucu yok; bulunanlar sayilir."""
+    import json
+    from services import scratch
+
+    class FakeDB:
+        def __init__(self):
+            self.rows = {}
+        def scratch_get(self, uid, day):
+            return self.rows.get((uid, day))
+        def scratch_create(self, uid, day, games):
+            self.rows.setdefault((uid, day), {"games": games, "found": "[]", "scratched": False})
+        def scratch_mark(self, uid, day):
+            self.rows[(uid, day)]["scratched"] = True
+        def scratch_found(self, uid, day, found):
+            self.rows[(uid, day)]["found"] = found
+
+    db = FakeDB()
+    monkeypatch.setattr(scratch, "build_hint", lambda g, p: {"title": "t", "text": g})
+    c = scratch.card(db, 7)
+    assert 1 <= c["n"] <= 3 and "games" not in c and not c["scratched"]
+    games = json.loads(next(iter(db.rows.values()))["games"])
+    assert scratch.lookup(db, 7, games[0])["state"] == "not_scratched"
+    scratch.scratch(db, 7)
+    other = next(g for g in scratch.GAMES if g not in games)
+    assert scratch.lookup(db, 7, other)["state"] == "none"
+    r = scratch.lookup(db, 7, games[0])
+    assert r["state"] == "hint" and r["found"] == 1
+    assert scratch.lookup(db, 7, games[0])["found"] == 1          # ayni oyun iki kez sayilmaz
+    assert scratch.card(db, 7)["n"] == len(games)                 # ayni gun ayni kart

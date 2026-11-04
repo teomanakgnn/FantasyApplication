@@ -229,6 +229,39 @@ def career_page(request: Request):
     return render(request, "career.html", active="career", payload=_json(payload), ready=len(teams) >= 20)
 
 
+# ==================== KAZI KAZAN ====================
+
+@router.get("/api/scratch")
+def scratch_card(request: Request):
+    from services import scratch
+    u = current_user(request)
+    if not u:
+        return _bad("Sign in for a daily scratch card.", 401)
+    if not db.available:
+        return _bad("Scratch cards are unavailable right now.", 503)
+    return scratch.card(db, u["id"])
+
+
+@router.post("/api/scratch")
+def scratch_do(request: Request):
+    from services import scratch
+    u = current_user(request)
+    if not u:
+        return _bad("Sign in for a daily scratch card.", 401)
+    if not db.available:
+        return _bad("Scratch cards are unavailable right now.", 503)
+    return scratch.scratch(db, u["id"])
+
+
+@router.get("/api/scratch/hint")
+def scratch_hint(request: Request, game: str = "", span: str = ""):
+    from services import scratch
+    u = current_user(request)
+    if not u or not db.available:
+        return {"state": "signed_out"}
+    return scratch.lookup(db, u["id"], game, {"span": span})
+
+
 @router.get("/api/career/leaderboard")
 def career_leaderboard():
     from services.database import db

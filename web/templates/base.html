@@ -163,6 +163,7 @@
   <script>window.HL_INV = {{ (invite or '')|tojson }}; window.HL_PUZZLES = {{ (puzzles or {})|tojson }}; window.HL_STREAKS = {{ streaks|tojson }};</script>
   <script src="/static/js/app.js?v={{ asset_version }}"></script>
   <script src="/static/js/player_share.js?v={{ asset_version }}" defer></script>
+  {% if user and active in ('daily', 'statmatch', 'starting5', 'eightytwo', 'pyramid', 'grid') %}<script src="/static/js/scratch_hint.js?v={{ asset_version }}" data-game="{{ active }}" defer></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

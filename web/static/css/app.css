@@ -479,3 +479,32 @@ td.sticky-col .pc-link, td.sticky-col .player-name { display: inline-block; max-
 /* Oyuncu donem paylasimi (son 7 / 15 / 30 gun) */
 .pp-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 4px; }
 .pp-share > span { font-size: .78rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+
+/* Gunluk kazi kazan */
+.sc-box { margin-bottom: 16px; }
+.sc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.sc-head span { font-size: .8rem; color: var(--muted); }
+.sc-card { position: relative; height: 170px; max-width: 520px; border-radius: 16px; overflow: hidden; user-select: none;
+  background: radial-gradient(circle at 30% 20%, rgba(245, 181, 68, .25), transparent 60%), linear-gradient(135deg, #1A2130, #241A10); border: 2px solid rgba(245, 181, 68, .45); }
+.sc-prize { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 12px; gap: 2px; }
+.sc-prize strong { font-size: 3.4rem; line-height: 1; font-weight: 900; color: var(--warn); }
+.sc-prize b { font-size: .9rem; letter-spacing: .2em; font-weight: 900; }
+.sc-prize span { font-size: .82rem; color: var(--muted); max-width: 320px; }
+.sc-card canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; transition: opacity .6s; }
+.sc-card canvas.sc-gone { opacity: 0; pointer-events: none; }
+.sc-card.sc-won { animation: sf-pop .6s cubic-bezier(.2, 1.6, .4, 1); border-color: var(--warn); box-shadow: 0 0 0 4px rgba(245, 181, 68, .25); }
+.sc-status { display: flex; flex-direction: column; gap: 10px; }
+.sc-status > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.sc-status span { font-size: .84rem; color: var(--muted); }
+.sc-status.done b { color: var(--good); }
+.sc-games { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-games a { padding: 6px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .82rem; font-weight: 700; text-decoration: none; color: inherit; }
+.sc-games a:hover { border-color: var(--warn); }
+.sc-hint { display: flex; gap: 12px; align-items: center; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(245, 181, 68, .16), rgba(245, 181, 68, .05)); border: 1px solid rgba(245, 181, 68, .5); animation: sf-pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+.sc-hint img { width: 64px; height: 47px; object-fit: cover; border-radius: 8px; flex: none; }
+.sc-hint b { display: block; font-size: 1rem; }
+.sc-hint p { margin: 2px 0 0; font-size: .9rem; }
+.sc-hint-k { font-size: .7rem; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; color: var(--warn); }
+.sc-hint.none { background: var(--surface-2); border-color: var(--line); animation: none; }
+.sc-hint.none p { color: var(--muted); }

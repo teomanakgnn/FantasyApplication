@@ -396,6 +396,16 @@ class Database:
                    redeemed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                    PRIMARY KEY (code, user_id)
                )""",
+            # Gunluk kazi kazan: hangi oyunlarda ipucu var (tarayiciya gitmez), kazindi mi, bulunanlar
+            """CREATE TABLE IF NOT EXISTS scratch_cards (
+                   user_id INTEGER NOT NULL,
+                   day DATE NOT NULL,
+                   games TEXT NOT NULL,
+                   found TEXT NOT NULL DEFAULT '[]',
+                   scratched BOOLEAN NOT NULL DEFAULT FALSE,
+                   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                   PRIMARY KEY (user_id, day)
+               )""",
             # NBA Career liderlik tablosu (biten kariyerler; sunucu dogrulayip puanlar)
             """CREATE TABLE IF NOT EXISTS career_scores (
                    id SERIAL PRIMARY KEY,
@@ -1121,6 +1131,21 @@ class Database:
     def sims_for_day(self, day):
         rows = self._run("SELECT game_id FROM game_sims WHERE day = %s", (day,), fetch="all") or []
         return {r["game_id"] for r in rows}
+
+    # ---------------- Kazi kazan ----------------
+    def scratch_get(self, user_id, day):
+        return self._run("SELECT games, found, scratched FROM scratch_cards WHERE user_id = %s AND day = %s",
+                         (int(user_id), day), fetch="one")
+
+    def scratch_create(self, user_id, day, games_json):
+        self._run("INSERT INTO scratch_cards (user_id, day, games) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                  (int(user_id), day, games_json))
+
+    def scratch_mark(self, user_id, day):
+        self._run("UPDATE scratch_cards SET scratched = TRUE WHERE user_id = %s AND day = %s", (int(user_id), day))
+
+    def scratch_found(self, user_id, day, found_json):
+        self._run("UPDATE scratch_cards SET found = %s WHERE user_id = %s AND day = %s", (found_json, int(user_id), day))
 
     # ---------------- NBA Career liderlik ----------------
     def add_career_score(self, row):

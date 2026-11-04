@@ -18,6 +18,8 @@
   <a class="btn btn-ghost hide-mobile" href="/nba/scores">All scores &amp; game pages &rarr;</a>
 </div>
 
+{% if user %}<section class="card sc-box" id="scratch-card" hidden></section>{% endif %}
+
 {% if offseason_note %}<div class="note note-info" style="margin-bottom:16px">{{ offseason_note }}</div>{% endif %}
 
 <form class="filters card" method="get" action="/" id="filters">
@@ -168,6 +170,7 @@
 {% endblock %}
 
 {% block scripts %}
+{% if user %}<script src="/static/js/scratch.js?v={{ asset_version }}" defer></script>{% endif %}
 {% if top %}
 <script>
 window.HL_BOARD = {{ {"top": top[:10], "low": low[:10], "period": period, "label": periods[period],
