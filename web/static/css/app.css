@@ -500,6 +500,10 @@ td.sticky-col .pc-link, td.sticky-col .player-name { display: inline-block; max-
 .sc-games { display: flex; flex-wrap: wrap; gap: 6px; }
 .sc-games a { padding: 6px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .82rem; font-weight: 700; text-decoration: none; color: inherit; }
 .sc-games a:hover { border-color: var(--warn); }
+.sc-share { align-self: flex-start; }
+.sc-teaser { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.sc-teaser div { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 240px; }
+.sc-teaser span { font-size: .84rem; color: var(--muted); }
 .sc-hint { display: flex; gap: 12px; align-items: center; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
   background: linear-gradient(135deg, rgba(245, 181, 68, .16), rgba(245, 181, 68, .05)); border: 1px solid rgba(245, 181, 68, .5); animation: sf-pop .5s cubic-bezier(.2, 1.6, .4, 1); }
 .sc-hint img { width: 64px; height: 47px; object-fit: cover; border-radius: 8px; flex: none; }

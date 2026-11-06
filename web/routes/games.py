@@ -264,13 +264,32 @@ def scratch_hint(request: Request, game: str = "", span: str = ""):
 
 @router.get("/api/career/leaderboard")
 def career_leaderboard():
+    from services.career_board import public_name
     from services.database import db
     if not db.available:
         return {"top": [], "total": 0}
-    top = db.career_top(5)
+    top = []
+    for r in db.career_top(5):
+        row = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(r).items()}
+        row["name"], row["owner"] = public_name(row.get("name")), public_name(row.get("owner"))
+        top.append(row)
     _, total = db.career_rank(10 ** 9)
-    return {"top": [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in dict(r).items()} for r in top],
-            "total": total or 0}
+    return {"top": top, "total": total or 0}
+
+
+@router.post("/api/career/claim")
+async def career_claim(request: Request):
+    """Misafirken bitirilen kariyerler, kayit/giris sonrasi kullanici adina gecer."""
+    from services.career_board import clean_ids
+    from services.database import db
+    u = current_user(request)
+    if not u:
+        return _bad("Sign in first.", 401)
+    if not db.available:
+        return _bad("Leaderboard is unavailable right now.", 503)
+    body = await request.json()
+    ids = clean_ids(body.get("ids") if isinstance(body, dict) else None)
+    return {"claimed": db.career_claim(ids, u["id"], u["username"])}
 
 
 @router.post("/api/career/submit")

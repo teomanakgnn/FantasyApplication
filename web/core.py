@@ -74,6 +74,23 @@ _user_cache = {}
 _USER_TTL = 60
 
 
+# Uyenin son gorulme zamani: oturum aylarca acik kaldigi icin last_login geri
+# donusu olcemiyor. Kullanici basina en fazla 15 dakikada bir yazilir.
+_seen_at = {}
+_SEEN_EVERY = 900
+
+
+def _mark_seen(user):
+    uid, now = user.get("id"), time.time()
+    if not uid or now - _seen_at.get(uid, 0) < _SEEN_EVERY:
+        return
+    _seen_at[uid] = now
+    try:
+        db.touch_last_seen(uid)
+    except Exception as exc:
+        print(f"last_seen failed: {exc}")
+
+
 def _cached_user(token):
     hit = _user_cache.get(token)
     if hit and time.time() - hit[0] < _USER_TTL:
@@ -81,6 +98,7 @@ def _cached_user(token):
     user = db.validate_session_by_token(token) if token else None
     if user:
         _user_cache[token] = (time.time(), user)
+        _mark_seen(user)
     else:
         _user_cache.pop(token, None)
     if len(_user_cache) > 5000:

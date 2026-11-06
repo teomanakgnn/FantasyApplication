@@ -382,6 +382,8 @@ class Database:
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_invite_code ON users (invite_code)",
             # Kayit kaynagi (utm/ref) ve Pro kodlari
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT",
+            # Oturum acik kalsa da uyenin geri donup donmedigi buradan olculur
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP",
             """CREATE TABLE IF NOT EXISTS promo_codes (
                    code TEXT PRIMARY KEY,
                    pro_days INTEGER NOT NULL DEFAULT 30,
@@ -1028,47 +1030,98 @@ class Database:
         finally:
             pool.putconn(conn)
 
+    @staticmethod
+    def _visitor_days(where):
+        """
+        Gunluk ziyaretci kayitlari ve is_real isareti. Ham sayilar botlarla dolu (sezonda
+        yaklasik %6'si gercek), "2+ sayfa" ya da "3+ sayfa" da yetmiyor: veri merkezlerinden
+        masaustu tarayicilar saatlerce sayfa geziyor. Elenenler: veri merkezi agirlikli
+        ulkeler, Avrupa'dan masaustu tarama, 40+ sayfa, 6+ saate yayilan masaustu ve
+        kaynaksiz tek sayfa. Tahmindir: o ulkelerdeki gercek masaustu kullanicilari da duser.
+        """
+        return f"""WITH raw AS (SELECT DATE(ts) AS day, visitor, COUNT(*) AS n, bool_or(device = 'mobile') AS mob,
+                            MIN(country_name) AS cn, MAX(country) AS iso, (array_agg(source ORDER BY ts))[1] AS fsrc,
+                            EXTRACT(EPOCH FROM MAX(ts) - MIN(ts)) AS secs
+                     FROM page_views WHERE {where} GROUP BY 1, 2),
+             v AS (SELECT *, COALESCE(
+                       COALESCE(cn, '') NOT IN ('Singapore', 'Hong Kong', 'China', 'Vietnam', 'Panama')
+                       AND NOT (NOT mob AND cn IN ('France', 'Germany', 'Poland', 'Andorra', 'The Netherlands'))
+                       AND n <= 40 AND NOT (NOT mob AND secs > 21600)
+                       AND (n >= 2 OR COALESCE(fsrc, '') <> ''), FALSE) AS is_real
+                   FROM raw)"""
+
     def visitor_report(self, days):
-        """Yonetici paneli: son N gunun ozeti."""
-        where = "ts >= NOW() - %s * INTERVAL '1 day'"
-        p = (days,)
+        """Yonetici paneli: son N takvim gunu (bugun dahil); listeler yalnizca gercek ziyaretciler."""
+        where = "ts >= CURRENT_DATE - %s * INTERVAL '1 day'"
+        p = (days - 1,)
+        days_cte = self._visitor_days(where)
         totals = self._run(f"SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors "
                            f"FROM page_views WHERE {where}", p, fetch="one") or {}
         countries = self._run(
-            f"SELECT COALESCE(NULLIF(country_name, ''), 'Unknown') AS name, MAX(country) AS iso, "
-            f"COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM page_views WHERE {where} "
-            f"GROUP BY 1 ORDER BY visitors DESC, views DESC LIMIT 40", p, fetch="all") or []
+            f"""{days_cte} SELECT COALESCE(NULLIF(cn, ''), 'Unknown') AS name, MAX(iso) AS iso, COUNT(*) AS visitors,
+                       SUM(n) AS views FROM v WHERE is_real GROUP BY 1 ORDER BY visitors DESC, views DESC LIMIT 40""",
+            p, fetch="all") or []
         pages = self._run(
-            f"SELECT path, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM page_views "
-            f"WHERE {where} GROUP BY 1 ORDER BY visitors DESC LIMIT 25", p, fetch="all") or []
+            f"""{days_cte} SELECT pv.path, COUNT(DISTINCT pv.visitor) AS visitors, COUNT(*) AS views
+                FROM page_views pv JOIN v ON v.visitor = pv.visitor AND v.day = DATE(pv.ts)
+                WHERE v.is_real AND pv.{where} GROUP BY 1 ORDER BY visitors DESC LIMIT 25""", (days - 1, days - 1), fetch="all") or []
         sources = self._run(
-            f"SELECT COALESCE(NULLIF(source, ''), 'direct') AS source, COUNT(DISTINCT visitor) AS visitors "
-            f"FROM page_views WHERE {where} GROUP BY 1 ORDER BY visitors DESC LIMIT 25", p, fetch="all") or []
+            f"""{days_cte} SELECT COALESCE(NULLIF(fsrc, ''), 'direct') AS source, COUNT(*) AS visitors
+                FROM v WHERE is_real GROUP BY 1 ORDER BY visitors DESC LIMIT 25""", p, fetch="all") or []
         devices = self._run(
-            f"SELECT device, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE {where} "
-            f"GROUP BY 1 ORDER BY visitors DESC", p, fetch="all") or []
-        # "Gercek" ziyaretci tahmini: tek sayfada kalip kaynaksiz gelen masaustu ziyaretleri
-        # cogunlukla tarayici / bot (veri merkezi IP'leri, onizleme servisleri). 2+ sayfa,
-        # mobil ya da bir kaynaktan (paylasim, arama, ChatGPT) gelenler insan sayilir.
+            f"""{days_cte} SELECT CASE WHEN mob THEN 'mobile' ELSE 'desktop' END AS device, COUNT(*) AS visitors
+                FROM v WHERE is_real GROUP BY 1 ORDER BY visitors DESC""", p, fetch="all") or []
         daily = self._run(
-            f"""WITH v AS (SELECT DATE(ts) AS day, visitor, COUNT(*) AS n, bool_or(device = 'mobile') AS mob,
-                                  bool_or(COALESCE(source, '') <> '') AS src
-                           FROM page_views WHERE {where} GROUP BY 1, 2),
-                   s AS (SELECT DATE(created_at) AS day, COUNT(*) AS signups FROM users
-                         WHERE created_at >= NOW() - %s * INTERVAL '1 day' GROUP BY 1)
-                SELECT v.day, COUNT(*) AS visitors, SUM(v.n) AS views,
-                       SUM(CASE WHEN v.n >= 2 OR v.mob OR v.src THEN 1 ELSE 0 END) AS humans,
+            f"""{days_cte}, s AS (SELECT DATE(created_at) AS day, COUNT(*) AS signups FROM users
+                                  WHERE created_at >= CURRENT_DATE - %s * INTERVAL '1 day' GROUP BY 1)
+                SELECT v.day, COUNT(*) AS visitors, SUM(v.n) AS views, COUNT(*) FILTER (WHERE v.is_real) AS humans,
+                       COUNT(*) FILTER (WHERE v.is_real AND v.fsrc LIKE 'ref:google%%') AS google,
                        COALESCE(MAX(s.signups), 0) AS signups
-                FROM v LEFT JOIN s ON s.day = v.day GROUP BY v.day ORDER BY v.day DESC""", (days, days), fetch="all") or []
-        totals["humans"] = sum(int(d["humans"] or 0) for d in daily)
-        totals["signups"] = int(self._run("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - %s * INTERVAL '1 day'",
-                                          (days,), fetch="value") or 0)
-        totals["conversion"] = round(100 * totals["signups"] / totals["humans"], 1) if totals["humans"] else 0
+                FROM v LEFT JOIN s ON s.day = v.day GROUP BY v.day ORDER BY v.day DESC""", (days - 1, days - 1), fetch="all") or []
+        humans = sum(int(d["humans"] or 0) for d in daily)
+        google = sum(int(d["google"] or 0) for d in daily)
+        totals["humans"] = humans
+        totals["per_day"] = round(humans / len(daily)) if daily else 0
+        totals["google_share"] = round(100 * google / humans) if humans else 0
+        totals["signups"] = int(self._run("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE - %s * INTERVAL '1 day'",
+                                          p, fetch="value") or 0)
+        totals["conversion"] = round(100 * totals["signups"] / humans, 1) if humans else 0
         recent = self._run(
             "SELECT ts, country_name, path, source, device FROM page_views ORDER BY ts DESC LIMIT 60",
             fetch="all") or []
-        return {"totals": totals, "countries": countries, "pages": pages, "sources": sources,
-                "devices": devices, "daily": daily, "recent": recent}
+        return {"totals": totals, "countries": countries, "pages": pages, "sources": sources, "devices": devices,
+                "daily": daily, "recent": recent, "goals": self._growth_goals(), "members": self._member_activity()}
+
+    def _growth_goals(self):
+        """Ocak sonu kontrol noktasi icin bugunku deger: son 7 tam gun ve son 30 gun."""
+        week = self._visitor_days("ts >= CURRENT_DATE - %s * INTERVAL '1 day' AND ts < CURRENT_DATE")
+        row = self._run(f"""{week} SELECT COUNT(*) FILTER (WHERE is_real) AS r,
+                                COUNT(*) FILTER (WHERE is_real AND fsrc LIKE 'ref:google%%') AS g FROM v""",
+                        (7,), fetch="one") or {}
+        real, google = int(row.get("r") or 0), int(row.get("g") or 0)
+        signups = int(self._run("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '30 days'",
+                                fetch="value") or 0)
+        return {"per_day": round(real / 7), "google_share": round(100 * google / real) if real else 0, "signups_30": signups}
+
+    def _member_activity(self):
+        row = self._run(
+            """SELECT COUNT(*) AS total,
+                      COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '1 day') AS seen_1,
+                      COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days') AS seen_7,
+                      COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '30 days') AS seen_30,
+                      COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '7 days') AS older,
+                      COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '7 days'
+                                       AND last_seen >= NOW() - INTERVAL '7 days') AS returning
+               FROM users""", fetch="one") or {}
+        out = {k: int(row.get(k) or 0) for k in ("total", "seen_1", "seen_7", "seen_30", "older", "returning")}
+        out["returning_pct"] = round(100 * out["returning"] / out["older"]) if out["older"] else 0
+        careers = self._run("SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE user_id IS NOT NULL) AS member FROM career_scores",
+                            fetch="one") or {}
+        out["careers"], out["careers_member"] = int(careers.get("n") or 0), int(careers.get("member") or 0)
+        return out
+
+    def touch_last_seen(self, user_id):
+        return bool(self._run("UPDATE users SET last_seen = NOW() WHERE id = %s", (int(user_id),)))
 
     # ==================== DAVET E-POSTALARI ====================
 
@@ -1163,6 +1216,14 @@ class Database:
         r = self._run("SELECT (SELECT COUNT(*) FROM career_scores WHERE score > %s) + 1 AS rank, "
                       "(SELECT COUNT(*) FROM career_scores) AS total", (float(score),), fetch="one")
         return (int(r["rank"]), int(r["total"])) if r else (None, None)
+
+    def career_claim(self, ids, user_id, username):
+        """Misafirken biten kariyerler hesaba gecer. Kimlikler yalnizca o tarayicida bulunur."""
+        if not ids:
+            return 0
+        rows = self._run("UPDATE career_scores SET user_id = %s, owner = %s WHERE career_id = ANY(%s) AND user_id IS NULL "
+                         "RETURNING id", (int(user_id), username, list(ids)), fetch="all") or []
+        return len(rows)
 
     def career_recent_from_ip(self, ip, seconds=20):
         return self._run("SELECT COUNT(*) FROM career_scores WHERE ip = %s AND created_at > NOW() - (%s * INTERVAL '1 second')",

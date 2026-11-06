@@ -108,6 +108,9 @@
       lb_title: "Leaderboard", lb_sub: "Top 5 careers by every player · {n} careers played", lb_empty: "No finished careers yet - be the first.",
       lb_you: "Your career ranks #{rank} of {total} on the leaderboard.", lb_top: "Top 5 all-time! Your career is #{rank} of {total}.",
       lb_seasons: "{n} seasons", lb_rings: "{n} rings", lb_ring1: "1 ring", lb_mvp: "{n} MVP", lb_as: "{n}x All-Star", lb_guest: "guest", lb_failed: "Could not save to the leaderboard.",
+      sb_rank: "#{rank} of {total} on the leaderboard",
+      claim_title: "Put your name on this career", claim_text: "It is on the leaderboard as a guest right now. Create a free account and it moves to your username, plus daily game streaks and a scratch card every day.",
+      claim_google: "Continue with Google", claim_create: "Create free account", claim_login: "Sign in", claimed: "Moved to your username: {n} career(s).",
     },
     tr: {
       head_eyebrow: "Kariyer oyunu", head_title: "NBA Kariyeri",
@@ -190,6 +193,9 @@
       lb_title: "Liderlik tablosu", lb_sub: "Tüm oyuncuların en iyi 5 kariyeri · {n} kariyer oynandı", lb_empty: "Henüz biten kariyer yok - ilk sen ol.",
       lb_you: "Kariyerin liderlik tablosunda {total} kariyer içinde {rank}. sırada.", lb_top: "Tüm zamanların ilk 5'inde! Kariyerin {total} kariyer içinde {rank}. sırada.",
       lb_seasons: "{n} sezon", lb_rings: "{n} yüzük", lb_ring1: "1 yüzük", lb_mvp: "{n} MVP", lb_as: "{n} All-Star", lb_guest: "misafir", lb_failed: "Liderlik tablosuna kaydedilemedi.",
+      sb_rank: "liderlik tablosunda {total} kariyer içinde {rank}. sıra",
+      claim_title: "Bu kariyere adını yaz", claim_text: "Liderlik tablosunda şu an misafir olarak görünüyor. Ücretsiz hesap aç, kariyer kullanıcı adına geçsin; günlük oyun serileri ve her gün bir kazı kazan da senin olsun.",
+      claim_google: "Google ile devam et", claim_create: "Ücretsiz hesap aç", claim_login: "Giriş yap", claimed: "Kullanıcı adına geçen kariyer: {n}.",
     },
   };
   function t(k, v) {
@@ -340,6 +346,38 @@
   const awardKey = (a) => (typeof a !== "string" ? a.k : /^All-NBA/.test(a) ? "allnba" : ({ "Rookie of the Year": "roy", "Most Improved Player": "mip",
     "Sixth Man of the Year": "smoy", "All-Star": "as", "MVP": "mvp", "Defensive Player of the Year": "dpoy", "Scoring title": "scoring",
     "NBA Champion": "ring", "Finals MVP": "fmvp" })[a]);
+  // Misafirin biten kariyerleri: kayit/giris sonrasi kullanici adina gecer. Kimlik
+  // yalnizca bu tarayicida durur, liderlik tablosu API'si vermez.
+  const GUEST_IDS = "hl_career_guest_ids";
+  function rememberGuestCareer() {
+    if (D.signed_in || !st || !st.id || !st.submitted) return;
+    const ids = load(GUEST_IDS, []);
+    if (!ids.includes(st.id)) save(GUEST_IDS, [st.id, ...ids].slice(0, 30));
+  }
+  async function claimGuestCareers() {
+    const ids = load(GUEST_IDS, []);
+    if (!D.signed_in || !ids.length) return;
+    try {
+      const r = await window.HL.api("/api/career/claim", { method: "POST", body: { ids } });
+      save(GUEST_IDS, []);
+      if (r.claimed) {
+        toast(t("claimed", { n: r.claimed }));
+        if (window.gtag) gtag("event", "career_claim", { n: r.claimed });
+        await loadBoard(true); paintBoard();
+      }
+    } catch (e) {}
+  }
+  function claimCard() {
+    if (D.signed_in) return "";
+    const next = encodeURIComponent("/career");
+    return `<div class="gate card" data-claim>
+      <div class="gate-title">${t("claim_title")}</div>
+      <p>${t("claim_text")}</p>
+      <div class="gate-actions">${window.HL_GOOGLE ? `<a class="btn btn-google" href="/auth/google?next=${next}" rel="nofollow">${t("claim_google")}</a>` : ""}
+        <a class="btn btn-primary" href="/register?next=${next}">${t("claim_create")}</a>
+        <a class="btn btn-ghost" href="/login?next=${next}">${t("claim_login")}</a></div>
+    </div>`;
+  }
   async function submitCareer() {
     if (st.submitted || st.submitting) return;
     st.submitting = true;
@@ -350,6 +388,7 @@
     try {
       const r = await window.HL.api("/api/career/submit", { method: "POST", body });
       st.submitted = true; st.board = { rank: r.rank, total: r.total }; persist();
+      rememberGuestCareer();
       await loadBoard(true); paintBoard();
     } catch (e) { toast(t("lb_failed"), true); }
     finally { if (st) st.submitting = false; }
@@ -825,9 +864,12 @@
           <div><span>${t("hof")}</span><b class="${H.p >= 70 ? "good" : H.p >= 30 ? "warn" : ""}">${H.p}%</b><small>${h(t("pts_place", { pts: num(x.pts), place: scoringPlace(x.pts) }))}</small></div>
         </div>
         <div class="gr-actions"><button class="btn btn-primary" id="cr-share">${t("share")}</button><button class="btn" id="cr-new">${t("new_career")}</button></div>
-      </section>` + boardHtml() + seasonRows() + logHtml();
+      </section>` + claimCard() + boardHtml() + seasonRows() + logHtml();
+    rememberGuestCareer();
     if (!st.submitted) submitCareer(); else if (!board) loadBoard().then(paintBoard);
+    if (!D.signed_in && window.gtag) gtag("event", "gate_view", { gate: "career-end" });
     app.onclick = async (e) => {
+      if (e.target.closest("[data-claim] a") && window.gtag) gtag("event", "gate_click", { gate: "career-end" });
       if (e.target.closest("#cr-new")) { st = null; save(KEY, null); return render(); }
       if (e.target.closest("#cr-share")) return share(x, H, earned);
     };
@@ -837,6 +879,7 @@
     const a = st.awards;
     const bits = [t("sb_seasons", { n: x.seasons }), t("sb_ppg", { v: x.ppg.toFixed(1) })];
     ["ring", "mvp", "fmvp", "as", "dpoy"].forEach((k) => { if (a[k]) bits.push(t("sb_" + k, { n: a[k] })); });
+    if (st.board && st.board.rank) bits.push(t("sb_rank", { rank: num(st.board.rank), total: num(st.board.total) }));
     const text = t("share_text", { name: st.name, ord: ord(st.pick), abbr: T(st, st.draftedBy).abbr, bits: bits.join(", "), m: money(earned), hof: H.p,
                                    url: `${location.origin}/career?ref=career-share${window.HL.inv()}` });
     if (window.gtag) gtag("event", "career_share", { hof: H.p, lang: LANG });
@@ -886,4 +929,5 @@
   const baseRender = render;
   render = function () { app.onclick = null; baseRender(); };      // eslint-disable-line no-func-assign
   render();
+  claimGuestCareers();
 })();

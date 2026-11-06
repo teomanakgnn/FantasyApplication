@@ -18,7 +18,11 @@
   <a class="btn btn-ghost hide-mobile" href="/nba/scores">All scores &amp; game pages &rarr;</a>
 </div>
 
-{% if user %}<section class="card sc-box" id="scratch-card" hidden></section>{% endif %}
+{% if user %}<section class="card sc-box" id="scratch-card" hidden></section>
+{% else %}<section class="card sc-box sc-teaser">
+  <div><b>Daily scratch card</b><span>Members scratch a free card every day, then hunt for the hints it hides in the daily games.</span></div>
+  <a class="btn btn-primary btn-sm" href="/register?next=%2F">Get my card</a>
+</section>{% endif %}
 
 {% if offseason_note %}<div class="note note-info" style="margin-bottom:16px">{{ offseason_note }}</div>{% endif %}
 

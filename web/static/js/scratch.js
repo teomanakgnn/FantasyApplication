@@ -16,7 +16,21 @@
     box.innerHTML = `<div class="sc-status ${done ? "done" : ""}">
       <div><b>${done ? "Every hint found today" : `${c.n} ${word(c.n)} hidden in today's games`}</b>
         <span>${done ? "Come back tomorrow for a new scratch card." : `Found ${c.found} of ${c.n}. Each game shows "no hint here" or your hint - try them all.`}</span></div>
-      ${done ? "" : links()}</div>`;
+      ${done ? "" : links()}
+      <button type="button" class="btn btn-sm sc-share" id="sc-share">Challenge a friend</button></div>`;
+    box.onclick = (e) => { if (e.target.closest("#sc-share")) share(c); };
+  }
+
+  async function share(c) {
+    const text = `HoopLife daily scratch card: ${c.n} ${word(c.n)} hidden in today's NBA games, ${c.found} found so far. Can you find yours? ${location.origin}/?ref=scratch-share${window.HL.inv()}`;
+    if (window.gtag) gtag("event", "scratch_share", { hints: c.n, found: c.found });
+    try {
+      if (navigator.share) return await navigator.share({ text });
+      await navigator.clipboard.writeText(text);
+      toast("Copied - send it to a friend.");
+    } catch (err) {
+      if (err && err.name !== "AbortError") window.prompt("Copy:", text);
+    }
   }
 
   function card(c) {

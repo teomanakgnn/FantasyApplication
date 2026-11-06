@@ -436,6 +436,43 @@ def test_career_submit_api(monkeypatch):
     assert c.post("/api/career/submit", json={"id": "x"}).status_code == 400
     lb = c.get("/api/career/leaderboard").json()
     assert lb["top"][0]["name"] == "Test Guy"
+    # Sonradan elenen ad: eski kayit da tabloda gizlenir
+    store[0]["name"] = "fuck you"
+    assert c.get("/api/career/leaderboard").json()["top"][0]["name"] == "Anonymous Player"
+    # Sahiplenme giris ister
+    assert c.post("/api/career/claim", json={"ids": ["zzzzzzzzzzzzzzzzzzzz"]}).status_code == 401
+
+
+def test_admin_visitors_page_renders(monkeypatch):
+    from datetime import datetime
+    from fastapi.testclient import TestClient
+    from services.database import db
+    from web.app import app
+    from web.routes import outreach
+    monkeypatch.setattr(outreach, "login_required", lambda request: None)
+    monkeypatch.setattr(outreach, "_admin", lambda request: True)
+    day = datetime(2026, 11, 5)
+    monkeypatch.setattr(db, "visitor_report", lambda days: {
+        "totals": {"views": 900, "visitors": 500, "humans": 56, "per_day": 8, "google_share": 20, "signups": 2, "conversion": 3.6},
+        "countries": [{"name": "Turkey", "iso": "TR", "visitors": 20, "views": 80}], "pages": [{"path": "/", "visitors": 9, "views": 12}],
+        "sources": [{"source": "ref:google.com", "visitors": 11}], "devices": [{"device": "mobile", "visitors": 30}],
+        "daily": [{"day": day, "visitors": 300, "views": 400, "humans": 56, "google": 11, "signups": 1}],
+        "recent": [{"ts": day, "country_name": "Turkey", "path": "/", "source": "", "device": "mobile"}],
+        "goals": {"per_day": 56, "google_share": 20, "signups_30": 36},
+        "members": {"total": 53, "seen_1": 4, "seen_7": 12, "seen_30": 20, "older": 46, "returning": 9, "returning_pct": 20, "careers": 365, "careers_member": 91}})
+    r = TestClient(app).get("/admin/visitors?days=7")
+    assert r.status_code == 200 and "End of January checkpoint" in r.text and "Members seen" in r.text
+
+
+def test_career_name_filter():
+    from services.career_board import ANON_NAME, clean_ids, clean_name, is_offensive
+    for bad in ("BABA SOKTU ÇIKARDI", "f.u.c.k", "FUUUCK off", "s1kt1r", "Siktir git", "orospu", "amk", "Sh1t Head"):
+        assert is_offensive(bad), bad
+    for ok in ("Marlon brown", "King Johnson", "Jeki", "bing", "Jack Sikma", "Niger Gibson", "Baba Yaga", "Test Guy", "Çağrı Şahin"):
+        assert not is_offensive(ok), ok
+    assert clean_name("amk oyuncu") == ANON_NAME and clean_name("Jack Sikma") == "Jack Sikma"
+    assert clean_ids(["abcdefghij1234567890", "BAD", "x", 5]) == ["abcdefghij1234567890"]
+    assert clean_ids("abc") == []
 
 
 def test_espn_week_stats_use_matchup_scores():

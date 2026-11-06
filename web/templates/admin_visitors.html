@@ -5,7 +5,7 @@
 <div class="page-head">
   <div class="eyebrow">Admin</div>
   <h1>Visitors</h1>
-  <p>Every page view counted on the server - you, bots and crawlers are left out. A visitor is one browser per day; no IP addresses are stored.</p>
+  <p>Real visitors are an estimate: data-center countries, desktop crawling from Europe, 40+ page or 6+ hour desktop sessions and single-page visits with no source are left out. Your own signed-in browsers are never counted. A visitor is one browser per day; no IP addresses are stored.</p>
 </div>
 
 <nav class="seg" style="margin-bottom:14px">
@@ -14,20 +14,31 @@
   {% endfor %}
 </nav>
 
+<section class="card" style="margin-bottom:12px">
+  <div class="card-title">End of January checkpoint <span class="dim small">· right now</span></div>
+  <table class="table small"><tbody>
+    {% set g = r.goals %}
+    <tr><td style="text-align:left">Real visitors per day <span class="dim">(last 7 full days)</span></td><td><b class="{{ 'good' if g.per_day >= 150 else 'warn' }}">{{ g.per_day }}</b></td><td class="dim">target 150+ · warning at 50</td></tr>
+    <tr><td style="text-align:left">Google share of real visitors <span class="dim">(last 7 full days)</span></td><td><b class="{{ 'good' if g.google_share >= 20 else 'warn' }}">{{ g.google_share }}%</b></td><td class="dim">target 20%+ · warning under 5%</td></tr>
+    <tr><td style="text-align:left">New members <span class="dim">(last 30 days)</span></td><td><b class="{{ 'good' if g.signups_30 >= 100 else 'warn' }}">{{ g.signups_30 }}</b></td><td class="dim">target 100+</td></tr>
+    <tr><td style="text-align:left">Older members back this week <span class="dim">({{ r.members.returning }} of {{ r.members.older }})</span></td><td><b class="{{ 'good' if r.members.returning_pct >= 50 else 'warn' }}">{{ r.members.returning_pct }}%</b></td><td class="dim">April target 50%</td></tr>
+  </tbody></table>
+</section>
+
 <div class="grid grid-3" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px">
-  <div class="kpi card"><div class="kpi-label">Likely real visitors</div><div class="kpi-value">{{ r.totals.humans or 0 }}</div><div class="tiny dim">2+ pages, mobile or from a link</div></div>
+  <div class="kpi card"><div class="kpi-label">Real visitors</div><div class="kpi-value">{{ r.totals.humans or 0 }}</div><div class="tiny dim">{{ r.totals.per_day }} per day · {{ r.totals.google_share }}% Google</div></div>
   <div class="kpi card"><div class="kpi-label">New members</div><div class="kpi-value">{{ r.totals.signups or 0 }}</div></div>
-  <div class="kpi card"><div class="kpi-label">Sign-up rate</div><div class="kpi-value">{{ r.totals.conversion }}%</div><div class="tiny dim">of likely real visitors</div></div>
+  <div class="kpi card"><div class="kpi-label">Sign-up rate</div><div class="kpi-value">{{ r.totals.conversion }}%</div><div class="tiny dim">of real visitors</div></div>
 </div>
 <div class="grid grid-3" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px">
-  <div class="kpi card"><div class="kpi-label">All visitors (incl. crawlers)</div><div class="kpi-value">{{ r.totals.visitors or 0 }}</div></div>
-  <div class="kpi card"><div class="kpi-label">Page views</div><div class="kpi-value">{{ r.totals.views or 0 }}</div></div>
-  <div class="kpi card"><div class="kpi-label">Countries</div><div class="kpi-value">{{ r.countries|length }}</div></div>
+  <div class="kpi card"><div class="kpi-label">Members seen</div><div class="kpi-value">{{ r.members.seen_7 }}</div><div class="tiny dim">{{ r.members.seen_1 }} today · {{ r.members.seen_30 }} in 30 days · {{ r.members.total }} total</div></div>
+  <div class="kpi card"><div class="kpi-label">Careers on a member's name</div><div class="kpi-value">{{ r.members.careers_member }}</div><div class="tiny dim">of {{ r.members.careers }} finished</div></div>
+  <div class="kpi card"><div class="kpi-label">All traffic (incl. crawlers)</div><div class="kpi-value">{{ r.totals.visitors or 0 }}</div><div class="tiny dim">{{ r.totals.views or 0 }} page views · not a growth number</div></div>
 </div>
 
 <div class="grid grid-2" style="align-items:start">
   <section class="card">
-    <div class="card-title">Countries</div>
+    <div class="card-title">Countries <span class="dim small">· real visitors</span></div>
     <table class="table small"><tbody>
       {% for c in r.countries %}<tr>
         <td style="text-align:left;white-space:normal">{{ c.flag }} {{ c.name }}
@@ -40,14 +51,14 @@
 
   <div>
     <section class="card">
-      <div class="card-title">Where they came from</div>
+      <div class="card-title">Where they came from <span class="dim small">· real visitors</span></div>
       <table class="table small"><tbody>
         {% for s in r.sources %}<tr><td style="text-align:left;white-space:normal;word-break:break-all">{{ s.source }}</td><td><b>{{ s.visitors }}</b></td></tr>
         {% else %}<tr><td class="muted" style="text-align:left">-</td></tr>{% endfor %}
       </tbody></table>
     </section>
     <section class="card">
-      <div class="card-title">Pages</div>
+      <div class="card-title">Pages <span class="dim small">· real visitors</span></div>
       <table class="table small"><tbody>
         {% for p in r.pages %}<tr><td style="text-align:left">{{ p.path }}</td><td><b>{{ p.visitors }}</b></td><td class="dim">{{ p.views }}</td></tr>
         {% else %}<tr><td class="muted" style="text-align:left">-</td></tr>{% endfor %}
@@ -57,14 +68,14 @@
       <div class="card-title">Devices and days</div>
       <p class="small">{% for d in r.devices %}{{ d.device }}: <b>{{ d.visitors }}</b>{{ ' · ' if not loop.last }}{% endfor %}</p>
       <table class="table small"><tbody>
-        {% for d in r.daily %}<tr><td style="text-align:left">{{ d.day.strftime('%a %d %b') }}</td><td><b>{{ d.humans }}</b> real <span class="dim">/ {{ d.visitors }}</span></td><td>{% if d.signups %}<b class="good">+{{ d.signups }}</b> members{% else %}<span class="dim">0 members</span>{% endif %}</td><td class="dim">{{ d.views }} views</td></tr>{% endfor %}
+        {% for d in r.daily %}<tr><td style="text-align:left">{{ d.day.strftime('%a %d %b') }}</td><td><b>{{ d.humans }}</b> real <span class="dim">/ {{ d.visitors }} all</span></td><td class="dim">{{ d.google }} Google</td><td>{% if d.signups %}<b class="good">+{{ d.signups }}</b> members{% else %}<span class="dim">0 members</span>{% endif %}</td></tr>{% endfor %}
       </tbody></table>
     </section>
   </div>
 </div>
 
 <section class="card" style="margin-top:12px">
-  <div class="card-title">Latest page views</div>
+  <div class="card-title">Latest page views <span class="dim small">· unfiltered, crawlers included</span></div>
   <div class="table-wrap" style="max-height:420px"><table class="table small"><tbody>
     {% for v in r.recent %}<tr>
       <td class="dim" style="text-align:left">{{ v.ts.strftime('%d %b %H:%M') }} UTC</td>

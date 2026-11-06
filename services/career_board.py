@@ -26,10 +26,50 @@ def hof_pct(score):
     return round(100 / (1 + math.exp(-(score - 36) / 6.5)))
 
 
+# Herkese acik tabloda kufur / nefret soylemi olmasin. Kayit silinmez, ad gizlenir.
+ANON_NAME = "Anonymous Player"
+_FOLD = str.maketrans({"ı": "i", "İ": "i", "ş": "s", "Ş": "s", "ğ": "g", "Ğ": "g", "ü": "u", "Ü": "u", "ö": "o", "Ö": "o",
+                       "ç": "c", "Ç": "c", "â": "a", "î": "i", "û": "u", "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
+                       "7": "t", "$": "s", "@": "a"})
+# Bitisik yazilsa da yakalanir (f.u.c.k, fuckyou)
+_BAD_ANYWHERE = ("fuck", "bitch", "nigger", "nigga", "faggot", "dickhead", "asshole", "pussy", "pusy", "orospu", "orosbu",
+                 "pezevenk", "amcik", "yarrak", "yarak", "siktir", "sikerim", "sikeyim", "kahpe", "gavat", "gotveren")
+# Yalnizca tam kelime: baska adlarin icinde gecebilir (Sikma, Niger, Scunthorpe)
+_BAD_WORDS = {"sik", "siki", "soktu", "amk", "aq", "pic", "ibne", "fuk", "shit", "shity", "bulshit", "whore", "slut", "cunt",
+              "cock", "fag", "rape", "rapist", "nazi", "hitler", "retard", "anani", "ananin", "ananizi"}
+_BAD_PREFIXES = ("sikt", "sikis", "siker", "sikim", "sikey", "sokt", "sokar", "sokay", "sokuy", "ibnel")
+
+
+def is_offensive(raw):
+    text = str(raw or "").translate(_FOLD).lower()
+    joined = re.sub(r"[\W_]", "", text)
+    squeezed = re.sub(r"(.)\1+", r"\1", joined)
+    if any(w in joined or w in squeezed for w in _BAD_ANYWHERE):
+        return True
+    for token in re.findall(r"[^\W\d_]+", text):
+        token = re.sub(r"(.)\1+", r"\1", token)
+        if token in _BAD_WORDS or token.startswith(_BAD_PREFIXES):
+            return True
+    return False
+
+
+def public_name(raw):
+    """Tabloda gosterilecek ad; eski kayitlar da burada elenir."""
+    return ANON_NAME if is_offensive(raw) else raw
+
+
+def clean_ids(raw):
+    """Istemciden gelen kariyer kimlikleri (sahiplenme icin)."""
+    ids = raw if isinstance(raw, list) else []
+    return [str(x) for x in ids[:30] if re.fullmatch(r"[a-z0-9]{10,40}", str(x))]
+
+
 def clean_name(raw):
     name = re.sub(r"[^\w .'\-]", "", str(raw or ""), flags=re.UNICODE)
     name = re.sub(r"\s+", " ", name).strip()[:24]
-    return name if len(name) >= 3 else None
+    if len(name) < 3:
+        return None
+    return public_name(name)
 
 
 def _num(x, lo, hi):
