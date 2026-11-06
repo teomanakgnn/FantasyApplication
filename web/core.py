@@ -56,6 +56,7 @@ NAV = [
     ("pyramid", "/pyramid", "Pyramid"),
     ("grid", "/grid", "3x3 Grid"),
     ("career", "/career", "NBA Career"),
+    ("auction", "/auction", "NBA Auction"),
     ("tiers", "/tier-list", "Tier List"),
     ("bracket", "/bracket", "Playoff Bracket"),
     None,

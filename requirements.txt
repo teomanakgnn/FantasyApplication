@@ -28,3 +28,4 @@ bcrypt>=4.1,<6
 pillow>=10.4,<13
 tzdata>=2024.1
 maxminddb>=2.5,<4
+anthropic==2.6.0

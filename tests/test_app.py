@@ -518,3 +518,103 @@ def test_scratch_card_hides_games_until_found(monkeypatch):
     assert r["state"] == "hint" and r["found"] == 1
     assert scratch.lookup(db, 7, games[0])["found"] == 1          # ayni oyun iki kez sayilmaz
     assert scratch.card(db, 7)["n"] == len(games)                 # ayni gun ayni kart
+
+
+def test_auction_rules():
+    """Teklif sinirlari, satis, salma, bos kadro rezervi."""
+    from services import auction as A
+    g = A.new_game("t", opener=0)
+    pid = A.current(g)
+    assert g["turn"] == 0 and A.max_bid(g, 0) == 16        # 20 - 4 bos yer rezervi
+    assert not A.bid(g, 1, 1)[0]                           # sira onda degil
+    assert not A.bid(g, 0, 17)[0] and not A.bid(g, 0, 0)[0]
+    assert A.bid(g, 0, 3)[0] and g["turn"] == 1
+    assert not A.bid(g, 1, 3)[0]                           # gecmek zorunda
+    assert A.pass_turn(g, 1)[0]                            # rakibe gider
+    assert g["seats"][0]["roster"] == [{"id": pid, "price": 3}] and g["seats"][0]["money"] == 17
+    # Yeni oyuncu: acilis sirasi degisti; ikisi de salarsa satilmaz
+    i = g["i"]
+    assert g["turn"] == 1 and A.pass_turn(g, 1)[0] and g["i"] == i
+    assert A.pass_turn(g, 0)[0] and g["i"] == i + 1 and not g["seats"][1]["roster"]
+    # Rakip gecemiyorsa aninda satis
+    g = A.new_game("u", opener=0)
+    g["seats"][1]["money"] = 5
+    assert A.max_bid(g, 1) == 1 and A.bid(g, 0, 1)[0] and len(g["seats"][0]["roster"]) == 1
+
+
+def test_auction_lone_side_cannot_wait_forever():
+    """Rakip dolunca: 1 dolar sinir, en fazla 3 salma, sonra otomatik alim."""
+    from services import auction as A
+    g = A.new_game("v", opener=0)
+    ids = g["lots"][-5:]
+    g["seats"][1]["roster"] = [{"id": x, "price": 1} for x in ids]
+    g["turn"] = 0
+    assert A.lone(g, 0) and not A.bid(g, 0, 2)[0]
+    for _ in range(3):
+        assert g["turn"] == 0 and A.pass_turn(g, 0)[0]
+    assert len(g["seats"][0]["roster"]) == 5 and g["over"]   # kalan yerler 1'er dolara doldu
+
+
+def test_auction_full_games_and_hidden_ratings():
+    """Bot-bot oyunlari biter, kadrolar dolar; istemci kartinda puan yok; kazanan toplama gore."""
+    import random
+    from services import auction as A
+    for k in range(40):
+        rng = random.Random(k)
+        g = A.new_game(k, opener=k % 2)
+        for _ in range(2000):
+            if g["over"]:
+                break
+            m, amt = A.bot_move(g, g["turn"], rng)
+            ok, err = A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
+            assert ok, err
+        assert g["over"] and all(len(s["roster"]) == 5 and s["money"] >= 0 for s in g["seats"])
+        r = A.result(g)
+        a, b = r["teams"]
+        assert 0 <= a["total"] <= 100 and 0 <= b["total"] <= 100
+        assert r["winner"] == (None if (a["total"], a["money_left"]) == (b["total"], b["money_left"]) else
+                               0 if (a["total"], a["money_left"]) > (b["total"], b["money_left"]) else 1)
+    c = A.card(A._load()[0]["id"])
+    assert not {"ovr", "sco", "ply", "rbd", "dfn", "sht", "rim", "ts"} & set(c)
+    # Ayni mevkiden bes yildiz, dengeli beslinin gerisinde kalir
+    ids = {p["name"]: p["id"] for p in A._load()}
+    pick = lambda L: [{"id": ids[n], "price": 4} for n in L]  # noqa: E731
+    five_pg = A.score_team(pick(["Stephen Curry", "Magic Johnson", "Oscar Robertson", "Chris Paul", "Russell Westbrook"]))
+    real = A.score_team(pick(["Stephen Curry", "Michael Jordan", "LeBron James", "Tim Duncan", "Shaquille O'Neal"]))
+    assert real["total"] > five_pg["total"]
+
+
+def test_auction_judge_applies_and_falls_back(monkeypatch):
+    """Hakem yaniti sinirlara kirpilir ve kazanani belirler; anahtar yoksa cagri yok."""
+    import asyncio
+    import random
+    from services import auction as A, auction_judge as J
+    rng = random.Random(1)
+    g = A.new_game(1)
+    while not g["over"]:
+        m, amt = A.bot_move(g, g["turn"], rng)
+        A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
+    base = A.result(g)
+    low = {k: 0 for k, _, _ in A.CATEGORIES}
+    high = {k: 999 for k, _, _ in A.CATEGORIES}
+    out = J._apply(base, {"team_a": {**low, "note": "weak"}, "team_b": {**high, "note": "great"}, "verdict": "Team B rolls."})
+    assert out["winner"] == 1 and out["by"] == "ai" and out["teams"][1]["cats"][0]["v"] == 45
+    monkeypatch.setattr(J.config, "ANTHROPIC_API_KEY", "")
+    assert asyncio.run(J.judge(g, base)) is None
+
+
+def test_auction_pages_and_solo_room():
+    from fastapi.testclient import TestClient
+    from web.app import app
+    c = TestClient(app)
+    assert c.get("/auction").status_code == 200
+    r = c.post("/api/auction/room", json={"solo": True}).json()
+    page = c.get(r["url"])
+    assert page.status_code == 200 and '"exists": true' in page.text
+    with c.websocket_connect(f"/ws/auction/{r['code']}") as ws:
+        ws.send_json({"t": "hello", "cid": "testclient1", "name": "Tester"})
+        assert ws.receive_json()["t"] == "chatlog"
+        st = ws.receive_json()
+        assert st["t"] == "state" and st["phase"] == "live" and st["you"] == 0 and st["teams"][1]["name"] == "HoopBot"
+        assert "ovr" not in st["lot"] and st["teams"][0]["money"] == 20
+

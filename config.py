@@ -60,6 +60,10 @@ SITE_URL = get("SITE_URL", "https://app.hooplifenba.com")
 GOOGLE_ANALYTICS_ID = get("GOOGLE_ANALYTICS_ID")
 # "Buy me a coffee" dugmesi (bos ise gizli): ornek https://buymeacoffee.com/kullanici
 BUYMEACOFFEE_URL = get("BUYMEACOFFEE_URL") or ""
+# NBA Auction yapay zeka hakemi: anahtar yoksa oyun kendi puanlama motorunu kullanir
+ANTHROPIC_API_KEY = get("ANTHROPIC_API_KEY") or ""
+AUCTION_AI_MODEL = get("AUCTION_AI_MODEL") or "claude-opus-5-5"
+AUCTION_AI_DAILY = int(get("AUCTION_AI_DAILY") or 200)
 # Google Ads: etiket (AW-...) ve istege bagli kayit donusumu etiketi
 # (Ads > Donusumler > etiket kurulumu > "send_to" degerinin / sonrasi).
 GOOGLE_ADS_ID = get("GOOGLE_ADS_ID")

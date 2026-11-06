@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{% if room %}NBA Auction - Live Game{% else %}NBA Auction - Bid on Players, Build a Five{% endif %} · HoopLife NBA{% endblock %}
+{% block description %}Two players, $20 each. NBA players from every era come up one at a time: raise or let them go. Build a five, then the judge scores your talent and fit. Play a friend live or take on the bot.{% endblock %}
+{% block robots %}{% if room %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="au-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Live game</div>
+    <h1>NBA Auction</h1>
+    <p>$20 and five open spots. Players from every era come up one at a time: raise or let them go. Ratings stay hidden until the end, when the judge scores both rosters on talent and fit.</p>
+  </div>
+  <div id="au-app"></div>
+  <script id="au-data" type="application/json">{{ payload|safe }}</script>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/share_card.js?v={{ asset_version }}"></script><script src="/static/js/auction.js?v={{ asset_version }}"></script>{% endblock %}

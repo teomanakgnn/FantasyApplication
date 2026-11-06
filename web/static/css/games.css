@@ -556,3 +556,94 @@
 .cr-lb-main small { font-size: .74rem; color: var(--muted); }
 .cr-lb-hof { display: flex; flex-direction: column; align-items: flex-end; font-weight: 900; font-size: 1.05rem; color: var(--good); }
 .cr-lb-hof small { font-size: .62rem; color: var(--muted); font-weight: 800; }
+
+
+/* ==================== NBA Auction ==================== */
+.au-wrap { width: 100%; min-width: 0; }
+.au-lobby { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.au-how ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: .92rem; line-height: 1.45; }
+.au-start { display: flex; flex-direction: column; gap: 10px; }
+.au-join { max-width: 460px; }
+.au-game { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.au-game > div { min-width: 0; }
+.au-side { display: flex; flex-direction: column; gap: 12px; }
+.au-side:empty, #au-log-slot:empty { display: none; }
+.au-lot-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.au-clock { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.au-clock i { display: block; height: 100%; width: 100%; background: var(--accent); transition: width .2s linear; }
+.au-clock i.low { background: var(--bad); }
+.au-lot-main { display: flex; gap: 14px; align-items: center; }
+.au-lot-info { flex: 1; min-width: 0; }
+.au-lot-info h2 { margin: 0 0 2px; font-size: 1.5rem; line-height: 1.15; }
+.au-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.au-stats span { padding: 3px 8px; border-radius: 8px; background: var(--surface-2); font-size: .82rem; font-weight: 700; white-space: nowrap; }
+.au-face { position: relative; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: var(--surface-2); }
+.au-face em { font-style: normal; font-weight: 800; font-size: .78rem; color: var(--muted); }
+.au-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; z-index: 1; }
+.au-face.big { width: 96px; height: 96px; }
+.au-face.big em { font-size: 1.6rem; }
+.au-bid { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); text-align: center; }
+.au-bid small { font-size: .72rem; color: var(--muted); max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-bid strong { font-size: 1.9rem; line-height: 1.1; font-weight: 900; }
+.au-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.au-ctl .btn { min-height: 44px; font-weight: 800; }
+.au-pass { margin-left: auto; }
+.au-ctl + .tiny { margin-top: 6px; }
+.au-wait { margin: 14px 0 0; min-height: 44px; display: flex; align-items: center; }
+.au-lone { margin: 12px 0 0; }
+.au-next { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.au-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.au-teams .au-team, .au-lobby .card { margin: 0; min-width: 0; }
+.au-team.active { border-color: var(--accent); }
+.au-team-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.au-team-h span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-team-h strong { font-size: 1.25rem; font-weight: 900; color: var(--good); }
+.au-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.au-slots li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: .86rem; }
+.au-slots li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.au-slots li b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-slots small { color: var(--muted); font-size: .74rem; }
+.au-slots li > i { font-style: normal; font-weight: 800; }
+.au-slots li.open { opacity: .5; }
+.au-log { font-size: .85rem; display: flex; flex-direction: column; gap: 4px; }
+.au-wait-box, .au-judging { text-align: center; }
+.au-wait-box .ezr-row { justify-content: center; }
+.au-wait-box .input { flex: 1 1 220px; min-width: 0; }
+.au-judging { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 34px 16px; }
+.au-winner { font-size: 1.8rem; font-weight: 900; line-height: 1.15; }
+.au-verdict { margin: 8px 0 4px; line-height: 1.5; }
+.au-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.au-score { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.au-score.won { border-color: var(--good); }
+.au-score p { margin: 6px 0 0; }
+.au-score-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.au-score-h b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-score-h strong { font-size: 1.6rem; font-weight: 900; }
+.au-final { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: .86rem; }
+.au-final li { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.au-final i { flex: none; width: 24px; font-style: normal; font-weight: 800; color: var(--muted); font-size: .74rem; }
+.au-final span { flex: 1; min-width: 0; }
+.au-final em { font-style: normal; font-weight: 800; }
+.au-final small { color: var(--muted); }
+.au-final li > small { flex: none; min-width: 22px; text-align: right; }
+.au-cats { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; }
+.au-cats > div { display: grid; grid-template-columns: 86px minmax(0, 1fr) 46px; gap: 6px; align-items: center; }
+.au-cats b { text-align: right; }
+.au-cats small { color: var(--muted); font-weight: 500; }
+.au-meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.au-meter i { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 860px) {
+  .au-game, .au-lobby { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .au-lot-main { flex-wrap: wrap; }
+  .au-face.big { width: 68px; height: 68px; }
+  .au-lot-info { flex: 1 1 calc(100% - 170px); }
+  .au-lot-info h2 { font-size: 1.2rem; }
+  .au-ctl .btn { flex: 1 1 22%; padding-left: 6px; padding-right: 6px; }
+  .au-pass { margin-left: 0; flex-basis: 100% !important; }
+  .au-teams { gap: 8px; }
+  .au-team { padding: 10px; }
+  .au-slots .au-face { display: none; }
+  .au-scores { grid-template-columns: minmax(0, 1fr); }
+}
