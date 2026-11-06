@@ -24,7 +24,7 @@
         <ol>
           <li><b>Open, raise or pass.</b> Whoever opens a player must bid at least $1. Then you take turns: raise, or pass and your opponent buys at their bid. Every player gets sold.</li>
           <li><b>Budget for five.</b> You start with $${D.money}, and every open spot must keep at least $1.</li>
-          <li><b>Build a team, not a highlight reel.</b> Five point guards lose to a real lineup: talent, positions, shooting, defense and roles all count.</li>
+          <li><b>Pick any five.</b> Positions do not matter. Talent counts most, then defense, shooting, playmaking and rebounding.</li>
           <li><b>Hidden ratings.</b> Only names and career numbers are shown. Trust your own eyes.</li>
         </ol>
       </section>
@@ -166,7 +166,7 @@
     const team = (t, i) => `<div class="au-score ${R.winner === i ? "won" : ""}">
       <div class="au-score-h"><b>${h(S.teams[i].name)}</b><strong>${t.total.toFixed(1)}</strong></div>
       ${t.note ? `<p class="small muted">${h(t.note)}</p>` : ""}
-      <ul class="au-final">${t.lineup.map((x) => `<li><i>${x.slot}</i><span>${h(x.name)}${x.off ? ' <small class="warn">out of position</small>' : ""}</span><em>${x.ovr}</em>${x.price ? `<small>$${x.price}</small>` : ""}</li>`).join("")}</ul>
+      <ul class="au-final">${t.lineup.map((x) => `<li><i>${x.slot}</i><span>${h(x.name)}</span><em>${x.ovr}</em>${x.price ? `<small>$${x.price}</small>` : ""}</li>`).join("")}</ul>
       <div class="au-cats">${t.cats.map((c) => `<div><span>${c.label}</span><span class="au-meter"><i style="width:${Math.round(100 * c.v / c.max)}%"></i></span><b>${c.v.toFixed(1)}<small>/${c.max}</small></b></div>`).join("")}
         ${t.chemistry ? `<div><span>Real teammates</span><span class="au-meter"><i style="width:${Math.round(100 * t.chemistry / 3)}%"></i></span><b>+${t.chemistry}</b></div>` : ""}</div>
       ${t.mates.length ? `<p class="tiny dim">Played together: ${t.mates.slice(0, 3).map((m) => h(m.join(" and "))).join("; ")}</p>` : ""}

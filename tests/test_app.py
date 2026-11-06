@@ -575,12 +575,13 @@ def test_auction_full_games_and_hidden_ratings():
                                0 if (a["total"], a["money_left"]) > (b["total"], b["money_left"]) else 1)
     c = A.card(A._load()[0]["id"])
     assert not {"ovr", "sco", "ply", "rbd", "dfn", "sht", "rim", "ts"} & set(c)
-    # Ayni mevkiden bes yildiz, dengeli beslinin gerisinde kalir
+    # Mevki puana girmez: ayni mevkiden besli cezalanmaz, yetenek belirleyici
     ids = {p["name"]: p["id"] for p in A._load()}
     pick = lambda L: [{"id": ids[n], "price": 4} for n in L]  # noqa: E731
     five_pg = A.score_team(pick(["Stephen Curry", "Magic Johnson", "Oscar Robertson", "Chris Paul", "Russell Westbrook"]))
-    real = A.score_team(pick(["Stephen Curry", "Michael Jordan", "LeBron James", "Tim Duncan", "Shaquille O'Neal"]))
-    assert real["total"] > five_pg["total"]
+    role = A.score_team(pick(["Mike Conley", "Klay Thompson", "Draymond Green", "Rudy Gobert", "Aaron Gordon"]))
+    assert five_pg["total"] > role["total"]
+    assert not {"fit", "balance"} & {c["k"] for c in five_pg["cats"]} and sum(c["max"] for c in five_pg["cats"]) == 100
 
 
 def test_auction_judge_applies_and_falls_back(monkeypatch):
@@ -597,7 +598,10 @@ def test_auction_judge_applies_and_falls_back(monkeypatch):
     low = {k: 0 for k, _, _ in A.CATEGORIES}
     high = {k: 999 for k, _, _ in A.CATEGORIES}
     out = J._apply(base, {"team_a": {**low, "note": "weak"}, "team_b": {**high, "note": "great"}, "verdict": "Team B rolls."})
-    assert out["winner"] == 1 and out["by"] == "ai" and out["teams"][1]["cats"][0]["v"] == 45
+    assert out["winner"] == 1 and out["by"] == "ai" and out["teams"][1]["cats"][0]["v"] == 55
+    # Yanit semasi kategorilerle ayni olmali: yoksa gercek API istegi reddeder ve hakem sessizce kapanir
+    keys = {k for k, _, _ in A.CATEGORIES} | {"note"}
+    assert set(J._TEAM["required"]) == keys and set(J._TEAM["properties"]) == keys
     monkeypatch.setattr(J.config, "ANTHROPIC_API_KEY", "")
     assert asyncio.run(J.judge(g, base)) is None
 

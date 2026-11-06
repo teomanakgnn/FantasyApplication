@@ -19,20 +19,20 @@ TIMEOUT = 30
 SYSTEM = """You judge a fantasy basketball auction game. Two players each bought a five-man roster from a pool of NBA players of all eras. Decide which team is better if each player performed at his prime and they played a seven-game series.
 
 Score both teams in these categories, using each category's full range:
-- quality (0-45): overall talent, with stars counting most
-- fit (0-15): can these five actually share a floor, positions and roles
-- spacing (0-10): shooting and floor spacing
-- playmaking (0-10): shot creation and passing
-- defense (0-12): perimeter and rim defense
+- quality (0-55): overall talent, with stars counting most
+- spacing (0-13): shooting and floor spacing
+- playmaking (0-13): shot creation and passing
+- defense (0-15): perimeter and rim defense
 - rebounding (0-4)
-- balance (0-4): enough touches to go round, no glaring role gaps
 
-The analytics baseline in the request comes from a formula that knows nothing about how players actually fit together. Start from it and move scores where your basketball judgment disagrees, for example a non-shooter who still thrives inside a lineup, or two ball-dominant stars who overlap. Keep the scoring fair and consistent across both teams.
+Do not score positional fit, position duplicates or role overlap: a lineup of five players from the same position is allowed and is not penalized for that.
+
+The analytics baseline in the request comes from a formula. Start from it and move scores where your basketball judgment disagrees, for example a shooter whose era-limited three-point numbers undersell him. Keep the scoring fair and consistent across both teams.
 
 Each team's note is one sentence on its defining strength or flaw. The verdict is two or three sentences explaining who wins and why, naming specific players. Refer to the teams only as "Team A" and "Team B". Write in plain English for a basketball fan, with no markdown."""
 
 _TEAM = {"type": "object", "additionalProperties": False,
-         "required": ["quality", "fit", "spacing", "playmaking", "defense", "rebounding", "balance", "note"],
+         "required": [*(k for k, _, _ in auction.CATEGORIES), "note"],
          "properties": {**{k: {"type": "number"} for k, _, _ in auction.CATEGORIES}, "note": {"type": "string"}}}
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["team_a", "team_b", "verdict"],
           "properties": {"team_a": _TEAM, "team_b": _TEAM, "verdict": {"type": "string"}}}
@@ -60,10 +60,10 @@ def _team_brief(label, seat, team):
     players = []
     for row in team["lineup"]:
         if row.get("filler"):
-            players.append({"slot": row["slot"], "name": "Replacement-level player"})
+            players.append({"name": "Replacement-level player"})
             continue
         p = auction.player(row["id"])
-        players.append({"slot": row["slot"], "name": p["name"], "natural_position": p["pos"], "career_years": f"{p['y0']}-{p['y1']}",
+        players.append({"name": p["name"], "position": p["pos"], "career_years": f"{p['y0']}-{p['y1']}",
                         "career_ppg": p["pts"], "career_rpg": p["reb"], "career_apg": p["ast"], "all_star": p["as"],
                         "rings": p["ring"], "mvp": p["mvp"], "rating_of_99": p["ovr"], "shooting_of_100": p["sht"],
                         "defense_of_100": p["dfn"], "paid": row["price"]})
