@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if room %}NBA Auction - Live Game{% else %}NBA Auction - Bid on Players, Build a Five{% endif %} · HoopLife NBA{% endblock %}
-{% block description %}Two players, $20 each. NBA players from every era come up one at a time: raise or let them go. Build a five, then the judge scores your talent, shooting, playmaking and defense. Play a friend live or take on the bot.{% endblock %}
+{% block description %}Two players, $20 each. NBA players from every era come up one at a time: raise or let them go. Bid in the open or blind on a category, build a five, then win on a 100-point score or head-to-head categories. Play a friend live or take on the bot.{% endblock %}
 {% block robots %}{% if room %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
 {% block content %}

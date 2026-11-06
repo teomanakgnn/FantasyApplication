@@ -178,7 +178,7 @@ def main():
             sh *= 0.5
         players.append({
             "id": pid, "name": g["n"], "pos": pos, "y0": g["y0"], "y1": g["y1"], "cur": g["y1"] >= CURRENT_FROM,
-            "pts": c.get("pts", 0), "reb": c.get("reb", 0), "ast": c.get("ast", 0),
+            "pts": c.get("pts", 0), "reb": c.get("reb", 0), "ast": c.get("ast", 0), "stl": c.get("stl", 0), "blk": c.get("blk", 0),
             "as": g["as"], "ring": g.get("ring", 0), "mvp": aw.get("mvp", 0), "photo": True,
             "ovr": clamp(ovr, 55, 99), "peak_season": peak_row["season"],
             "sco": clamp(b.get("pts", 0) * 3.0), "ply": clamp(b.get("ast", 0) * 10), "rbd": clamp(b.get("reb", 0) * 7.5),
@@ -191,7 +191,7 @@ def main():
         rows = seasons.get(pid) or []
         players.append({
             "id": pid or "L-" + re.sub(r"[^a-z]", "", name.lower()), "name": name, "pos": pos, "y0": y0, "y1": y1, "cur": False,
-            "pts": pts, "reb": reb, "ast": ast, "as": stars, "ring": ring, "mvp": mvp, "photo": bool(pid),
+            "pts": pts, "reb": reb, "ast": ast, "stl": 0, "blk": 0, "legend": True, "as": stars, "ring": ring, "mvp": mvp, "photo": bool(pid),
             "ovr": ovr, "peak_season": None, "sco": clamp(pts * 3.2), "ply": ply, "rbd": clamp(reb * 6),
             "dfn": dfn, "sht": sht, "rim": rim, "ts": sorted(f"{r['team']}{r['season']}" for r in rows),
         })

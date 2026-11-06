@@ -630,6 +630,21 @@
 .au-cats small { color: var(--muted); font-weight: 500; }
 .au-meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .au-meter i { display: block; height: 100%; background: var(--accent); }
+.au-modes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: .88rem; line-height: 1.4; }
+.au-mode { margin-bottom: 8px; }
+.au-reveal { margin-bottom: 10px; padding: 7px 10px; border-radius: 10px; background: var(--surface-2); }
+.au-mystery em { font-size: 2.6rem; color: var(--warn); }
+.au-manual { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.au-manual label { font-size: .84rem; color: var(--muted); }
+.au-dollar { font-weight: 800; margin-right: -2px; }
+.au-manual .input { width: 84px; flex: none; }
+.au-manual + .tiny, .au-ctl + .tiny { margin-top: 6px; }
+.au-h2h { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: .92rem; table-layout: fixed; }
+.au-h2h th, .au-h2h td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-h2h th:first-child, .au-h2h td:first-child { text-align: left; color: var(--muted); font-weight: 600; }
+.au-h2h th { font-size: .78rem; }
+.au-h2h td.won { color: var(--good); font-weight: 900; }
+.au-h2h-total td { font-weight: 900; font-size: 1.05rem; border-bottom: 0; color: inherit !important; }
 @media (max-width: 860px) {
   .au-game, .au-lobby { grid-template-columns: minmax(0, 1fr); }
 }

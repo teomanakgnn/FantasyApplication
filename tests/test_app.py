@@ -621,3 +621,75 @@ def test_auction_pages_and_solo_room():
         assert st["t"] == "state" and st["phase"] == "live" and st["you"] == 0 and st["teams"][1]["name"] == "HoopBot"
         assert "ovr" not in st["lot"] and st["teams"][0]["money"] == 20 and "next" not in st
 
+
+def test_auction_pass_to_broke_opponent():
+    """Rakibin parasi bittiyse acan paslayabilir: rakip 1 dolara alir. Parasi varsa paslanamaz."""
+    from services import auction as A
+    g = A.new_game("x", opener=0)
+    pid = A.current(g)
+    assert not A.can_give(g, 0) and not A.pass_turn(g, 0)[0]
+    g["seats"][1]["money"] = 5                              # 5 bos yer, 5 dolar
+    assert A.can_give(g, 0) and A.pass_turn(g, 0)[0]
+    assert g["seats"][1]["roster"] == [{"id": pid, "price": 1}] and g["seats"][1]["money"] == 4
+    assert g["events"][-1]["given"] is True
+    # Parasi biten taraf acarken paslayamaz (rakibinin parasi var)
+    assert g["turn"] == 1 and not A.can_give(g, 1) and not A.pass_turn(g, 1)[0]
+
+
+def test_auction_blind_categories():
+    """En az 15-20 kategori, oyuncular kategoriye uyar, oda oyuncuyu istemciye sizdirmaz."""
+    import random
+    from fastapi.testclient import TestClient
+    from services import auction as A
+    from web.app import app
+    stat = [c for c in A.categories() if not c["team"]]
+    assert len(stat) >= 20 and len(A.categories()) >= 40
+    assert all(len(c["ids"]) >= A.MIN_IN_CATEGORY for c in A.categories())
+    assert not any(A.player(i).get("legend") for c in A.categories("h2h5") for i in c["ids"])
+    by_label = {c["label"]: set(c["ids"]) for c in A.categories()}
+    for seed in range(30):
+        rng = random.Random(seed)
+        g = A.new_game(seed, blind=True)
+        assert len(set(g["lots"])) == len(g["lots"]) >= 10 and len(set(g["labels"])) == len(g["labels"])
+        assert all(pid in by_label[lab] for pid, lab in zip(g["lots"], g["labels"]))
+        while not g["over"]:
+            m, amt = A.bot_move(g, g["turn"], rng)
+            ok, err = A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
+            assert ok, err
+        assert all(len(s["roster"]) == 5 for s in g["seats"])
+    c = TestClient(app)
+    r = c.post("/api/auction/room", json={"solo": True, "blind": True}).json()
+    with c.websocket_connect(f"/ws/auction/{r['code']}") as ws:
+        ws.send_json({"t": "hello", "cid": "testclient2", "name": "Tester"})
+        ws.receive_json()
+        st = ws.receive_json()
+    assert st["blind"] and set(st["lot"]) == {"blind", "category"}
+
+
+def test_auction_h2h_scoring():
+    """Kategorilerin cogunu alan kazanir, 100 uzerinden puani dusuk olsa bile; 5 kategoride efsane yok."""
+    import random
+    from services import auction as A
+    ids = {p["name"]: p["id"] for p in A._load()}
+    g = A.new_game("h", scoring="h2h3")
+    big = ["Wilt Chamberlain", "Bill Russell", "Moses Malone", "Kareem Abdul-Jabbar", "Rudy Gobert"]
+    small = ["Stephen Curry", "Klay Thompson", "Ray Allen", "Reggie Miller", "Damian Lillard"]
+    g["seats"][0]["roster"] = [{"id": ids[n], "price": 1} for n in small]
+    g["seats"][1]["roster"] = [{"id": ids[n], "price": 1} for n in big]
+    r = A.result(g)
+    h = r["h2h"]
+    assert [c["label"] for c in h["cats"]] == ["PTS", "REB", "AST"] and sum(h["wins"]) == 3
+    assert r["winner"] == (0 if h["wins"][0] > h["wins"][1] else 1) and r["by"] == "h2h"
+    assert "Team" in r["verdict"]
+    # Esit kategoride 100 uzerinden puan bakar
+    tie = A.decide({"teams": [{"total": 80, "money_left": 0}, {"total": 70, "money_left": 9}], "h2h": {"wins": [2, 2]}})
+    assert tie["winner"] == 0
+    for seed in range(20):
+        rng = random.Random(seed)
+        g = A.new_game(seed, scoring="h2h5", blind=seed % 2 == 0)
+        assert not any(A.player(i).get("legend") for i in g["lots"])
+        while not g["over"]:
+            m, amt = A.bot_move(g, g["turn"], rng)
+            ok, err = A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
+            assert ok, err
+        assert len(A.result(g)["h2h"]["cats"]) == 5

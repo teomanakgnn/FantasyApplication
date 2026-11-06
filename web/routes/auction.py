@@ -46,7 +46,7 @@ def _cleanup():
 
 def _new_game(room):
     room["round"] = room.get("round", 0) + 1
-    room["game"] = auction.new_game(secrets.token_hex(6), opener=room["round"] % 2)
+    room["game"] = auction.new_game(secrets.token_hex(6), opener=room["round"] % 2, blind=room["blind"], scoring=room["scoring"])
     room.update({"phase": "waiting", "deadline": None, "bot_at": None, "result": None})
 
 
@@ -77,8 +77,10 @@ async def room_create(request: Request):
     if len(_rooms) >= MAX_ROOMS:
         return _bad("Too many games running right now. Try again shortly.", 503)
     code = secrets.token_hex(4)
-    solo = bool(isinstance(b, dict) and b.get("solo"))
-    room = {"solo": solo, "bot_seat": 1 if solo else None, "seats": {}, "names": [None, BOT_NAME if solo else None],
+    b = b if isinstance(b, dict) else {}
+    solo = bool(b.get("solo"))
+    scoring = b.get("scoring") if b.get("scoring") in auction.SCORINGS else "judge"
+    room = {"solo": solo, "blind": bool(b.get("blind")), "scoring": scoring, "bot_seat": 1 if solo else None, "seats": {}, "names": [None, BOT_NAME if solo else None],
             "conns": {}, "chat": [], "touched": time.time()}
     _new_game(room)
     _rooms[code] = room
@@ -116,13 +118,16 @@ def _public(room, viewer_seat):
     pid = auction.current(g)
     live = room["phase"] == "live"
     me = viewer_seat
-    limit = 0
-    if live and me is not None and g["turn"] == me:
-        limit = auction.max_bid(g, me)
+    my_turn = live and me is not None and g["turn"] == me
+    limit = auction.max_bid(g, me) if my_turn else 0
+    # Kor draftta oyuncu satilana kadar sunucudan cikmaz: yalnizca kategori
+    lot = None
+    if pid and live:
+        lot = {"blind": True, "category": auction.current_label(g)} if g["blind"] else auction.card(pid)
     events = [dict(e, seat_name=room["names"][e["seat"]] if e.get("seat") is not None else None) for e in g["events"][-14:]]
     return {"t": "state", "round": room["round"], "phase": room["phase"], "solo": room["solo"], "you": me,
             "teams": [_team_public(room, 0), _team_public(room, 1)], "turn": g["turn"] if live else None,
-            "lot": auction.card(pid) if pid and live else None,
+            "lot": lot, "blind": room["blind"], "scoring": room["scoring"], "can_give": bool(my_turn and auction.can_give(g, me)),
             "lot_no": g["i"] + 1, "lots": len(g["lots"]), "bid": g["bid"], "bidder": g["bidder"], "limit": limit,
             "left": round(room["deadline"] - now, 2) if live and room["deadline"] else None, "secs": TURN_SECS,
             "events": events, "result": room["result"], "ai_on": auction_judge.enabled()}
@@ -149,10 +154,11 @@ async def _judge(room, round_no):
     """Motor sonucu hazir; hakem varsa uzerine yazar. Oda bu arada yeni tura gectiyse atilir."""
     base = auction.result(room["game"])
     verdict = None
-    try:
-        verdict = await auction_judge.judge(room["game"], base)
-    except Exception as exc:
-        print(f"auction judge failed: {exc}")
+    if room["scoring"] == "judge":
+        try:
+            verdict = await auction_judge.judge(room["game"], base)
+        except Exception as exc:
+            print(f"auction judge failed: {exc}")
     if room["round"] != round_no:
         return
     room["result"] = _named_verdict(verdict or base, room)
