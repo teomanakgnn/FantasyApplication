@@ -106,7 +106,7 @@ async def _send(ws, obj):
 def _team_public(room, seat):
     s = room["game"]["seats"][seat]
     roster = [{**auction.card(x["id"]), "price": x["price"]} for x in s["roster"]]
-    return {"seat": seat, "name": room["names"][seat], "money": s["money"], "roster": roster, "skips": s["skips"],
+    return {"seat": seat, "name": room["names"][seat], "money": s["money"], "roster": roster,
             "online": seat == room.get("bot_seat") or any(c["seat"] == seat for c in room["conns"].values())}
 
 
@@ -114,19 +114,16 @@ def _public(room, viewer_seat):
     g = room["game"]
     now = time.time()
     pid = auction.current(g)
-    nxt = g["lots"][g["i"] + 1] if not g["over"] and g["i"] + 1 < len(g["lots"]) else None
     live = room["phase"] == "live"
     me = viewer_seat
     limit = 0
     if live and me is not None and g["turn"] == me:
-        limit = 1 if auction.lone(g, me) else auction.max_bid(g, me)
+        limit = auction.max_bid(g, me)
     events = [dict(e, seat_name=room["names"][e["seat"]] if e.get("seat") is not None else None) for e in g["events"][-14:]]
     return {"t": "state", "round": room["round"], "phase": room["phase"], "solo": room["solo"], "you": me,
             "teams": [_team_public(room, 0), _team_public(room, 1)], "turn": g["turn"] if live else None,
-            "lot": auction.card(pid) if pid and live else None, "next": auction.card(nxt) if nxt and live else None,
+            "lot": auction.card(pid) if pid and live else None,
             "lot_no": g["i"] + 1, "lots": len(g["lots"]), "bid": g["bid"], "bidder": g["bidder"], "limit": limit,
-            "passed": g["passed"], "lone": bool(live and me is not None and g["turn"] == me and auction.lone(g, me)),
-            "skips_left": auction.LONE_SKIPS - g["seats"][me]["skips"] if me is not None else 0,
             "left": round(room["deadline"] - now, 2) if live and room["deadline"] else None, "secs": TURN_SECS,
             "events": events, "result": room["result"], "ai_on": auction_judge.enabled()}
 
@@ -189,7 +186,7 @@ async def _tick():
                     auction.pass_turn(g, room["bot_seat"])
                 await _after_move(room)
             elif room["deadline"] and now > room["deadline"] + 0.8:
-                auction.pass_turn(g, g["turn"], timeout=True)
+                auction.timeout_move(g)
                 await _after_move(room)
 
 

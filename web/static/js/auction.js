@@ -22,7 +22,7 @@
       <section class="card au-how">
         <div class="card-title">How it works</div>
         <ol>
-          <li><b>Raise or let go.</b> You take turns bidding. Highest bid buys the player. Let a player go and your opponent pays their bid.</li>
+          <li><b>Open, raise or pass.</b> Whoever opens a player must bid at least $1. Then you take turns: raise, or pass and your opponent buys at their bid. Every player gets sold.</li>
           <li><b>Budget for five.</b> You start with $${D.money}, and every open spot must keep at least $1.</li>
           <li><b>Build a team, not a highlight reel.</b> Five point guards lose to a real lineup: talent, positions, shooting, defense and roles all count.</li>
           <li><b>Hidden ratings.</b> Only names and career numbers are shown. Trust your own eyes.</li>
@@ -123,7 +123,7 @@
           ${honors.length ? `<div class="small">${honors.join(" · ")}</div>` : '<div class="small dim">No major honors</div>'}</div>
         <div class="au-bid"><small>${bidder ? h(bidder.name) : "No bid"}</small><strong class="${S.bidder === S.you ? "good" : ""}">$${S.bid}</strong></div></div>
       ${controlsHtml()}
-      ${S.next ? `<div class="au-next small dim">Next up: <b>${h(S.next.name)}</b> (${S.next.pos})</div>` : ""}</section>`;
+</section>`;
   }
 
   function controlsHtml() {
@@ -132,23 +132,17 @@
       const other = S.turn != null ? S.teams[S.turn] : null;
       return `<p class="au-wait small muted">${other ? `${h(other.name)} is deciding...` : ""}</p>`;
     }
-    if (S.lone) {
-      return `<p class="small muted au-lone">Your opponent's roster is full. Take him for $1, or skip (${S.skips_left} skip${S.skips_left === 1 ? "" : "s"} left).</p>
-        <div class="au-ctl"><button class="btn btn-primary" data-bid="1">Take for $1</button><button class="btn" data-pass ${S.skips_left <= 0 ? "disabled" : ""}>Skip</button></div>`;
-    }
     const min = S.bid + 1;
     const opts = [...new Set([min, min + 1, min + 4, S.limit].filter((v) => v >= min && v <= S.limit))];
     const opp = S.teams[1 - me];
-    const passLabel = S.bid > 0 ? `Let him go - ${h(opp.name)} pays $${S.bid}` : (S.passed.includes(1 - me) ? "Pass - no sale" : "Pass");
     return `<div class="au-ctl">${opts.map((v, i) => `<button class="btn ${i === 0 ? "btn-primary" : ""}" data-bid="${v}">${v === S.limit && opts.length > 1 ? "Max " : ""}$${v}</button>`).join("")}
-      <button class="btn btn-ghost au-pass" data-pass>${passLabel}</button></div>
-      <div class="tiny dim">You can bid up to $${S.limit}. Every open spot keeps $1.</div>`;
+      ${S.bid > 0 ? `<button class="btn btn-ghost au-pass" data-pass>Pass - ${h(opp.name)} pays $${S.bid}</button>` : ""}</div>
+      <div class="tiny dim">${S.bid > 0 ? "" : "You open this player, so you must bid at least $1. "}You can bid up to $${S.limit}. Every open spot keeps $1.</div>`;
   }
 
   function logHtml() {
     const rows = S.events.slice().reverse().filter((e) => e.kind !== "bid").slice(0, 8).map((e) => {
       if (e.kind === "sold") return `<div><b>${h(e.seat_name)}</b> bought ${h(e.name)} <span class="dim">for $${e.price}</span></div>`;
-      if (e.kind === "nosale") return `<div class="dim">${h(e.name)}: no sale</div>`;
       return `<div class="dim">${h(e.seat_name)} ${e.timeout ? "ran out of time" : "passed"}</div>`;
     }).join("");
     return rows ? `<section class="card au-log"><div class="card-title">Auction log</div>${rows}</section>` : "";

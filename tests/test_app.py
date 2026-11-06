@@ -521,38 +521,37 @@ def test_scratch_card_hides_games_until_found(monkeypatch):
 
 
 def test_auction_rules():
-    """Teklif sinirlari, satis, salma, bos kadro rezervi."""
+    """Acan salamaz, pas teklif sahibine satar, teklif sinirlari, sure dolunca 1 dolar."""
     from services import auction as A
     g = A.new_game("t", opener=0)
     pid = A.current(g)
     assert g["turn"] == 0 and A.max_bid(g, 0) == 16        # 20 - 4 bos yer rezervi
+    assert not A.pass_turn(g, 0)[0]                        # acan pas diyemez
     assert not A.bid(g, 1, 1)[0]                           # sira onda degil
     assert not A.bid(g, 0, 17)[0] and not A.bid(g, 0, 0)[0]
     assert A.bid(g, 0, 3)[0] and g["turn"] == 1
     assert not A.bid(g, 1, 3)[0]                           # gecmek zorunda
     assert A.pass_turn(g, 1)[0]                            # rakibe gider
     assert g["seats"][0]["roster"] == [{"id": pid, "price": 3}] and g["seats"][0]["money"] == 17
-    # Yeni oyuncu: acilis sirasi degisti; ikisi de salarsa satilmaz
+    # Yeni oyuncu: acilis sirasi degisti; sure dolarsa acan 1 dolar vermis sayilir, rakip de pas
     i = g["i"]
-    assert g["turn"] == 1 and A.pass_turn(g, 1)[0] and g["i"] == i
-    assert A.pass_turn(g, 0)[0] and g["i"] == i + 1 and not g["seats"][1]["roster"]
+    assert g["turn"] == 1 and A.timeout_move(g)[0] and g["bid"] == 1 and g["bidder"] == 1 and g["i"] == i
+    assert A.timeout_move(g)[0] and g["i"] == i + 1 and g["seats"][1]["roster"][0]["price"] == 1
     # Rakip gecemiyorsa aninda satis
     g = A.new_game("u", opener=0)
     g["seats"][1]["money"] = 5
     assert A.max_bid(g, 1) == 1 and A.bid(g, 0, 1)[0] and len(g["seats"][0]["roster"]) == 1
 
 
-def test_auction_lone_side_cannot_wait_forever():
-    """Rakip dolunca: 1 dolar sinir, en fazla 3 salma, sonra otomatik alim."""
+def test_auction_lone_side_fills_for_a_dollar_each():
+    """Rakip dolunca kalan taraf siradakileri 1'er dolara otomatik alir; oyun biter."""
     from services import auction as A
-    g = A.new_game("v", opener=0)
-    ids = g["lots"][-5:]
-    g["seats"][1]["roster"] = [{"id": x, "price": 1} for x in ids]
-    g["turn"] = 0
-    assert A.lone(g, 0) and not A.bid(g, 0, 2)[0]
-    for _ in range(3):
-        assert g["turn"] == 0 and A.pass_turn(g, 0)[0]
-    assert len(g["seats"][0]["roster"]) == 5 and g["over"]   # kalan yerler 1'er dolara doldu
+    g = A.new_game("w", opener=0)
+    g["seats"][1]["roster"] = [{"id": x, "price": 1} for x in g["lots"][-4:]]
+    g["seats"][1]["money"] = 16
+    assert A.bid(g, 0, 1)[0] and A.bid(g, 1, 2)[0] and A.pass_turn(g, 0)[0]
+    assert g["over"] and len(g["seats"][0]["roster"]) == 5 and g["seats"][0]["money"] == 15
+    assert [x["price"] for x in g["seats"][0]["roster"]] == [1] * 5 and len(g["seats"][1]["roster"]) == 5
 
 
 def test_auction_full_games_and_hidden_ratings():
@@ -616,5 +615,5 @@ def test_auction_pages_and_solo_room():
         assert ws.receive_json()["t"] == "chatlog"
         st = ws.receive_json()
         assert st["t"] == "state" and st["phase"] == "live" and st["you"] == 0 and st["teams"][1]["name"] == "HoopBot"
-        assert "ovr" not in st["lot"] and st["teams"][0]["money"] == 20
+        assert "ovr" not in st["lot"] and st["teams"][0]["money"] == 20 and "next" not in st
 

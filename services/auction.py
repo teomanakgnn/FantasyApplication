@@ -4,12 +4,12 @@ gelir; taraflar sirayla artirir ya da salar, en yuksek teklifi veren alir.
 
 Kurallar (tum dogrulama sunucuda, burada):
   - Her oyuncuda acilisi siradaki taraf yapar; acilis sirasi her oyuncuda degisir.
-  - Artir ya da sal. Teklif varken salarsan oyuncu rakibe gider; teklif yokken salarsan
-    sira rakibe gecer; ikisi de salarsa oyuncu satilmaz.
+  - Acan taraf salamaz: en az 1 dolar vermek zorunda. Sonra taraflar sirayla artirir ya
+    da pas der; pas diyenin karsisindaki son teklifiyle oyuncuyu alir. Her oyuncu satilir.
   - Her bos kadro yeri icin 1 dolar ayrilmali: en yuksek teklif = para - (bos yer - 1).
     Boylece kimse parasiz kalip kadrosunu dolduramama durumuna dusmez.
-  - Kadrosu dolan cikar. Kalan taraf gelen oyunculari 1 dolara alir; en fazla LONE_SKIPS
-    kez salabilir, sonra gelen oyuncu otomatik onun olur (bedava yildiz beklenmesin).
+  - Kadrosu dolan cikar. Kalan taraf siradaki oyunculari 1'er dolara otomatik alir.
+  - Sonraki oyuncu kimseye gosterilmez.
 
 Puanlama (score_team): yetenek, mevki uyumu, sut, oyun kurma, savunma, ribaund, rol
 dengesi ve gercekte takim arkadasligi. services/auction_judge.py bunu temel alarak
@@ -26,7 +26,6 @@ from pathlib import Path
 START_MONEY = 20
 ROSTER = 5
 LOTS = 60
-LONE_SKIPS = 3
 SLOTS = ("PG", "SG", "SF", "PF", "C")
 FILLER_OVR = 40
 # (OVR alt siniri, adet): her oyunda yildiz sayisi benzer olsun
@@ -76,8 +75,8 @@ def build_lots(rng):
 
 def new_game(seed=None, opener=0):
     rng = random.Random(seed)
-    g = {"lots": build_lots(rng), "i": 0, "bid": 0, "bidder": None, "opener": opener, "turn": opener, "passed": [],
-         "seats": [{"money": START_MONEY, "roster": [], "skips": 0}, {"money": START_MONEY, "roster": [], "skips": 0}],
+    g = {"lots": build_lots(rng), "i": 0, "bid": 0, "bidder": None, "opener": opener, "turn": opener,
+         "seats": [{"money": START_MONEY, "roster": []}, {"money": START_MONEY, "roster": []}],
          "over": False, "events": []}
     _settle_turn(g)
     return g
@@ -122,7 +121,7 @@ def _finish(g):
 
 def _next_lot(g):
     g["i"] += 1
-    g["bid"], g["bidder"], g["passed"] = 0, None, []
+    g["bid"], g["bidder"] = 0, None
     if all(open_slots(g, i) <= 0 for i in (0, 1)) or g["i"] >= len(g["lots"]):
         return _finish(g)
     g["opener"] = 1 - g["opener"]
@@ -131,10 +130,10 @@ def _next_lot(g):
 
 
 def _settle_turn(g):
-    """Kadrosu dolu taraf hic oynamaz; tek kalanin salma hakki bittiyse oyuncu ona gider."""
+    """Kadrosu dolu taraf hic oynamaz; tek kalan taraf oyuncuyu 1 dolara otomatik alir."""
     if open_slots(g, g["turn"]) <= 0:
         g["turn"] = 1 - g["turn"]
-    if lone(g, g["turn"]) and g["seats"][g["turn"]]["skips"] >= LONE_SKIPS:
+    if lone(g, g["turn"]):
         _award(g, g["turn"], 1)
 
 
@@ -148,12 +147,12 @@ def bid(g, seat, amount):
         return False, "Bad bid."
     if amount <= g["bid"]:
         return False, f"Bid more than ${g['bid']}."
-    limit = 1 if lone(g, seat) else max_bid(g, seat)
+    limit = max_bid(g, seat)
     if amount > limit:
         return False, f"You can bid up to ${limit}: keep $1 for each open spot."
     g["bid"], g["bidder"] = amount, seat
     _event(g, "bid", seat=seat, price=amount)
-    if lone(g, seat) or max_bid(g, 1 - seat) <= amount:
+    if max_bid(g, 1 - seat) <= amount:
         _award(g, seat, amount)
     else:
         g["turn"] = 1 - seat
@@ -161,24 +160,20 @@ def bid(g, seat, amount):
 
 
 def pass_turn(g, seat, timeout=False):
+    """Yalnizca teklif varken: oyuncu son teklifi verene gider. Acan taraf salamaz."""
     if g["over"] or g["turn"] != seat:
         return False, "Not your turn."
-    pid = current(g)
-    if g["bidder"] is not None:
-        _event(g, "pass", seat=seat, timeout=timeout)
-        _award(g, g["bidder"], g["bid"])
-    elif lone(g, seat):
-        g["seats"][seat]["skips"] += 1
-        _event(g, "nosale", name=player(pid)["name"], seat=seat)
-        _next_lot(g)
-    elif (1 - seat) in g["passed"]:
-        _event(g, "nosale", name=player(pid)["name"], seat=seat)
-        _next_lot(g)
-    else:
-        g["passed"].append(seat)
-        _event(g, "pass", seat=seat, timeout=timeout)
-        g["turn"] = 1 - seat
+    if g["bidder"] is None:
+        return False, "You open this player: bid at least $1."
+    _event(g, "pass", seat=seat, timeout=timeout)
+    _award(g, g["bidder"], g["bid"])
     return True, None
+
+
+def timeout_move(g):
+    """Sure doldu: acan taraf 1 dolar vermis sayilir, teklif varsa pas."""
+    seat = g["turn"]
+    return bid(g, seat, 1) if g["bidder"] is None else pass_turn(g, seat, timeout=True)
 
 
 # ==================== PUANLAMA ====================
@@ -322,16 +317,16 @@ def bot_value(g, seat, pid, rng):
 
 
 def bot_move(g, seat, rng=None):
-    """('bid', tutar) ya da ('pass', None)."""
+    """('bid', tutar) ya da ('pass', None). Acarken pas yok."""
     rng = rng or random
-    pid = current(g)
-    if lone(g, seat):
-        return ("pass", None) if g["seats"][seat]["skips"] < LONE_SKIPS and player(pid)["ovr"] < 88 else ("bid", 1)
-    v = bot_value(g, seat, pid, rng)
+    v = bot_value(g, seat, current(g), rng)
     limit = max_bid(g, seat)
+    if g["bid"] == 0:
+        # Degerli oyuncuyu yuksek acip rakibi zorlar; digerlerini 1 dolara acar
+        return "bid", min(limit, max(1, int(v * rng.uniform(0.3, 0.6)))) if v >= 4 else 1
     next_bid = g["bid"] + 1
     if next_bid > limit or v < next_bid:
         return "pass", None
     # Rakibi tartmak icin ara sira buyuk adim
     step = 2 if v - next_bid >= 4 and rng.random() < 0.35 else 1
-    return "bid", min(limit, int(v), next_bid + step - 1) if int(v) >= next_bid else next_bid
+    return "bid", min(limit, int(v), next_bid + step - 1)
