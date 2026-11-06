@@ -139,7 +139,7 @@
     const bidder = S.bidder != null ? S.teams[S.bidder] : null;
     let info;
     if (p.blind) {
-      info = `<span class="au-face big au-mystery"><em>?</em></span><div class="au-lot-info"><div class="small muted">Mystery player from</div><h2>${h(p.category)}</h2></div>`;
+      info = `<span class="au-face big au-mystery"><em>?</em></span><div class="au-lot-info"><div class="small muted">Mystery player</div><h2>${h(p.category)}</h2></div>`;
     } else {
       const bits = [`${Number(p.pts).toFixed(1)} PTS`, `${Number(p.reb).toFixed(1)} REB`, `${Number(p.ast).toFixed(1)} AST`];
       if (S.scoring === "h2h5") bits.push(`${Number(p.stl).toFixed(1)} STL`, `${Number(p.blk).toFixed(1)} BLK`);
@@ -210,7 +210,7 @@
       ${t.mates.length ? `<p class="tiny dim">Played together: ${t.mates.slice(0, 3).map((m) => h(m.join(" and "))).join("; ")}</p>` : ""}
       <p class="tiny dim">$${t.money_left} left unspent</p></div>`;
     const H = R.h2h;
-    const table = H ? `<table class="au-h2h"><thead><tr><th>Career totals of the five</th><th>${h(S.teams[0].name)}</th><th>${h(S.teams[1].name)}</th></tr></thead><tbody>
+    const table = H ? `<table class="au-h2h"><thead><tr><th>Career averages, added up</th><th>${h(S.teams[0].name)}</th><th>${h(S.teams[1].name)}</th></tr></thead><tbody>
       ${H.cats.map((c) => `<tr><td>${c.label}</td><td class="${c.w === 0 ? "won" : ""}">${c.a.toFixed(1)}</td><td class="${c.w === 1 ? "won" : ""}">${c.b.toFixed(1)}</td></tr>`).join("")}
       <tr class="au-h2h-total"><td>Categories won</td><td>${H.wins[0]}</td><td>${H.wins[1]}</td></tr></tbody></table>` : "";
     return `<section class="card au-result">
@@ -297,8 +297,8 @@
   // ---------------- tiklamalar ----------------
   app.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-bid]");
-    if (b && S) { send({ t: "bid", amount: +b.dataset.bid, round: S.round, lot: S.lot_no }); app.querySelectorAll(".au-ctl button").forEach((x) => { x.disabled = true; }); return; }
-    if (e.target.closest("[data-pass]") && S) { send({ t: "pass", round: S.round, lot: S.lot_no }); app.querySelectorAll(".au-ctl button").forEach((x) => { x.disabled = true; }); return; }
+    if (b && S) { send({ t: "bid", amount: +b.dataset.bid, round: S.round, lot: S.lot_no }); app.querySelectorAll(".au-ctl button, #au-bf button").forEach((x) => { x.disabled = true; }); return; }
+    if (e.target.closest("[data-pass]") && S) { send({ t: "pass", round: S.round, lot: S.lot_no }); app.querySelectorAll(".au-ctl button, #au-bf button").forEach((x) => { x.disabled = true; }); return; }
     if (e.target.closest("#au-next")) return send({ t: "next" });
     if (e.target.closest("#au-share")) return share();
     if (e.target.closest("#au-copy")) {
