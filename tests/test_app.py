@@ -693,3 +693,38 @@ def test_auction_h2h_scoring():
             ok, err = A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
             assert ok, err
         assert len(A.result(g)["h2h"]["cats"]) == 5
+
+
+def test_life_auction_private_and_hidden_scores(monkeypatch):
+    """Hayat surumu: lobi yalnizca admin; puanlar oyun bitene kadar gelmez; her tema ve karisik oyun biter."""
+    import random
+    from fastapi.testclient import TestClient
+    from services import auction as A, life_auction as L
+    from web.app import app
+    from web.routes import auction as R
+    assert len(L.THEMES) >= 12 and all(len(t["ids"]) >= L.LOTS for t in L.THEMES.values())
+    for key in list(L.THEMES) + [L.MIX]:
+        for seed in range(15):
+            rng = random.Random(seed)
+            g = L.new_game(seed, opener=seed % 2, theme=key, blind=key == L.MIX and seed % 2)
+            assert len(set(g["lots"])) == L.LOTS
+            while not g["over"]:
+                m, amt = A.bot_move(g, g["turn"], rng)
+                ok, err = A.bid(g, g["turn"], amt) if m == "bid" else A.pass_turn(g, g["turn"])
+                assert ok, err
+            res = L.result(g)
+            assert all(len(t["lineup"]) == 5 for t in res["teams"]) and res["verdict"]
+    c = TestClient(app)
+    assert c.get("/auction/life").status_code == 404
+    assert c.post("/api/auction/room", json={"life": True}).status_code == 404
+    monkeypatch.setattr(R, "current_user", lambda request: {"username": next(iter(R.config.ADMIN_USERNAMES))})
+    assert c.get("/auction/life").status_code == 200
+    r = c.post("/api/auction/room", json={"life": True, "solo": True, "theme": "tatli"}).json()
+    monkeypatch.setattr(R, "current_user", lambda request: None)
+    page = c.get(r["url"])
+    assert page.status_code == 200 and "life_auction.js" in page.text and "noindex" in page.text
+    with c.websocket_connect(f"/ws/auction/{r['code']}") as ws:
+        ws.send_json({"t": "hello", "cid": "testclient3", "name": "Tester"})
+        ws.receive_json()
+        st = ws.receive_json()
+    assert st["phase"] == "live" and st["theme"] == "tatli" and "score" not in st["lot"] and st["lot"]["theme"] == "Tatlılar"

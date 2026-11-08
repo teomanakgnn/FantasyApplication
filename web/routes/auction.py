@@ -20,7 +20,7 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 import config
-from services import auction, auction_judge
+from services import auction, auction_judge, life_auction
 from web.core import current_user, render
 
 router = APIRouter()
@@ -28,6 +28,7 @@ ROOM_TTL = 2 * 3600
 MAX_ROOMS = 3000
 TURN_SECS = 20
 BOT_NAME = "HoopBot"
+LIFE_BOT = "Bot"
 CODE_RE = re.compile(r"^[A-Za-z0-9]{6,12}$")
 _rooms = {}
 _ticker = None
@@ -44,8 +45,17 @@ def _cleanup():
             _rooms.pop(code, None)
 
 
+def _is_admin(request):
+    u = current_user(request)
+    return bool(u and u.get("username") in config.ADMIN_USERNAMES)
+
+
 def _new_game(room):
     room["round"] = room.get("round", 0) + 1
+    if room.get("life"):
+        room["game"] = life_auction.new_game(secrets.token_hex(6), opener=room["round"] % 2, theme=room["theme"], blind=room["blind"])
+        room.update({"phase": "waiting", "deadline": None, "bot_at": None, "result": None})
+        return
     room["game"] = auction.new_game(secrets.token_hex(6), opener=room["round"] % 2, blind=room["blind"], scoring=room["scoring"])
     room.update({"phase": "waiting", "deadline": None, "bot_at": None, "result": None})
 
@@ -70,6 +80,20 @@ def auction_page(request: Request):
     return render(request, "auction.html", active="auction", payload=json.dumps(payload).replace("</", "<\\/"), room=None)
 
 
+def _life_payload(request, room=None):
+    return {"room": room, "me": (current_user(request) or {}).get("username") or "", "secs": TURN_SECS,
+            "money": auction.START_MONEY, "roster": auction.ROSTER, "themes": life_auction.theme_list(), "admin": _is_admin(request)}
+
+
+@router.get("/auction/life")
+def life_page(request: Request):
+    """Gizli lobi: yalnizca admin. Davet edilen kisi oda linkiyle hesapsiz katilir."""
+    if not _is_admin(request):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    payload = json.dumps(_life_payload(request)).replace("</", "<\\/")
+    return render(request, "life_auction.html", active=None, payload=payload, room=None)
+
+
 @router.post("/api/auction/room")
 async def room_create(request: Request):
     b = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
@@ -79,9 +103,15 @@ async def room_create(request: Request):
     code = secrets.token_hex(4)
     b = b if isinstance(b, dict) else {}
     solo = bool(b.get("solo"))
+    life = bool(b.get("life"))
+    if life and not _is_admin(request):
+        return _bad("Not found.", 404)
     scoring = b.get("scoring") if b.get("scoring") in auction.SCORINGS else "judge"
     room = {"solo": solo, "blind": bool(b.get("blind")), "scoring": scoring, "bot_seat": 1 if solo else None, "seats": {}, "names": [None, BOT_NAME if solo else None],
             "conns": {}, "chat": [], "touched": time.time()}
+    if life:
+        room.update({"life": True, "theme": life_auction.valid_theme(b.get("theme")), "scoring": "life"})
+        room["names"][1] = LIFE_BOT if solo else None
     _new_game(room)
     _rooms[code] = room
     return {"code": code, "url": f"/auction/room/{code}"}
@@ -90,6 +120,9 @@ async def room_create(request: Request):
 @router.get("/auction/room/{code}")
 def room_page(request: Request, code: str):
     room = _rooms.get(code) if CODE_RE.match(code) else None
+    if room and room.get("life"):
+        payload = json.dumps(_life_payload(request, {"code": code, "exists": True, "solo": room["solo"]})).replace("</", "<\\/")
+        return render(request, "life_auction.html", active=None, payload=payload, room=code)
     payload = {"room": {"code": code, "exists": bool(room), "solo": bool(room and room["solo"])},
                "me": (current_user(request) or {}).get("username") or "", "secs": TURN_SECS,
                "money": auction.START_MONEY, "roster": auction.ROSTER, "signed_in": bool(current_user(request))}
@@ -107,7 +140,8 @@ async def _send(ws, obj):
 
 def _team_public(room, seat):
     s = room["game"]["seats"][seat]
-    roster = [{**auction.card(x["id"]), "price": x["price"]} for x in s["roster"]]
+    cardf = life_auction.card if room.get("life") else auction.card
+    roster = [{**cardf(x["id"]), "price": x["price"]} for x in s["roster"]]
     return {"seat": seat, "name": room["names"][seat], "money": s["money"], "roster": roster,
             "online": seat == room.get("bot_seat") or any(c["seat"] == seat for c in room["conns"].values())}
 
@@ -123,14 +157,15 @@ def _public(room, viewer_seat):
     # Kor draftta oyuncu satilana kadar sunucudan cikmaz: yalnizca kategori
     lot = None
     if pid and live:
-        lot = {"blind": True, "category": auction.current_label(g)} if g["blind"] else auction.card(pid)
+        cardf = life_auction.card if room.get("life") else auction.card
+        lot = {"blind": True, "category": auction.current_label(g)} if g["blind"] else cardf(pid)
     events = [dict(e, seat_name=room["names"][e["seat"]] if e.get("seat") is not None else None) for e in g["events"][-14:]]
     return {"t": "state", "round": room["round"], "phase": room["phase"], "solo": room["solo"], "you": me,
             "teams": [_team_public(room, 0), _team_public(room, 1)], "turn": g["turn"] if live else None,
             "lot": lot, "blind": room["blind"], "scoring": room["scoring"], "can_give": bool(my_turn and auction.can_give(g, me)),
             "lot_no": g["i"] + 1, "lots": len(g["lots"]), "bid": g["bid"], "bidder": g["bidder"], "limit": limit,
             "left": round(room["deadline"] - now, 2) if live and room["deadline"] else None, "secs": TURN_SECS,
-            "events": events, "result": room["result"], "ai_on": auction_judge.enabled()}
+            "events": events, "result": room["result"], "ai_on": auction_judge.enabled(), "theme": room.get("theme")}
 
 
 async def _broadcast(room, obj, skip=None):
@@ -152,7 +187,7 @@ def _named_verdict(res, room):
 
 async def _judge(room, round_no):
     """Motor sonucu hazir; hakem varsa uzerine yazar. Oda bu arada yeni tura gectiyse atilir."""
-    base = auction.result(room["game"])
+    base = life_auction.result(room["game"]) if room.get("life") else auction.result(room["game"])
     verdict = None
     if room["scoring"] == "judge":
         try:

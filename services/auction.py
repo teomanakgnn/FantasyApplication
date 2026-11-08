@@ -235,7 +235,8 @@ def _award(g, seat, price, given=False):
     s = g["seats"][seat]
     s["money"] -= price
     s["roster"].append({"id": pid, "price": price})
-    _event(g, "sold", seat=seat, price=price, name=player(pid)["name"], id=pid, given=given)
+    name = g["lot_names"][g["i"]] if g.get("lot_names") else player(pid)["name"]
+    _event(g, "sold", seat=seat, price=price, name=name, id=pid, given=given)
     _next_lot(g)
 
 
@@ -432,7 +433,7 @@ def bot_value(g, seat, rng):
     """Su anki oyuncu bot icin kac dolar eder. Kor draftta oyuncuyu bilmez, kategorinin ortalamasina bakar."""
     s = g["seats"][seat]
     n = open_slots(g, seat)
-    w = g["means"][g["i"]] if g["blind"] else worth(current(g), g["scoring"])
+    w = g["means"][g["i"]] if g["blind"] else g["lot_scores"][g["i"]] if g.get("lot_scores") else worth(current(g), g["scoring"])
     v = _value(w) * max(0.6, min(1.5, (s["money"] / max(n, 1)) / 4)) + rng.uniform(-1.2, 1.2)
     if not g["blind"] and g["scoring"] == "judge" and ROSTER - n >= 2 and player(current(g))["sht"] >= 60 \
             and not any(player(x["id"])["sht"] >= 60 for x in s["roster"]):

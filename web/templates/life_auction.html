@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Hayat Açık Artırması{% endblock %}
+{% block description %}Özel oyun.{% endblock %}
+{% block robots %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/css/games.css?v={{ asset_version }}">{% endblock %}
+{% block content %}
+<div class="au-wrap">
+  <div class="page-head">
+    <div class="eyebrow">Özel oyun</div>
+    <h1>Hayat Açık Artırması</h1>
+    <p>İkinizin de 20 doları var. Tatlılar, ülkeler, tatil yerleri sırayla açık artırmaya çıkıyor. Her birinin gizli bir puanı var ve puanlar oyun bitince açılıyor. Beş alımının ortalaması yüksek olan kazanır.</p>
+  </div>
+  <div id="au-app"></div>
+  <script id="au-data" type="application/json">{{ payload|safe }}</script>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/life_auction.js?v={{ asset_version }}"></script>{% endblock %}
