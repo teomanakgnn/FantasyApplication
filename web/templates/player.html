@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set av = log.avg if log else None %}
-{% block title %}{{ p.name }} Stats & Game Log 2026-27, Fantasy Outlook · HoopLife NBA{% endblock %}
+{% block title %}{{ p.name }} Stats & Game Log 2026-27, Fantasy Outlook{% endblock %}
 {% block description %}{% if av %}{{ p.name }} 2026-27 stats: {{ '%.1f'|format(av.pts) }} points, {{ '%.1f'|format(av.reb) }} rebounds, {{ '%.1f'|format(av.ast) }} assists in {{ av.gp }} game{{ 's' if av.gp != 1 }}. Game log with shot charts, {% else %}{{ p.name }} 2026-27 projection: {{ '%.1f'|format(p.s.pts) }} pts, {{ '%.1f'|format(p.s.reb) }} reb, {{ '%.1f'|format(p.s.ast) }} ast. {% endif %}No. {{ p.rank }} in 9-cat fantasy, category strengths and best punt build.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
 {% block content %}

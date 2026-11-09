@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set nice = day.strftime('%A, %B ') ~ day.day ~ ', ' ~ day.year %}
-{% block title %}NBA Scores{{ ' Today' if day == today }} - {{ nice }} · Box Scores & Shot Charts · HoopLife NBA{% endblock %}
+{% block title %}NBA Scores{{ ' Today' if day == today }} - {{ nice }} · Box Scores{% endblock %}
 {% block description %}NBA scores for {{ nice }}: {% for g in games[:4] %}{{ g.away_nick }} {{ g.away_score }}-{{ g.home_score }} {{ g.home_nick }}{{ ', ' if not loop.last }}{% endfor %}{% if games|length > 4 %} and more{% endif %}. Full box scores, shot charts and fantasy stats for every game.{% endblock %}
 {% block canonical %}{{ site_url }}{{ canonical }}{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}

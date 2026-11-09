@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ t.name }} 2026-27: Roster, Schedule, Stats & Injuries · HoopLife NBA{% endblock %}
+{% block title %}{{ t.name }} 2026-27 Roster, Schedule & Stats{% endblock %}
 {% block description %}{{ t.name }} 2026-27: {{ t.wins }}-{{ t.losses }}{% if t.rank %}, {{ t.rank.seed }}{{ 'st' if t.rank.seed == 1 else 'nd' if t.rank.seed == 2 else 'rd' if t.rank.seed == 3 else 'th' }} in the {{ t.rank.conf }}{% endif %}. Full roster with stats, schedule and results, team leaders{% if t.leaders %} ({{ t.leaders[0].p.name }} {{ '%.1f'|format(t.leaders[0].value) }} ppg){% endif %} and injury report.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/nba.css?v={{ asset_version }}">{% endblock %}
 {% block content %}

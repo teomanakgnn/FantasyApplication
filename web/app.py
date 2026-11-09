@@ -133,7 +133,7 @@ def healthz():
 
 
 PUBLIC_PAGES = ["/", "/nba/scores", "/nba/standings", "/nba/simulations", "/waiver-wire", "/over-under", "/bracket",
-                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/pyramid", "/grid", "/career", "/auction", "/tier-list", "/rankings", "/register", "/privacy", "/terms"]
+                "/injuries", "/trade-analyzer", "/league", "/daily", "/stat-match", "/starting-five", "/82-0", "/pyramid", "/grid", "/career", "/auction", "/tier-list", "/rankings", "/privacy", "/terms"]
 
 
 @app.get("/privacy", include_in_schema=False)

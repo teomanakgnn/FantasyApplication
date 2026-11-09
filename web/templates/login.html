@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Sign in' if mode == 'login' else 'Create account' }} · HoopLife NBA{% endblock %}
+{% block description %}{{ 'Sign in to HoopLife NBA' if mode == 'login' else 'Create a free HoopLife NBA account' }} to keep your daily game streaks, scratch cards, saved leagues and Career scores.{% endblock %}
 {% block robots %}<meta name="robots" content="noindex">{% endblock %}
 {% block content %}
 {% set google = google_enabled %}

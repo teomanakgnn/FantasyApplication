@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "partials/gate.html" import gate with context %}
 {% set wk = ('Week ' ~ week) if week else 'This Week' %}
-{% block title %}Fantasy Basketball Waiver Wire {{ wk }}: Best Pickups 2026-27 · HoopLife NBA{% endblock %}
+{% block title %}Fantasy Basketball Waiver Wire {{ wk }}: Best Pickups 2026-27{% endblock %}
 {% block description %}Best fantasy basketball waiver wire pickups for {{ wk|lower }} of 2026-27: {% for r in rows[:5] %}{{ r.name }}{{ ', ' if not loop.last }}{% endfor %}. Players owned in under {{ owned }}% of ESPN leagues, ranked by 9-cat value over the {{ windows[window][0]|lower }}.{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/css/seo.css?v={{ asset_version }}">{% endblock %}
 {% block content %}
